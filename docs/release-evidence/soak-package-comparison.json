@@ -1,0 +1,12 @@
+{
+  "verifiedAt": "2026-10-08T15:19:13.804162+00:00",
+  "status": "pass",
+  "soakExecutableFiles": 40,
+  "packageInventoryFiles": 71,
+  "matchingExecutableFiles": 40,
+  "soakServerSha256": "bcac391aba4a3b20145936125edb6e4163b8be833d09940793aa181964f62583",
+  "packageServerInventoryHash": "bbc9e3a4bd9438ef43bf3480b1605ea4a9fe43e2bf7d2fd14a7f3cd8548ef3c0",
+  "releaseId": "helsinki-lens-0.1.0-a523eab230af",
+  "comparison": "Every40 executable JS entry matches package path, bytecount and SHA256; package71entry hash also includes non-executable source maps",
+  "mismatches": []
+}

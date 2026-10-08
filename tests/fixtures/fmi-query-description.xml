@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DescribeStoredQueriesResponse xmlns="http://www.opengis.net/wfs/2.0"
+  xmlns:omso="http://inspire.ec.europa.eu/schemas/omso/3.0"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  xmlns:ows_common="http://www.opengis.net/ows/1.1"
+  xmlns:inspire_common="http://inspire.ec.europa.eu/schemas/common/1.0"
+  xmlns:gml="http://www.opengis.net/gml/3.2"
+  xmlns:fe="http://www.opengis.net/fes/2.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.opengis.net/wfs/2.0 http://schemas.opengis.net/wfs/2.0/wfs.xsd
+  http://inspire.ec.europa.eu/schemas/omso/3.0 https://inspire.ec.europa.eu/schemas/omso/3.0/SpecialisedObservations.xsd
+  http://inspire.ec.europa.eu/schemas/common/1.0 https://inspire.ec.europa.eu/schemas/common/1.0/common.xsd
+  http://www.opengis.net/gml/3.2 http://schemas.opengis.net/gml/3.2.1/gml.xsd">
+
+  <StoredQueryDescription id="fmi::observations::weather::timevaluepair">
+    <Title>Instantaneous Weather Observations</Title>
+    <Abstract>
+    Real time weather observations from weather stations. Default set contains air temperatire, wind speed, gust speed, wind direction, relative humidity, dew point, one hour precipitation amount, precipitation intensity, snow depth, pressure reduced to sea level and visibility. By default, the data is returned from last 12 hour.  At least one location parameter (geoid/place/fmisid/wmo/bbox) has to be given. The data is returned as a time value pair format.
+    </Abstract>
+    
+    <Parameter name="starttime" type="dateTime">
+      <Title>Begin of the time interval</Title>
+      <Abstract>
+      Parameter begin specifies the begin of time interval in ISO-format (for example 2012-02-27T00:00:00Z).
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="endtime" type="dateTime">
+      <Title>End of time interval</Title>
+      <Abstract>
+      End of time interval in ISO-format (for example 2012-02-27T00:00:00Z).
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="timestep" type="int">
+      <Title>The time step of data in minutes</Title>
+      <Abstract>
+      The time step of data in minutes. Notice that timestep is calculated from start of the ongoing hour or day. 
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="parameters" type="NameList">
+      <Title>Parameters to return</Title>
+      <Abstract>
+      Comma separated list of meteorological parameters to return.
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="crs" type="xsi:string">
+      <Title>Coordinate projection to use in results</Title>
+      <Abstract>
+      Coordinate projection to use in results. For example EPSG::3067
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="bbox" type="xsi:string">
+      <Title>Bounding box of area for which to return data.</Title>
+      <Abstract>
+      Bounding box of area for which to return data (lon,lat,lon,lat). For example 21,61,22,62
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="place" type="xsi:string">
+      <Title>The location for which to provide data</Title>
+      <Abstract>
+      The location for which to provide data. Region can be given after location name separated by comma (for example Kumpula,Kolari).
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="fmisid" type="int">
+      <Title>FMI observation station identifier.</Title>
+      <Abstract>
+      Identifier of the observation station.
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="maxlocations" type="int">
+      <Title>Amount of locations</Title>
+      <Abstract>
+      How many observation stations are fetched around queried locations. Note that stations are only searched with 50 kilometers radius around the location.
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="geoid" type="int">
+      <Title>Geoid of the location for which to return data.</Title>
+      <Abstract>
+      Geoid of the location for which to return data. (ID from geonames.org)
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="wmo" type="int">
+      <Title>WMO code of the location for which to return data.</Title>
+      <Abstract>
+      WMO code of the location for which to return data.
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="timezone" type="xsi:string">
+      <Title>Time zone</Title>
+      <Abstract>
+      Time zone of the time instant of the data point in the form Area/Location (for example America/Costa_Rica). Default value is UTC.
+      </Abstract>
+    </Parameter>
+    
+    <QueryExpressionText xmlns:wfs_001="http://inspire.ec.europa.eu/schemas/omso/3.0"
+                         xsi:schemaLocation="http://inspire.ec.europa.eu/schemas/omso/3.0 https://inspire.ec.europa.eu/schemas/omso/3.0/SpecialisedObservations.xsd"
+                         returnFeatureTypes="wfs_001:PointTimeSeriesObservation"
+                         language="urn:ogc:def:queryLanguage:OGC-WFS::WFS_QueryExpression"
+                         isPrivate="true"/>
+  </StoredQueryDescription>
+
+  <StoredQueryDescription id="urban::observations::airquality::hourly::timevaluepair">
+    <Title>Hourly Air Quality Observations</Title>
+    <Abstract>
+    Hourly air quality observations from Finnish municipalities. By default, all the station are selected and the data is returned from the last 24 hours. The data is returned as timevaluepair format.
+    </Abstract>
+    
+    <Parameter name="starttime" type="dateTime">
+      <Title>Begin of the time interval</Title>
+      <Abstract>
+      Parameter begin specifies the begin of time interval in ISO-format (for example 2015-03-13T10:00:00Z).
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="endtime" type="dateTime">
+      <Title>End of time interval</Title>
+      <Abstract>
+      End of time interval in ISO-format (for example 2015-03-13T12:00:00Z).
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="timestep" type="int">
+      <Title>The time step of data in minutes</Title>
+      <Abstract>
+      The time step of data in minutes. Notice that timestep is calculated from start of the ongoing hour or day. 
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="parameters" type="NameList">
+      <Title>Parameters to return</Title>
+      <Abstract>
+      Comma separated list of parameters to return.
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="crs" type="xsi:string">
+      <Title>Coordinate projection to use in results</Title>
+      <Abstract>
+      Coordinate projection to use in results. For example EPSG::3067
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="bbox" type="xsi:string">
+      <Title>Bounding box of area for which to return data.</Title>
+      <Abstract>
+      Bounding box of area for which to return data (lon,lat,lon,lat). For example 24,60,25,61
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="place" type="xsi:string">
+      <Title>The location for which to provide data</Title>
+      <Abstract>
+      The location for which to provide data. Region can be given after location name separated by comma (for example Kumpula,Helsinki).
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="fmisid" type="int">
+      <Title>FMI observation station identifier.</Title>
+      <Abstract>
+      Identifier of the observation station.
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="maxlocations" type="int">
+      <Title>Amount of locations</Title>
+      <Abstract>
+      How many observation stations are fetched around queried locations. Note that stations are only searched with 50 kilometers radius around a location.
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="geoid" type="int">
+      <Title>Geoid of the location for which to return data.</Title>
+      <Abstract>
+      Geoid of the location for which to return data. (ID from geonames.org)
+      </Abstract>
+    </Parameter>
+    
+    <Parameter name="timezone" type="xsi:string">
+      <Title>Time zone</Title>
+      <Abstract>
+      Time zone of the time instant of the data point in the form Area/Location (for example America/Costa_Rica). Default value is UTC.
+      </Abstract>
+    </Parameter>
+    
+    <QueryExpressionText xmlns:wfs_001="http://inspire.ec.europa.eu/schemas/omso/3.0"
+                         xsi:schemaLocation="http://inspire.ec.europa.eu/schemas/omso/3.0 https://inspire.ec.europa.eu/schemas/omso/3.0/SpecialisedObservations.xsd"
+                         returnFeatureTypes="wfs_001:PointTimeSeriesObservation"
+                         language="urn:ogc:def:queryLanguage:OGC-WFS::WFS_QueryExpression"
+                         isPrivate="true"/>
+  </StoredQueryDescription>
+
+</DescribeStoredQueriesResponse>

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Helsinki City Hall",
+    "gmlId": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+    "longitude": 24.952913,
+    "latitude": 60.168037,
+    "sourceUrl": "https://api.hel.fi/servicemap/v2/search/?input=Kaupungintalo&lang=fi",
+    "retrievedAt": "2026-10-08T11:00:52Z"
+  },
+  {
+    "name": "Helsinki Cathedral",
+    "gmlId": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+    "longitude": 24.952229,
+    "latitude": 60.170345,
+    "sourceUrl": "https://api.hel.fi/servicemap/v2/search/?input=Tuomiokirkko&lang=fi",
+    "retrievedAt": "2026-10-08T11:00:52Z"
+  },
+  {
+    "name": "National Library of Finland",
+    "gmlId": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+    "longitude": 24.950335,
+    "latitude": 60.170370,
+    "sourceUrl": "https://api.hel.fi/servicemap/v2/search/?input=Kansalliskirjasto&lang=fi",
+    "retrievedAt": "2026-10-08T11:00:52Z"
+  }
+]

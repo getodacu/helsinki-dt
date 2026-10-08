@@ -1,0 +1,30 @@
+{
+  "mode": "OFFLINE FIXTURE; attributable values, synthetic current traffic times/deviation",
+  "browser": "154.0.8037.99",
+  "checks": [
+    "WebGL unavailable message explains metadata alternative",
+    "fallback keyboard tram and exact delay",
+    "follow rendering limitation explicit",
+    "fallback selected vehicle receives updates",
+    "fallback vehicle stale after31seconds",
+    "fallback expired selection retains identity",
+    "fallback expired vehicle removed from current search",
+    "fallback station history keyboard accessible",
+    "fallback measured and modeled building metadata accessible",
+    "fallback solar metadata accessible",
+    "fallback landscape source drawer fits",
+    "desktop fallback measured journey",
+    "desktop fallback has no viewport overflow",
+    "portrait fallback measured journey",
+    "portrait fallback has no viewport overflow",
+    "fallback has no uncaught errors"
+  ],
+  "screenshots": [
+    "output/playwright/task-e-webgl-fallback-desktop.png",
+    "output/playwright/task-e-webgl-fallback-portrait.png",
+    "output/playwright/task-e-webgl-fallback-landscape.png"
+  ],
+  "errors": [],
+  "completedAt": "2026-10-08T15:20:25.886Z",
+  "clockControlledAgeChecks": true
+}

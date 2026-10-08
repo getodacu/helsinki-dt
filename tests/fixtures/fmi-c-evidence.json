@@ -1,0 +1,28 @@
+{
+  "note": "Real anonymous FMI responses used only for offline tests. Retrieval timestamps are request start; receivedAt is completion.",
+  "metadata": {
+    "url": "https://opendata.fmi.fi/meta?observableProperty=observation&param=t2m%2Cws_10min%2Cwg_10min%2Cr_1h%2CNO2_PT1H_avg&language=eng",
+    "retrievedAt": "2026-10-08T12:50:10.382Z"
+  },
+  "weather": {
+    "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=fmi%3A%3Aobservations%3A%3Aweather%3A%3Atimevaluepair&fmisid=100971&parameters=t2m%2Cws_10min%2Cwg_10min%2Cr_1h&timestep=10&starttime=2026-10-08T06%3A50%3A10.677Z&endtime=2026-10-08T12%3A50%3A10.677Z",
+    "retrievedAt": "2026-10-08T12:50:10.677Z",
+    "receivedAt": "2026-10-08T12:50:10.744Z",
+    "starttime": "2026-10-08T06:50:10.677Z",
+    "endtime": "2026-10-08T12:50:10.677Z"
+  },
+  "airQuality": {
+    "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=urban%3A%3Aobservations%3A%3Aairquality%3A%3Ahourly%3A%3Atimevaluepair&fmisid=100742&parameters=NO2_PT1H_avg&timestep=60&starttime=2026-10-08T06%3A50%3A10.677Z&endtime=2026-10-08T12%3A50%3A10.677Z",
+    "retrievedAt": "2026-10-08T12:50:46.701Z",
+    "receivedAt": "2026-10-08T12:50:46.910Z",
+    "starttime": "2026-10-08T06:50:10.677Z",
+    "endtime": "2026-10-08T12:50:10.677Z"
+  },
+  "precipitation": {
+    "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=fmi%3A%3Aobservations%3A%3Aweather%3A%3Atimevaluepair&fmisid=100971&parameters=r_1h&timestep=60&starttime=2026-10-08T06%3A50%3A10.677Z&endtime=2026-10-08T12%3A50%3A10.677Z",
+    "retrievedAt": "2026-10-08T12:51:55.743Z",
+    "receivedAt": "2026-10-08T12:51:55.954Z",
+    "starttime": "2026-10-08T06:50:10.677Z",
+    "endtime": "2026-10-08T12:50:10.677Z"
+  }
+}

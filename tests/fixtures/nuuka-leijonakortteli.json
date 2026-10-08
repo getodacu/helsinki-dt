@@ -1,0 +1,183 @@
+{
+  "attribution": "City of Helsinki municipal service property energy / Nuuka, CC BY 4.0",
+  "metadataUrl": "https://helsinki-openapi.nuuka.cloud/api/v1.0/Property/Search?SearchString=1761&SearchFromRecord=LocationName",
+  "consumptionUrl": "https://helsinki-openapi.nuuka.cloud/api/v1.0/EnergyData/Daily/ListByProperty?Record=PropertyCode&SearchString=091-001-0030-0001&ReportingGroup=Electricity&StartTime=2026-10-06&EndTime=2026-10-07",
+  "retrievedAt": "2026-10-08T10:51:51.829Z",
+  "metadata": [
+    {
+      "locationName": "1761 K30, Leijonakortteli",
+      "propertyName": "1761 K30, Leijonakortteli",
+      "propertyCode": "091-001-0030-0001",
+      "yearOfIntroduction": "1899-12-31T00:00:00",
+      "purposeOfUse": "D toimisto",
+      "totalArea": 23630,
+      "heatedArea": 18482,
+      "volume": 88860,
+      "buildingType": "Office",
+      "latitude": "60.1685853",
+      "longitude": "24.9528048",
+      "reportingGroups": [
+        {
+          "name": "Electricity",
+          "energyType": "Electricity",
+          "isTopGroup": true
+        },
+        {
+          "name": "Heat",
+          "energyType": "Heating",
+          "isTopGroup": true
+        },
+        {
+          "name": "Water",
+          "energyType": "Water",
+          "isTopGroup": true
+        }
+      ],
+      "buildings": [
+        {
+          "locationName": "1761 K30, Leijonakortteli, 216 1 Kaupungintalo",
+          "propertyName": "1761 K30, Leijonakortteli",
+          "propertyCode": "091-001-0030-0001",
+          "buildingCode": "103027184J",
+          "yearOfIntroduction": "1833-01-01T00:00:00",
+          "purposeOfUse": "D toimisto",
+          "totalArea": 12549,
+          "heatedArea": 14431.8,
+          "volume": 49429,
+          "buildingType": "Office",
+          "longitude": "24.9528857",
+          "latitude": "60.1685853",
+          "reportingGroups": []
+        },
+        {
+          "locationName": "1761 K30, Leijonakortteli, 217 3 Hellenius, Burtz talot",
+          "propertyName": "1761 K30, Leijonakortteli",
+          "propertyCode": "091-001-0030-0001",
+          "buildingCode": "103027185K",
+          "yearOfIntroduction": "1970-01-01T00:00:00",
+          "purposeOfUse": "D toimisto",
+          "totalArea": 7416,
+          "heatedArea": 2317.8,
+          "volume": 26041,
+          "buildingType": "Office",
+          "longitude": "24.9528048",
+          "latitude": "60.1689861",
+          "reportingGroups": [
+            {
+              "name": "Electricity",
+              "energyType": "Electricity",
+              "isTopGroup": true
+            },
+            {
+              "name": "Heat",
+              "energyType": "Heating",
+              "isTopGroup": true
+            },
+            {
+              "name": "Water",
+              "energyType": "Water",
+              "isTopGroup": true
+            }
+          ]
+        },
+        {
+          "locationName": "1761 K30, Leijonakortteli, 999920 2 Bockin talo",
+          "propertyName": "1761 K30, Leijonakortteli",
+          "propertyCode": "091-001-0030-0001",
+          "buildingCode": "",
+          "yearOfIntroduction": "1970-01-01T00:00:00",
+          "purposeOfUse": "D toimisto",
+          "totalArea": 3665,
+          "heatedArea": 1732.4,
+          "volume": 13670,
+          "buildingType": "Office",
+          "longitude": "24.9532932",
+          "latitude": "60.1689985",
+          "reportingGroups": [
+            {
+              "name": "Electricity",
+              "energyType": "Electricity",
+              "isTopGroup": true
+            },
+            {
+              "name": "Heat",
+              "energyType": "Heating",
+              "isTopGroup": true
+            },
+            {
+              "name": "Water",
+              "energyType": "Water",
+              "isTopGroup": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "consumption": [
+    {
+      "timestamp": "2026-10-06T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6088.751,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-10-07T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 4323.735000000001,
+      "unit": "kWh"
+    }
+  ],
+  "buildings": [
+    {
+      "id": "BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+      "gmlId": "BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+      "vtjPrt": "103027185K",
+      "ratu": "217",
+      "uuid": "1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+      "longitude": 24.95285304614411,
+      "latitude": 60.168510487822225,
+      "chunkRef": "senate-square",
+      "sourceId": "helsinki-citygml-20190326",
+      "attributes": {}
+    },
+    {
+      "id": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+      "gmlId": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+      "vtjPrt": "103027184J",
+      "ratu": "216",
+      "uuid": "29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+      "longitude": 24.952867730318225,
+      "latitude": 60.16834501461571,
+      "chunkRef": "senate-square",
+      "sourceId": "helsinki-citygml-20190326",
+      "attributes": {}
+    },
+    {
+      "id": "BID_508bfef0-6aaf-476b-8daa-1669665405c0",
+      "gmlId": "BID_508bfef0-6aaf-476b-8daa-1669665405c0",
+      "vtjPrt": "103027185K",
+      "ratu": "217",
+      "uuid": "508bfef0-6aaf-476b-8daa-1669665405c0",
+      "longitude": 24.952853042541562,
+      "latitude": 60.16851048782094,
+      "chunkRef": "senate-square",
+      "sourceId": "helsinki-citygml-20190326",
+      "attributes": {}
+    },
+    {
+      "id": "BID_f2b6e1f2-9a20-45ee-8e84-ac1a457470ed",
+      "gmlId": "BID_f2b6e1f2-9a20-45ee-8e84-ac1a457470ed",
+      "vtjPrt": "103027185K",
+      "ratu": "217",
+      "uuid": "f2b6e1f2-9a20-45ee-8e84-ac1a457470ed",
+      "longitude": 24.95283374105499,
+      "latitude": 60.16877996589819,
+      "chunkRef": "senate-square",
+      "sourceId": "helsinki-citygml-20190326",
+      "attributes": {}
+    }
+  ]
+}

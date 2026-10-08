@@ -1,0 +1,140 @@
+{
+  "at": "2026-10-08T15:22:23.449Z",
+  "fixture": true,
+  "referencePeak": 236,
+  "identities": 472,
+  "sourceSnapshotAt": "2026-10-08T15:22:10.148Z",
+  "initial": {
+    "metrics": {
+      "fps": "200",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "490534",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    "heap": 154524997,
+    "modeCounts": [
+      {
+        "mode": "Trams",
+        "count": "187"
+      },
+      {
+        "mode": "Buses",
+        "count": "283"
+      },
+      {
+        "mode": "HSL Ferries",
+        "count": "2"
+      }
+    ]
+  },
+  "samples": [
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "490534",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "490534",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "490534",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "490534",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "2"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "490534",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "490534",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    {
+      "fps": "239",
+      "drawCalls": "24",
+      "geometries": "23",
+      "triangles": "491312",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    {
+      "fps": "239",
+      "drawCalls": "24",
+      "geometries": "23",
+      "triangles": "491312",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    {
+      "fps": "239",
+      "drawCalls": "24",
+      "geometries": "23",
+      "triangles": "491312",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "24",
+      "geometries": "23",
+      "triangles": "491312",
+      "loadedChunks": "12",
+      "placedVehicles": "470",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "1"
+    }
+  ],
+  "end": {
+    "heap": 151806755,
+    "events": 13
+  }
+}

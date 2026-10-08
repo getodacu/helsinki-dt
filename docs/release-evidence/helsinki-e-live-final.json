@@ -1,0 +1,283 @@
+{
+  "at": "2026-10-08T15:45:09.938Z",
+  "live": true,
+  "traffic": {
+    "generatedAt": "2026-10-08T15:45:09.575Z",
+    "status": {
+      "state": "live",
+      "connectedAt": "2026-10-08T15:15:37.988Z",
+      "lastPositionAt": "2026-10-08T15:45:09.344Z",
+      "retryAt": null
+    },
+    "vehicleCount": 176,
+    "modeCounts": {
+      "tram": 66,
+      "bus": 109,
+      "ferry": 1
+    },
+    "modes": {
+      "tram": {
+        "id": "0040/00410",
+        "routeId": "1002",
+        "reportedAt": "2026-10-08T15:45:09.344Z",
+        "receivedAt": "2026-10-08T15:45:09.393Z",
+        "delaySeconds": -299,
+        "rawDeviationSeconds": 299,
+        "providerAgeSeconds": 0.592
+      },
+      "bus": {
+        "id": "0012/01824",
+        "routeId": "4400",
+        "reportedAt": "2026-10-08T15:45:09.259Z",
+        "receivedAt": "2026-10-08T15:45:09.428Z",
+        "delaySeconds": 60,
+        "rawDeviationSeconds": -60,
+        "providerAgeSeconds": 0.677
+      },
+      "ferry": {
+        "id": "0060/00004",
+        "routeId": "1019",
+        "reportedAt": "2026-10-08T15:45:03.000Z",
+        "receivedAt": "2026-10-08T15:45:03.937Z",
+        "delaySeconds": null,
+        "rawDeviationSeconds": null,
+        "providerAgeSeconds": 6.936
+      }
+    }
+  },
+  "route": {
+    "vehicleId": "0040/00449",
+    "routeId": "1005",
+    "status": "exact",
+    "tripId": "1005_20261007_To_2_1826",
+    "stops": 18,
+    "source": {
+      "url": "https://infopalvelut.storage.hsldev.com/gtfs/hsl.zip",
+      "archiveSha256": "5d6b6a170f3150afcb7bc2e377de5f9c1e85ce835804df1f1e2ca9f39c296bbd",
+      "feedVersion": "2026-10-08 04:57:02",
+      "validFrom": "2026-10-07",
+      "validTo": "2026-12-05",
+      "retrievedAt": "2026-10-08T10:54:54.985Z"
+    }
+  },
+  "observations": {
+    "generatedAt": "2026-10-08T15:45:09.578Z",
+    "sources": [
+      {
+        "id": "fmi-weather",
+        "state": "partial",
+        "message": "3 requested parameter(s) have no current valid reading; missing values stay empty.",
+        "provider": "Finnish Meteorological Institute",
+        "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=fmi%3A%3Aobservations%3A%3Aweather%3A%3Atimevaluepair&fmisid=100971&parameters=t2m%2Cws_10min%2Cwg_10min&timestep=10&starttime=2026-10-08T09%3A40%3A59.960Z&endtime=2026-10-08T15%3A40%3A59.960Z",
+        "license": "CC BY 4.0",
+        "attribution": "Finnish Meteorological Institute; FMI Open Data",
+        "coverage": "Helsinki Kaisaniemi (100971) only; selected central Helsinki station coverage.",
+        "method": "Station observations; no interpolation or AQI.",
+        "resolution": "Requested every 10 minutes; each value retains its provider aggregation period.",
+        "vintage": "2026-10-08T09:40:59.960Z\u20132026-10-08T15:40:59.960Z",
+        "units": [
+          "degC",
+          "m/s",
+          "mm"
+        ],
+        "requests": [
+          {
+            "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=fmi%3A%3Aobservations%3A%3Aweather%3A%3Atimevaluepair&fmisid=100971&parameters=t2m%2Cws_10min%2Cwg_10min&timestep=10&starttime=2026-10-08T09%3A40%3A59.960Z&endtime=2026-10-08T15%3A40%3A59.960Z",
+            "retrievedAt": "2026-10-08T15:40:59.960Z",
+            "receivedAt": "2026-10-08T15:41:00.154Z"
+          },
+          {
+            "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=fmi%3A%3Aobservations%3A%3Aweather%3A%3Atimevaluepair&fmisid=100971&parameters=r_1h&timestep=60&starttime=2026-10-08T09%3A40%3A59.960Z&endtime=2026-10-08T15%3A40%3A59.960Z",
+            "retrievedAt": "2026-10-08T15:40:59.966Z",
+            "receivedAt": "2026-10-08T15:41:00.150Z"
+          }
+        ],
+        "parameters": [
+          "t2m",
+          "ws_10min",
+          "wg_10min",
+          "r_1h"
+        ],
+        "retrievedAt": "2026-10-08T15:40:59.966Z",
+        "metadataRetrievedAt": "2026-10-08T15:15:47.692Z",
+        "observedAt": "2026-10-08T15:40:00.000Z",
+        "lastAttemptAt": "2026-10-08T15:40:59.960Z",
+        "nextRefreshAt": "2026-10-08T15:46:00.159Z",
+        "refreshMs": 300000,
+        "staleAfterMs": 1800000,
+        "lastError": null
+      },
+      {
+        "id": "fmi-air-quality",
+        "state": "current",
+        "message": "Station observations available; measurement times are independent of live traffic.",
+        "provider": "HSY via Finnish Meteorological Institute",
+        "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=urban%3A%3Aobservations%3A%3Aairquality%3A%3Ahourly%3A%3Atimevaluepair&fmisid=100742&parameters=NO2_PT1H_avg&timestep=60&starttime=2026-10-08T09%3A30%3A59.956Z&endtime=2026-10-08T15%3A30%3A59.956Z",
+        "license": "CC BY 4.0",
+        "attribution": "HSY via Finnish Meteorological Institute; FMI Open Data",
+        "coverage": "Helsinki Mannerheimintie (100742) only; selected central Helsinki station coverage.",
+        "method": "Station observations; no interpolation or AQI.",
+        "resolution": "Requested every 60 minutes; each value retains its provider aggregation period.",
+        "vintage": "2026-10-08T09:30:59.956Z\u20132026-10-08T15:30:59.956Z",
+        "units": [
+          "ug/m3"
+        ],
+        "requests": [
+          {
+            "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=urban%3A%3Aobservations%3A%3Aairquality%3A%3Ahourly%3A%3Atimevaluepair&fmisid=100742&parameters=NO2_PT1H_avg&timestep=60&starttime=2026-10-08T09%3A30%3A59.956Z&endtime=2026-10-08T15%3A30%3A59.956Z",
+            "retrievedAt": "2026-10-08T15:30:59.956Z",
+            "receivedAt": "2026-10-08T15:31:00.139Z"
+          }
+        ],
+        "parameters": [
+          "NO2_PT1H_avg"
+        ],
+        "retrievedAt": "2026-10-08T15:30:59.956Z",
+        "metadataRetrievedAt": "2026-10-08T15:15:47.692Z",
+        "observedAt": "2026-10-08T15:00:00.000Z",
+        "lastAttemptAt": "2026-10-08T15:30:59.956Z",
+        "nextRefreshAt": "2026-10-08T15:46:00.142Z",
+        "refreshMs": 900000,
+        "staleAfterMs": 7200000,
+        "lastError": null
+      }
+    ],
+    "latestValidByParameter": {
+      "fmi-weather:t2m": {
+        "stationId": "100971",
+        "stationName": "Helsinki Kaisaniemi",
+        "longitude": 24.94459,
+        "latitude": 60.17523,
+        "parameter": "t2m",
+        "value": 12.2,
+        "unit": "degC",
+        "observedAt": "2026-10-08T15:30:00.000Z",
+        "receivedAt": "2026-10-08T15:41:00.154Z",
+        "quality": "unknown",
+        "aggregation": "avg PT1M",
+        "sourceId": "fmi-weather"
+      },
+      "fmi-weather:ws_10min": {
+        "stationId": "100971",
+        "stationName": "Helsinki Kaisaniemi",
+        "longitude": 24.94459,
+        "latitude": 60.17523,
+        "parameter": "ws_10min",
+        "value": 6,
+        "unit": "m/s",
+        "observedAt": "2026-10-08T15:30:00.000Z",
+        "receivedAt": "2026-10-08T15:41:00.154Z",
+        "quality": "unknown",
+        "aggregation": "avg PT10M",
+        "sourceId": "fmi-weather"
+      },
+      "fmi-weather:wg_10min": {
+        "stationId": "100971",
+        "stationName": "Helsinki Kaisaniemi",
+        "longitude": 24.94459,
+        "latitude": 60.17523,
+        "parameter": "wg_10min",
+        "value": 8.8,
+        "unit": "m/s",
+        "observedAt": "2026-10-08T15:30:00.000Z",
+        "receivedAt": "2026-10-08T15:41:00.154Z",
+        "quality": "unknown",
+        "aggregation": "max PT10M",
+        "sourceId": "fmi-weather"
+      },
+      "fmi-weather:r_1h": {
+        "stationId": "100971",
+        "stationName": "Helsinki Kaisaniemi",
+        "longitude": 24.94459,
+        "latitude": 60.17523,
+        "parameter": "r_1h",
+        "value": 0,
+        "unit": "mm",
+        "observedAt": "2026-10-08T15:00:00.000Z",
+        "receivedAt": "2026-10-08T15:41:00.150Z",
+        "quality": "unknown",
+        "aggregation": "acc PT1H",
+        "sourceId": "fmi-weather"
+      },
+      "fmi-air-quality:NO2_PT1H_avg": {
+        "stationId": "100742",
+        "stationName": "Helsinki Mannerheimintie",
+        "longitude": 24.93924,
+        "latitude": 60.16964,
+        "parameter": "NO2_PT1H_avg",
+        "value": 17.6,
+        "unit": "ug/m3",
+        "observedAt": "2026-10-08T15:00:00.000Z",
+        "receivedAt": "2026-10-08T15:31:00.139Z",
+        "quality": "unknown",
+        "aggregation": "avg PT1H",
+        "sourceId": "fmi-air-quality"
+      }
+    },
+    "latestBySource": {
+      "fmi-weather": {
+        "stationId": "100971",
+        "stationName": "Helsinki Kaisaniemi",
+        "longitude": 24.94459,
+        "latitude": 60.17523,
+        "parameter": "wg_10min",
+        "value": null,
+        "unit": "m/s",
+        "observedAt": "2026-10-08T15:40:00.000Z",
+        "receivedAt": "2026-10-08T15:41:00.154Z",
+        "quality": "unknown",
+        "aggregation": "max PT10M",
+        "sourceId": "fmi-weather"
+      },
+      "fmi-air-quality": {
+        "stationId": "100742",
+        "stationName": "Helsinki Mannerheimintie",
+        "longitude": 24.93924,
+        "latitude": 60.16964,
+        "parameter": "NO2_PT1H_avg",
+        "value": 17.6,
+        "unit": "ug/m3",
+        "observedAt": "2026-10-08T15:00:00.000Z",
+        "receivedAt": "2026-10-08T15:31:00.139Z",
+        "quality": "unknown",
+        "aggregation": "avg PT1H",
+        "sourceId": "fmi-air-quality"
+      }
+    }
+  },
+  "energy": {
+    "status": "current",
+    "retrievedAt": "2026-10-08T14:13:18.564Z",
+    "complete": true,
+    "total": 173390.33299999998,
+    "period": {
+      "start": "2026-09-01",
+      "end": "2026-10-01"
+    },
+    "source": {
+      "id": "helsinki-nuuka",
+      "provider": "City of Helsinki",
+      "url": "https://helsinki-openapi.nuuka.cloud/api/v1.0/EnergyData/Daily/ListByProperty?Record=PropertyCode&SearchString=091-001-0030-0001&ReportingGroup=Electricity&StartTime=2025-10-01&EndTime=2026-09-30",
+      "license": "CC BY 4.0",
+      "attribution": "City of Helsinki, CC BY 4.0",
+      "retrievedAt": "2026-10-08T14:13:18.564Z",
+      "vintage": null,
+      "units": [
+        "kWh"
+      ],
+      "coverage": "Property 091-001-0030-0001; 3 declared members, including unresolved associations.",
+      "method": "Measured daily property electricity; no building allocation. Daily source calendar labels have no timezone suffix; displayed in Europe/Helsinki. Successful requests are cached for six hours; failures retry after one minute and a new completed-month or city/source version triggers a new lookup. Provider publication cadence is unknown.",
+      "checksum": "add3492aa4625aa240c256518da00a536ba65ce174d49d2540aa707f8b4d4b98",
+      "coordinateReference": null,
+      "axisOrder": null,
+      "verticalReference": null
+    }
+  },
+  "catalog": {
+    "status": "ready",
+    "generatedAt": "2026-10-08T14:11:31.993Z",
+    "cityGeneratedAt": "2026-10-08T12:10:39.077Z",
+    "energyRecords": 34643,
+    "solarRecords": 695
+  }
+}

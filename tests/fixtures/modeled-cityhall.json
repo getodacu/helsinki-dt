@@ -1,0 +1,22 @@
+{
+  "attribution": "City of Helsinki Energy and Climate Atlas, CC BY 4.0",
+  "source": "https://www.hel.fi/hel2/tietokeskus/data/helsinki/kaupunginkanslia/3D-malli/Helsinki_Buildings_Heating_Energy_Demand_Climate_Change_20201021.xlsx",
+  "retrievedAt": "2026-10-08T10:51:57.732Z",
+  "vintage": "2020-10-21",
+  "rowNumber": 9645,
+  "unit": null,
+  "values": {
+    "vtj_prt": "103027184J",
+    "gmlid": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+    "SQ_2020_Longitude": 24.95287,
+    "SQ_2020_Latitude": 60.16835,
+    "SQ_2020_Total_Yearly_Heat_DHW_demand": 59114
+  },
+  "metadata": {
+    "vtj_prt": "Persistent building identifier",
+    "gmlid": "Building's ID of Helsinki's CityGML information model",
+    "SQ_2020_Longitude": "Coordinates at WGS-84 geographic coordinate system",
+    "SQ_2020_Latitude": "Coordinates at WGS-84 geographic coordinate system",
+    "SQ_2020_Total_Yearly_Heat_DHW_demand": "Yearly consumption of energy for heating and for domestic hot water demand (in 2020)"
+  }
+}

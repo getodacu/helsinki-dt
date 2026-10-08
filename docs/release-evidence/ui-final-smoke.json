@@ -1,0 +1,22 @@
+{
+  "verifiedAt": "2026-10-08T15:21:43.840Z",
+  "browser": "154.0.8037.99",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "mode": "Final live production smoke; no fixture interception",
+  "favicon": {
+    "status": 200,
+    "contentType": "image/svg+xml",
+    "referenced": true
+  },
+  "panelMutedContrastMinimumAgainstWhiteBackdrop": 6.11,
+  "sourceLabels": {
+    "browserVersusUpstream": true,
+    "historicalFoundation": true,
+    "currentEnergyCatalog": true
+  },
+  "pageReady": true,
+  "searchIndex": "current"
+}

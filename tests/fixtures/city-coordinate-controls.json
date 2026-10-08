@@ -1,0 +1,24 @@
+[
+  {
+    "name": "Katajanokka Terminal",
+    "gmlId": "BID_02c650c9-e65a-482f-82c0-28be11b17763",
+    "longitude": 24.968521,
+    "latitude": 60.163994,
+    "address": "Katajanokanlaituri 8",
+    "serviceMapId": "9229",
+    "sourceUrl": "https://api.hel.fi/servicemap/v2/search/?input=Katajanokan%20terminaali&lang=fi",
+    "retrievedAt": "2026-10-08T12:05:40.557Z",
+    "sourceChecksum": "376229944f33c0fb473cc291928a08371369444fa996db5da0f80b7be1f465f0"
+  },
+  {
+    "name": "Suomenlinna church",
+    "gmlId": "BID_38894eec-560e-4e69-8c74-fa2a3a42a456",
+    "longitude": 24.986294,
+    "latitude": 60.147766,
+    "address": "Suomenlinna C43",
+    "serviceMapId": "43172",
+    "sourceUrl": "https://api.hel.fi/servicemap/v2/search/?input=Suomenlinnan%20kirkko&lang=fi",
+    "retrievedAt": "2026-10-08T12:05:40.853Z",
+    "sourceChecksum": "730f774c0ca01baff8653e4c5b41ae1e7dc6e6aacc79f673f61775f3b6ad69af"
+  }
+]

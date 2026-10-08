@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?><ListStoredQueriesResponse xmlns="http://www.opengis.net/wfs/2.0"><StoredQuery id="fmi::observations::weather::timevaluepair">
+    <Title>Instantaneous Weather Observations</Title>
+    <ReturnFeatureType xmlns:wfstype="http://inspire.ec.europa.eu/schemas/omso/3.0"  xsi:schemaLocation="http://inspire.ec.europa.eu/schemas/omso/3.0 https://inspire.ec.europa.eu/schemas/omso/3.0/SpecialisedObservations.xsd">wfstype:PointTimeSeriesObservation</ReturnFeatureType>
+  </StoredQuery><StoredQuery id="urban::observations::airquality::hourly::timevaluepair">
+    <Title>Hourly Air Quality Observations</Title>
+    <ReturnFeatureType xmlns:wfstype="http://inspire.ec.europa.eu/schemas/omso/3.0"  xsi:schemaLocation="http://inspire.ec.europa.eu/schemas/omso/3.0 https://inspire.ec.europa.eu/schemas/omso/3.0/SpecialisedObservations.xsd">wfstype:PointTimeSeriesObservation</ReturnFeatureType>
+  </StoredQuery></ListStoredQueriesResponse>

@@ -1,0 +1,652 @@
+{
+  "attribution": "Original City of Helsinki source records, CC BY 4.0. Excerpts verified 2026-10-08; IDs and values are unchanged. Annual workbook fields excerpted; all original raw rows and solar tables remain in ignored source caches.",
+  "sources": [
+    {
+      "id": "helsinki-modeled-demand",
+      "provider": "City of Helsinki",
+      "url": "https://www.hel.fi/hel2/tietokeskus/data/helsinki/kaupunginkanslia/3D-malli/Helsinki_Buildings_Heating_Energy_Demand_Climate_Change_20201021.xlsx",
+      "license": "CC BY 4.0",
+      "attribution": "City of Helsinki, CC BY 4.0",
+      "retrievedAt": "2026-10-08T10:51:57.732Z",
+      "vintage": "2020-10-21 export; scenarios 2020–2050",
+      "units": [
+        "kWh"
+      ],
+      "coverage": "Full release identity set; citywide workbook source rows counted",
+      "method": "SimStadt modeled annual space heating and domestic hot water demand. 2020 SQ baseline; 2025–2050 CC changes climate while keeping the building stock. DIN V 18599 monthly energy balance; CityGML geometry, construction year/function typologies and available Atlas attributes; FMI climate reference years interpolated in 5-year steps; cooling excluded. kWh established by original City visualization (raw monthly fields /1000 → MWh) and model author paper doi:10.3390/ijgi9100602. Annual values are original workbook totals; missing calculations remain null.",
+      "checksum": "944e2029355ccae0c590226731dfba266b46ea5d4c35c96e083aaa5f949710b3",
+      "coordinateReference": null,
+      "axisOrder": null,
+      "verticalReference": null
+    },
+    {
+      "id": "helsinki-atlas-solar",
+      "provider": "City of Helsinki",
+      "url": "https://kartta.hel.fi/3d/data/buildings_solar/tileset.json",
+      "license": "CC BY 4.0",
+      "attribution": "City of Helsinki, CC BY 4.0",
+      "retrievedAt": "2026-10-08T14:01:52.289Z",
+      "vintage": "2017-08-08 export (HTTP Last-Modified; calculation/weather year unknown)",
+      "units": [
+        "kWh"
+      ],
+      "coverage": "Only 12 original solar tiles intersecting district 24.944,60.164,24.958,60.174; coverage outside these tiles is unqueried",
+      "method": "Modeled incoming direct and diffuse radiation on CityGML roof and wall surfaces; building aggregate. The source tool supports shading from modeled surroundings and terrain; exact per-run weather, terrain and vegetation configuration is not published. Annual reference calculation; weather year and calculation date unknown. Export last modified 2017-08-08. Incoming radiation in kWh, not panel capacity, electrical generation, installed panels or live production. Suitable panel area and PV yield are unavailable.",
+      "checksum": "7e9722393f621db32c4e99f4db285f708b768fd69c6fc173d810ce39776fb599",
+      "coordinateReference": null,
+      "axisOrder": null,
+      "verticalReference": null
+    },
+    {
+      "id": "helsinki-nuuka",
+      "provider": "City of Helsinki",
+      "url": "https://helsinki-openapi.nuuka.cloud/api/v1.0/Property/Search?SearchString=1761&SearchFromRecord=LocationName",
+      "license": "CC BY 4.0",
+      "attribution": "City of Helsinki, CC BY 4.0",
+      "retrievedAt": "2026-10-08T10:51:51.829Z",
+      "vintage": null,
+      "units": [
+        "kWh"
+      ],
+      "coverage": "Leijonakortteli municipal property; three original declared building members",
+      "method": "Measured property-level daily electricity retrieved on demand by the server; shared member buildings are a measurement boundary, never an allocation.",
+      "checksum": "3233f9bab1aa99f4742ae8bb7b1d636dbf7172a8582655796aa349c5913fc80c",
+      "coordinateReference": null,
+      "axisOrder": null,
+      "verticalReference": null
+    },
+    {
+      "id": "helsinki-atlas-identity",
+      "provider": "City of Helsinki",
+      "url": "https://www.hel.fi/hel2/tietokeskus/data/helsinki/kaupunginkanslia/3D-malli/data_atlas.xlsx",
+      "license": "CC BY 4.0",
+      "attribution": "City of Helsinki, CC BY 4.0",
+      "retrievedAt": "2026-10-08T10:51:53.185Z",
+      "vintage": "2017",
+      "units": [],
+      "coverage": "Original Atlas UUID and VTJ-PRT crosswalk for release IDs",
+      "method": "Original UUID → BID_UUID with declared national building identity; contradictory versions exclude solar associations.",
+      "checksum": "189554eca2a960a271c2c4c86176c3c7828e2cf4a28f4a1b5c041197b9533a7b",
+      "coordinateReference": null,
+      "axisOrder": null,
+      "verticalReference": null
+    },
+    {
+      "id": "helsinki-semantic-tiles",
+      "provider": "City of Helsinki, Helsinki 3D",
+      "url": "https://kartta.hel.fi/3d/datasource-data/16fc3fd5-df6d-4f48-bfd5-9aeee430a02f/tileset.json",
+      "license": "CC BY 4.0",
+      "attribution": "City of Helsinki, Helsinki 3D, CC BY 4.0; downloaded 2026-10-08T11:53:45.574Z",
+      "retrievedAt": "2026-10-08T11:53:45.574Z",
+      "vintage": null,
+      "units": [
+        "m"
+      ],
+      "coverage": "Release bounds 24.9,60.135,25.04,60.195",
+      "method": "Official untextured semantic LoD2 tiles; original GMLID, VTJ_PRT and RATU retained; Three 0.186.1 glTF conversion; 500m chunks, 30000-triangle batches; positions rounded to 0.01m",
+      "checksum": "059578f562215babc3052e28b9c2c3ec1a18105909f929c36d36f73debac872d",
+      "coordinateReference": "EPSG:3879 ETRS-GK25",
+      "axisOrder": "easting,northing; local east,elevation,-north",
+      "verticalReference": "N2000 values in geocentric tile encoding; verified against original CityGML extrema"
+    }
+  ],
+  "modeledRows": [
+    {
+      "sourceId": "modeled:data:2477",
+      "gmlId": "BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+      "vtjPrt": "103027185K",
+      "values": {
+        "vtj_prt": "103027185K",
+        "gmlid": "BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+        "SQ_2020_Total_Yearly_Heat_DHW_demand": 2421375,
+        "CC_2025_Total_Yearly_Heat_DHW_demand": 2350549,
+        "CC_2030_Total_Yearly_Heat_DHW_demand": 2280198,
+        "CC_2035_Total_Yearly_Heat_DHW_demand": 2229685,
+        "CC_2040_Total_Yearly_Heat_DHW_demand": 2179342,
+        "CC_2045_Total_Yearly_Heat_DHW_demand": 2129508,
+        "CC_2050_Total_Yearly_Heat_DHW_demand": 2080231
+      }
+    },
+    {
+      "sourceId": "modeled:data:3420",
+      "gmlId": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+      "vtjPrt": "103027179C",
+      "values": {
+        "vtj_prt": "103027179C",
+        "gmlid": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+        "SQ_2020_Total_Yearly_Heat_DHW_demand": 1664832,
+        "CC_2025_Total_Yearly_Heat_DHW_demand": 1615118,
+        "CC_2030_Total_Yearly_Heat_DHW_demand": 1565340,
+        "CC_2035_Total_Yearly_Heat_DHW_demand": 1529929,
+        "CC_2040_Total_Yearly_Heat_DHW_demand": 1494416,
+        "CC_2045_Total_Yearly_Heat_DHW_demand": 1459354,
+        "CC_2050_Total_Yearly_Heat_DHW_demand": 1424641
+      }
+    },
+    {
+      "sourceId": "modeled:data:3809",
+      "gmlId": "BID_17840114-cda9-47b6-af4a-8b3720a2d7e4",
+      "vtjPrt": "103017634F",
+      "values": {
+        "vtj_prt": "103017634F",
+        "gmlid": "BID_17840114-cda9-47b6-af4a-8b3720a2d7e4",
+        "SQ_2020_Total_Yearly_Heat_DHW_demand": 500403,
+        "CC_2025_Total_Yearly_Heat_DHW_demand": 486972,
+        "CC_2030_Total_Yearly_Heat_DHW_demand": 473492,
+        "CC_2035_Total_Yearly_Heat_DHW_demand": 463951,
+        "CC_2040_Total_Yearly_Heat_DHW_demand": 454481,
+        "CC_2045_Total_Yearly_Heat_DHW_demand": 445093,
+        "CC_2050_Total_Yearly_Heat_DHW_demand": 435796
+      }
+    },
+    {
+      "sourceId": "modeled:data:9303",
+      "gmlId": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+      "vtjPrt": "103036770S",
+      "values": {
+        "vtj_prt": "103036770S",
+        "gmlid": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+        "SQ_2020_Total_Yearly_Heat_DHW_demand": 1411460,
+        "CC_2025_Total_Yearly_Heat_DHW_demand": 1372987,
+        "CC_2030_Total_Yearly_Heat_DHW_demand": 1334755,
+        "CC_2035_Total_Yearly_Heat_DHW_demand": 1307518,
+        "CC_2040_Total_Yearly_Heat_DHW_demand": 1280656,
+        "CC_2045_Total_Yearly_Heat_DHW_demand": 1254022,
+        "CC_2050_Total_Yearly_Heat_DHW_demand": 1227674
+      }
+    },
+    {
+      "sourceId": "modeled:data:9645",
+      "gmlId": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+      "vtjPrt": "103027184J",
+      "values": {
+        "vtj_prt": "103027184J",
+        "gmlid": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+        "SQ_2020_Total_Yearly_Heat_DHW_demand": 59114,
+        "CC_2025_Total_Yearly_Heat_DHW_demand": 59114,
+        "CC_2030_Total_Yearly_Heat_DHW_demand": 59114,
+        "CC_2035_Total_Yearly_Heat_DHW_demand": 59114,
+        "CC_2040_Total_Yearly_Heat_DHW_demand": 59114,
+        "CC_2045_Total_Yearly_Heat_DHW_demand": 59114,
+        "CC_2050_Total_Yearly_Heat_DHW_demand": 59114
+      }
+    }
+  ],
+  "solarRows": [
+    {
+      "sourceId": "solar:BID_17840114-cda9-47b6-af4a-8b3720a2d7e4",
+      "gmlId": "BID_17840114-cda9-47b6-af4a-8b3720a2d7e4",
+      "vtjPrt": "103017634F",
+      "globalRadYear": 1242798.4745984767,
+      "tile": "15/37310/5430.b3dm",
+      "original": {
+        "id": "BID_17840114-cda9-47b6-af4a-8b3720a2d7e4",
+        "parentPosition": -1,
+        "classId": 26,
+        "attributes": {
+          "SVF_min": 0.0072074520867317915,
+          "SVF_mean": 0.3837286487136475,
+          "SVF_max": 0.9063884252682328,
+          "globalRadYear": 1242798.4745984767,
+          "globalRadMonth_12": 9087.602420619365,
+          "globalRadMonth_11": 20525.24190420645,
+          "globalRadMonth_10": 48334.756450154106,
+          "globalRadMonth_09": 98268.98907643862,
+          "globalRadMonth_08": 156667.8781196358,
+          "globalRadMonth_07": 202016.48973363684,
+          "globalRadMonth_06": 203128.11344572424,
+          "globalRadMonth_05": 202677.20102992377,
+          "globalRadMonth_04": 148881.1191977458,
+          "globalRadMonth_03": 97405.2158760245,
+          "globalRadMonth_02": 41059.49099973662,
+          "globalRadMonth_01": 14746.376344630526,
+          "directRadYear": 595773.3686078863,
+          "directRadMonth_12": 3651.4317923690164,
+          "directRadMonth_11": 7805.347586841988,
+          "directRadMonth_10": 19210.357627674726,
+          "directRadMonth_09": 44773.63915522093,
+          "directRadMonth_08": 71251.15629918042,
+          "directRadMonth_07": 100347.7065784323,
+          "directRadMonth_06": 99518.11827997587,
+          "directRadMonth_05": 106030.95274827289,
+          "directRadMonth_04": 75174.5296886571,
+          "directRadMonth_03": 45227.91547469333,
+          "directRadMonth_02": 17312.51087742808,
+          "directRadMonth_01": 5469.702499139612,
+          "diffuseRadYear": 647025.1059905904,
+          "diffuseRadMonth_12": 5436.1706282503455,
+          "diffuseRadMonth_11": 12719.894317364462,
+          "diffuseRadMonth_10": 29124.398822479383,
+          "diffuseRadMonth_09": 53495.34992121771,
+          "diffuseRadMonth_08": 85416.72182045529,
+          "diffuseRadMonth_07": 101668.78315520448,
+          "diffuseRadMonth_06": 103609.99516574836,
+          "diffuseRadMonth_05": 96646.24828165091,
+          "diffuseRadMonth_04": 73706.58950908874,
+          "diffuseRadMonth_03": 52177.30040133117,
+          "diffuseRadMonth_02": 23746.980122308516,
+          "diffuseRadMonth_01": 9276.67384549091
+        }
+      }
+    },
+    {
+      "sourceId": "solar:BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+      "gmlId": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+      "vtjPrt": "103027179C",
+      "globalRadYear": 4304491.6873486955,
+      "tile": "15/37310/5430.b3dm",
+      "original": {
+        "id": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+        "parentPosition": -1,
+        "classId": 26,
+        "attributes": {
+          "SVF_min": 0.17752160131931305,
+          "SVF_mean": 0.4747800289797907,
+          "SVF_max": 0.9975923644378781,
+          "globalRadYear": 4304491.6873486955,
+          "globalRadMonth_12": 57474.38484104262,
+          "globalRadMonth_11": 101375.73005467397,
+          "globalRadMonth_10": 194521.88801759947,
+          "globalRadMonth_09": 355637.86885536276,
+          "globalRadMonth_08": 516346.4717476296,
+          "globalRadMonth_07": 640643.0327336799,
+          "globalRadMonth_06": 636964.4115649868,
+          "globalRadMonth_05": 658167.8939191554,
+          "globalRadMonth_04": 514981.0273629566,
+          "globalRadMonth_03": 371919.6047008907,
+          "globalRadMonth_02": 180387.97938942804,
+          "globalRadMonth_01": 76071.39416128691,
+          "directRadYear": 2401818.690496921,
+          "directRadMonth_12": 41488.52128662123,
+          "directRadMonth_11": 63970.999981016656,
+          "directRadMonth_10": 108877.2867865015,
+          "directRadMonth_09": 198326.88229571978,
+          "directRadMonth_08": 265165.9710488772,
+          "directRadMonth_07": 341670.9425610328,
+          "directRadMonth_06": 332283.90043706336,
+          "directRadMonth_05": 373965.31020178896,
+          "directRadMonth_04": 298235.9022502678,
+          "directRadMonth_03": 218484.53764851615,
+          "directRadMonth_02": 110556.47298085097,
+          "directRadMonth_01": 48791.9630186671,
+          "diffuseRadYear": 1902672.9968517716,
+          "diffuseRadMonth_12": 15985.863554421467,
+          "diffuseRadMonth_11": 37404.7300736575,
+          "diffuseRadMonth_10": 85644.60123109806,
+          "diffuseRadMonth_09": 157310.98655964318,
+          "diffuseRadMonth_08": 251180.5006987522,
+          "diffuseRadMonth_07": 298972.0901726478,
+          "diffuseRadMonth_06": 304680.51112792344,
+          "diffuseRadMonth_05": 284202.58371736726,
+          "diffuseRadMonth_04": 216745.12511268863,
+          "diffuseRadMonth_03": 153435.0670523743,
+          "diffuseRadMonth_02": 69831.50640857703,
+          "diffuseRadMonth_01": 27279.431142619884
+        }
+      }
+    },
+    {
+      "sourceId": "solar:BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+      "gmlId": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+      "vtjPrt": "103036769R",
+      "globalRadYear": 2600290.1051776432,
+      "tile": "15/37310/5430.b3dm",
+      "original": {
+        "id": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+        "parentPosition": -1,
+        "classId": 26,
+        "attributes": {
+          "SVF_min": 0.06316399900242686,
+          "SVF_mean": 0.5426797355964396,
+          "SVF_max": 0.9860544309485704,
+          "globalRadYear": 2600290.1051776432,
+          "globalRadMonth_12": 21507.085361330744,
+          "globalRadMonth_11": 47648.63254650494,
+          "globalRadMonth_10": 107933.90311747712,
+          "globalRadMonth_09": 211997.57627889214,
+          "globalRadMonth_08": 321437.9547109708,
+          "globalRadMonth_07": 407372.83870179113,
+          "globalRadMonth_06": 407697.9529281638,
+          "globalRadMonth_05": 414985.2990440045,
+          "globalRadMonth_04": 315223.9114041048,
+          "globalRadMonth_03": 216096.96292474764,
+          "globalRadMonth_02": 94665.89156119023,
+          "globalRadMonth_01": 33722.09659846462,
+          "directRadYear": 1415698.709653013,
+          "directRadMonth_12": 11554.394358761332,
+          "directRadMonth_11": 24360.699480501604,
+          "directRadMonth_10": 54612.15110892595,
+          "directRadMonth_09": 114056.81535550489,
+          "directRadMonth_08": 165054.6663878376,
+          "directRadMonth_07": 221234.82859362365,
+          "directRadMonth_06": 218005.91837289414,
+          "directRadMonth_05": 238042.68419924832,
+          "directRadMonth_04": 180279.85603818786,
+          "directRadMonth_03": 120569.32338672395,
+          "directRadMonth_02": 51189.2659061261,
+          "directRadMonth_01": 16738.106464677257,
+          "diffuseRadYear": 1184591.39552463,
+          "diffuseRadMonth_12": 9952.691002569427,
+          "diffuseRadMonth_11": 23287.93306600335,
+          "diffuseRadMonth_10": 53321.75200855103,
+          "diffuseRadMonth_09": 97940.76092338715,
+          "diffuseRadMonth_08": 156383.28832313302,
+          "diffuseRadMonth_07": 186138.01010816745,
+          "diffuseRadMonth_06": 189692.0345552696,
+          "diffuseRadMonth_05": 176942.61484475632,
+          "diffuseRadMonth_04": 134944.05536591687,
+          "diffuseRadMonth_03": 95527.63953802374,
+          "diffuseRadMonth_02": 43476.62565506413,
+          "diffuseRadMonth_01": 16983.99013378737
+        }
+      }
+    },
+    {
+      "sourceId": "solar:BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+      "gmlId": "BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+      "vtjPrt": "103027185K",
+      "globalRadYear": 8320888.281814322,
+      "tile": "15/37310/5430.b3dm",
+      "original": {
+        "id": "BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+        "parentPosition": -1,
+        "classId": 26,
+        "attributes": {
+          "SVF_min": 0.014177796663716435,
+          "SVF_mean": 0.45546197729322807,
+          "SVF_max": 0.950706172734499,
+          "globalRadYear": 8320888.281814322,
+          "globalRadMonth_12": 65503.44064012483,
+          "globalRadMonth_11": 144924.1530361518,
+          "globalRadMonth_10": 332528.9841357204,
+          "globalRadMonth_09": 667445.7499995205,
+          "globalRadMonth_08": 1038896.388636701,
+          "globalRadMonth_07": 1328255.6103190142,
+          "globalRadMonth_06": 1332955.6096310173,
+          "globalRadMonth_05": 1344606.0259538523,
+          "globalRadMonth_04": 1003868.5434449542,
+          "globalRadMonth_03": 670263.7063928971,
+          "globalRadMonth_02": 287988.29106374213,
+          "globalRadMonth_01": 103651.77856062687,
+          "directRadYear": 4310435.0223439485,
+          "directRadMonth_12": 31808.444861366333,
+          "directRadMonth_11": 66082.48035160711,
+          "directRadMonth_10": 152007.3334203211,
+          "directRadMonth_09": 335865.7255588988,
+          "directRadMonth_08": 509458.2458714945,
+          "directRadMonth_07": 698082.3774474199,
+          "directRadMonth_06": 690750.1697199601,
+          "directRadMonth_05": 745563.9519321265,
+          "directRadMonth_04": 547013.2693538296,
+          "directRadMonth_03": 346853.34329034603,
+          "directRadMonth_02": 140797.47427420746,
+          "directRadMonth_01": 46152.206262371146,
+          "diffuseRadYear": 4010453.259470371,
+          "diffuseRadMonth_12": 33694.99577875848,
+          "diffuseRadMonth_11": 78841.67268454471,
+          "diffuseRadMonth_10": 180521.65071539916,
+          "diffuseRadMonth_09": 331580.0244406218,
+          "diffuseRadMonth_08": 529438.1427652068,
+          "diffuseRadMonth_07": 630173.232871594,
+          "diffuseRadMonth_06": 642205.4399110568,
+          "diffuseRadMonth_05": 599042.0740217252,
+          "diffuseRadMonth_04": 456855.2740911239,
+          "diffuseRadMonth_03": 323410.363102551,
+          "diffuseRadMonth_02": 147190.81678953485,
+          "diffuseRadMonth_01": 57499.57229825584
+        }
+      }
+    }
+  ],
+  "property": [
+    {
+      "locationName": "1761 K30, Leijonakortteli",
+      "propertyName": "1761 K30, Leijonakortteli",
+      "propertyCode": "091-001-0030-0001",
+      "yearOfIntroduction": "1899-12-31T00:00:00",
+      "purposeOfUse": "D toimisto",
+      "totalArea": 23630,
+      "heatedArea": 18482,
+      "volume": 88860,
+      "buildingType": "Office",
+      "latitude": "60.1685853",
+      "longitude": "24.9528048",
+      "reportingGroups": [
+        {
+          "name": "Electricity",
+          "energyType": "Electricity",
+          "isTopGroup": true
+        },
+        {
+          "name": "Heat",
+          "energyType": "Heating",
+          "isTopGroup": true
+        },
+        {
+          "name": "Water",
+          "energyType": "Water",
+          "isTopGroup": true
+        }
+      ],
+      "buildings": [
+        {
+          "locationName": "1761 K30, Leijonakortteli, 216 1 Kaupungintalo",
+          "propertyName": "1761 K30, Leijonakortteli",
+          "propertyCode": "091-001-0030-0001",
+          "buildingCode": "103027184J",
+          "yearOfIntroduction": "1833-01-01T00:00:00",
+          "purposeOfUse": "D toimisto",
+          "totalArea": 12549,
+          "heatedArea": 14431.8,
+          "volume": 49429,
+          "buildingType": "Office",
+          "longitude": "24.9528857",
+          "latitude": "60.1685853",
+          "reportingGroups": []
+        },
+        {
+          "locationName": "1761 K30, Leijonakortteli, 217 3 Hellenius, Burtz talot",
+          "propertyName": "1761 K30, Leijonakortteli",
+          "propertyCode": "091-001-0030-0001",
+          "buildingCode": "103027185K",
+          "yearOfIntroduction": "1970-01-01T00:00:00",
+          "purposeOfUse": "D toimisto",
+          "totalArea": 7416,
+          "heatedArea": 2317.8,
+          "volume": 26041,
+          "buildingType": "Office",
+          "longitude": "24.9528048",
+          "latitude": "60.1689861",
+          "reportingGroups": [
+            {
+              "name": "Electricity",
+              "energyType": "Electricity",
+              "isTopGroup": true
+            },
+            {
+              "name": "Heat",
+              "energyType": "Heating",
+              "isTopGroup": true
+            },
+            {
+              "name": "Water",
+              "energyType": "Water",
+              "isTopGroup": true
+            }
+          ]
+        },
+        {
+          "locationName": "1761 K30, Leijonakortteli, 999920 2 Bockin talo",
+          "propertyName": "1761 K30, Leijonakortteli",
+          "propertyCode": "091-001-0030-0001",
+          "buildingCode": "",
+          "yearOfIntroduction": "1970-01-01T00:00:00",
+          "purposeOfUse": "D toimisto",
+          "totalArea": 3665,
+          "heatedArea": 1732.4,
+          "volume": 13670,
+          "buildingType": "Office",
+          "longitude": "24.9532932",
+          "latitude": "60.1689985",
+          "reportingGroups": [
+            {
+              "name": "Electricity",
+              "energyType": "Electricity",
+              "isTopGroup": true
+            },
+            {
+              "name": "Heat",
+              "energyType": "Heating",
+              "isTopGroup": true
+            },
+            {
+              "name": "Water",
+              "energyType": "Water",
+              "isTopGroup": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "buildings": [
+    {
+      "id": "BID_17840114-cda9-47b6-af4a-8b3720a2d7e4",
+      "gmlId": "BID_17840114-cda9-47b6-af4a-8b3720a2d7e4",
+      "vtjPrt": "103017634F",
+      "ratu": "19",
+      "uuid": null,
+      "chunkRef": "tile_0_0_0",
+      "longitude": 24.95482565723824,
+      "latitude": 60.16878605435879,
+      "attributes": {
+        "selectedLod": "2",
+        "tileUrl": "https://kartta.hel.fi/3d/datasource-data/16fc3fd5-df6d-4f48-bfd5-9aeee430a02f/15/37310/5430.b3dm",
+        "tileGeometryMinimumElevation": "3.58",
+        "tileGeometryMaximumElevation": "22.96",
+        "VTJ_PRT": "103017634F",
+        "measuredHeight": "19.4",
+        "Address": "{\"HouseNumber\":\"4\",\"Country\":\"Finland\",\"PostalCode\":\"00170\",\"Street\":\"Helenankatu\",\"City\":\"Helsinki\"}",
+        "RATU": "19",
+        "storeysAboveGround": "3",
+        "function": "Toimistorakennukset",
+        "usage": "Toimistorakennus",
+        "yearOfConstruction": "1815",
+        "class": "Toimistorakennukset"
+      },
+      "sourceId": "helsinki-semantic-tiles"
+    },
+    {
+      "id": "BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+      "gmlId": "BID_1b6c3f66-d6e5-4d79-b595-b0ae2cfd013b",
+      "vtjPrt": "103027185K",
+      "ratu": "217",
+      "uuid": null,
+      "chunkRef": "tile_0_0_0",
+      "longitude": 24.952833700254256,
+      "latitude": 60.16877993038002,
+      "attributes": {
+        "selectedLod": "2",
+        "tileUrl": "https://kartta.hel.fi/3d/datasource-data/16fc3fd5-df6d-4f48-bfd5-9aeee430a02f/15/37310/5430.b3dm",
+        "tileGeometryMinimumElevation": "3.5",
+        "tileGeometryMaximumElevation": "21.09",
+        "VTJ_PRT": "103027185K",
+        "measuredHeight": "17.6",
+        "Address": "{\"HouseNumber\":\"20\",\"Country\":\"Finland\",\"PostalCode\":\"00170\",\"Street\":\"Aleksanterinkatu\",\"City\":\"Helsinki\"}",
+        "RATU": "217",
+        "storeysAboveGround": "4",
+        "function": "Toimistorakennukset",
+        "usage": "Liikerakennus",
+        "yearOfConstruction": "1970",
+        "class": "Toimistorakennukset"
+      },
+      "sourceId": "helsinki-semantic-tiles"
+    },
+    {
+      "id": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+      "gmlId": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+      "vtjPrt": "103027184J",
+      "ratu": "216",
+      "uuid": null,
+      "chunkRef": "tile_0_0_0",
+      "longitude": 24.952867737232452,
+      "latitude": 60.16834499257769,
+      "attributes": {
+        "selectedLod": "2",
+        "tileUrl": "https://kartta.hel.fi/3d/datasource-data/16fc3fd5-df6d-4f48-bfd5-9aeee430a02f/15/37310/5430.b3dm",
+        "tileGeometryMinimumElevation": "1.9",
+        "tileGeometryMaximumElevation": "20.63",
+        "VTJ_PRT": "103027184J",
+        "measuredHeight": "18",
+        "Address": "{\"HouseNumber\":\"11-13\",\"Country\":\"Finland\",\"PostalCode\":\"00170\",\"Street\":\"Pohjoisesplanadi\",\"City\":\"Helsinki\"}",
+        "RATU": "216",
+        "storeysAboveGround": "3",
+        "function": "Toimistorakennukset",
+        "usage": "Muu rakennus",
+        "yearOfConstruction": "1970",
+        "class": "Toimistorakennukset"
+      },
+      "sourceId": "helsinki-semantic-tiles"
+    },
+    {
+      "id": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+      "gmlId": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+      "vtjPrt": "103027179C",
+      "ratu": "211",
+      "uuid": null,
+      "chunkRef": "tile_0_-1_0",
+      "longitude": 24.952177147093625,
+      "latitude": 60.17037763767209,
+      "attributes": {
+        "selectedLod": "2",
+        "tileUrl": "https://kartta.hel.fi/3d/datasource-data/16fc3fd5-df6d-4f48-bfd5-9aeee430a02f/15/37310/5430.b3dm",
+        "tileGeometryMinimumElevation": "9.93",
+        "tileGeometryMaximumElevation": "72.33",
+        "VTJ_PRT": "103027179C",
+        "measuredHeight": "58.9",
+        "Address": "{\"HouseNumber\":\"7\",\"Country\":\"Finland\",\"PostalCode\":\"00170\",\"Street\":\"Hallituskatu\",\"City\":\"Helsinki\"}",
+        "RATU": "211",
+        "storeysAboveGround": "3",
+        "function": "Kirkot, kappelit, luostarit, rukoushuoneet",
+        "usage": "Kirkko",
+        "yearOfConstruction": "1852",
+        "class": "Uskonnonharjoittamisrakennukset"
+      },
+      "sourceId": "helsinki-semantic-tiles"
+    },
+    {
+      "id": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+      "gmlId": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+      "vtjPrt": "103036769R",
+      "ratu": "330",
+      "uuid": null,
+      "chunkRef": "tile_-1_-1_0",
+      "longitude": 24.950271613076684,
+      "latitude": 60.17033686117043,
+      "attributes": {
+        "selectedLod": "2",
+        "tileUrl": "https://kartta.hel.fi/3d/datasource-data/16fc3fd5-df6d-4f48-bfd5-9aeee430a02f/15/37310/5430.b3dm",
+        "tileGeometryMinimumElevation": "12.27",
+        "tileGeometryMaximumElevation": "40.25",
+        "VTJ_PRT": "103036769R",
+        "measuredHeight": "27.9",
+        "Address": "{\"HouseNumber\":\"1\",\"Country\":\"Finland\",\"PostalCode\":\"00170\",\"Street\":\"Yliopistonkatu\",\"City\":\"Helsinki\"}",
+        "RATU": "330",
+        "storeysAboveGround": "6",
+        "function": "Kirjastot",
+        "usage": "Muu rakennus",
+        "yearOfConstruction": "1847",
+        "class": "Kirjastot ja arkistot"
+      },
+      "sourceId": "helsinki-semantic-tiles"
+    }
+  ],
+  "solarChecksums": [
+    {
+      "url": "https://kartta.hel.fi/3d/data/buildings_solar/15/37310/5430.b3dm",
+      "sha256": "dfe005b22896d8911542a08f9be09f4a06f894cb3584cde44decdc3574fd1525",
+      "bytes": 1293253,
+      "retrievedAt": "2026-10-08T14:01:49.802Z"
+    }
+  ]
+}

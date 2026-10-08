@@ -1,0 +1,35 @@
+{
+  "controlledVisibility": true,
+  "before": {
+    "hidden": false,
+    "streamsCreated": 1,
+    "streamsClosed": 0,
+    "snapshotRequests": 1,
+    "frames": 959
+  },
+  "hiddenStart": {
+    "hidden": true,
+    "streamsCreated": 1,
+    "streamsClosed": 1,
+    "snapshotRequests": 1,
+    "frames": 959,
+    "header": "HELSINKI\nLENS\nLiving city\nHSL reconnecting\n60.1695\u00b0 N \u00b7 24.9520\u00b0 E\nSources & status \u2197"
+  },
+  "hiddenEnd": {
+    "hidden": true,
+    "streamsCreated": 1,
+    "streamsClosed": 1,
+    "snapshotRequests": 1,
+    "frames": 959
+  },
+  "resumed": {
+    "hidden": false,
+    "streamsCreated": 2,
+    "streamsClosed": 1,
+    "snapshotRequests": 2,
+    "frames": 1561,
+    "header": "HELSINKI\nLENS\nLiving city\nHSL connected\n60.1695\u00b0 N \u00b7 24.9520\u00b0 E\nSources & status \u2197",
+    "count": 60,
+    "unique": 60
+  }
+}

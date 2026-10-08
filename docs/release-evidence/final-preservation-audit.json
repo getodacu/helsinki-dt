@@ -1,0 +1,431 @@
+{
+  "checkedAt": "2026-10-08T15:34:13.243Z",
+  "candidateId": "helsinki-lens-0.1.0-a523eab230af",
+  "candidateDocsFinalPending": true,
+  "baseline": ".cache/task-e/starting-files.json",
+  "baselineFileCount": 133,
+  "baselineScope": "src/scripts/tests/docs plus recorded root configuration; generated static data, .nvmrc and tsconfig were not in this baseline",
+  "modified": [
+    "README.md",
+    "docs/milestones/E-release-readiness.md",
+    "package.json",
+    "src/app.css",
+    "src/app.html",
+    "src/lib/components/StationHistory.svelte",
+    "src/routes/+page.svelte",
+    "src/routes/api/energy/catalog/+server.ts",
+    "tests/energy-service.test.ts",
+    "tests/io.test.ts",
+    "tests/observations.test.ts",
+    "tests/traffic.test.ts"
+  ],
+  "newWithinComparedScope": [
+    ".env.example",
+    "docs/milestone-results/E.md",
+    "docs/operations.md",
+    "docs/release-screenshots/472-fixture.png",
+    "docs/release-screenshots/chromium-building-energy.png",
+    "docs/release-screenshots/chromium-portrait-inspector.png",
+    "docs/release-screenshots/chromium-solar.png",
+    "docs/release-screenshots/chromium-station.png",
+    "docs/release-screenshots/chromium-tram.png",
+    "docs/release-screenshots/firefox-landscape-sources.png",
+    "docs/release-screenshots/performance-all-features.png",
+    "docs/release-screenshots/webgl-fallback-desktop.png",
+    "scripts/package-release.ts",
+    "scripts/verify-release-soak.ts",
+    "static/favicon.svg",
+    "tests/energy-catalog-http.test.ts",
+    "tests/package-release.test.ts"
+  ],
+  "deletedBaselineFiles": [],
+  "noBaselineDeletion": true,
+  "packageLock": {
+    "baselineSha256": "a6bb9bf7409b64293f9c45ef75d4fb92c29236dafcebe38921685bafa159f516",
+    "currentSha256": "a6bb9bf7409b64293f9c45ef75d4fb92c29236dafcebe38921685bafa159f516",
+    "candidateSha256": "a6bb9bf7409b64293f9c45ef75d4fb92c29236dafcebe38921685bafa159f516",
+    "unchangedFromBaseline": true,
+    "candidateMatchesCurrent": true
+  },
+  "archivedUnusedGenerations": [
+    {
+      "from": "static/data/generations/20261008110256306-0d5a233c-fbf4-42e6-a29a-7ed99a9d837a",
+      "to": ".cache/task-e/archived-generations/generations/20261008110256306-0d5a233c-fbf4-42e6-a29a-7ed99a9d837a",
+      "recordedBytes": 9970615,
+      "actualBytes": 9970615,
+      "preservedByteCount": true,
+      "originalPathRemovedAfterArchive": true
+    },
+    {
+      "from": "static/data/city/generations/10412020-63a4-48dd-bcd5-7e72b1694b8c",
+      "to": ".cache/task-e/archived-generations/city/generations/10412020-63a4-48dd-bcd5-7e72b1694b8c",
+      "recordedBytes": 73646407,
+      "actualBytes": 73646407,
+      "preservedByteCount": true,
+      "originalPathRemovedAfterArchive": true
+    },
+    {
+      "from": "static/data/city/generations/207d2146-390e-476a-b4b7-a3833b313323",
+      "to": ".cache/task-e/archived-generations/city/generations/207d2146-390e-476a-b4b7-a3833b313323",
+      "recordedBytes": 73646407,
+      "actualBytes": 73646407,
+      "preservedByteCount": true,
+      "originalPathRemovedAfterArchive": true
+    },
+    {
+      "from": "static/data/energy/1034c46e-6ce0-4791-9971-39228d7577c3",
+      "to": ".cache/task-e/archived-generations/energy/1034c46e-6ce0-4791-9971-39228d7577c3",
+      "recordedBytes": 16750161,
+      "actualBytes": 16750161,
+      "preservedByteCount": true,
+      "originalPathRemovedAfterArchive": true
+    },
+    {
+      "from": "static/data/energy/b7eaf21d-437d-4ec8-b42a-37c0989aeff3",
+      "to": ".cache/task-e/archived-generations/energy/b7eaf21d-437d-4ec8-b42a-37c0989aeff3",
+      "recordedBytes": 16750161,
+      "actualBytes": 16750161,
+      "preservedByteCount": true,
+      "originalPathRemovedAfterArchive": true
+    }
+  ],
+  "allRecordedArchivesPreserved": true,
+  "oceanLens": {
+    "status": "reference only; no Task E writes issued",
+    "basis": "Parent task action record states all Task E mutations were confined to Helsinki and owned temporary/browser paths. Packaging actions copied only Helsinki and temporary release directories.",
+    "byteForByteAuditPerformed": false,
+    "limit": "No before/after Ocean hash baseline exists; do not claim a byte-for-byte filesystem comparison."
+  },
+  "publicBuildScan": {
+    "path": "/Users/radu/Projects/helsinki-dt/.cache/task-e/releases/helsinki-lens-0.1.0-a523eab230af/build",
+    "filesScannedIncludingCompressed": 1226,
+    "compressedVariantsValidated": 770,
+    "allCompressedVariantsMatchRaw": true,
+    "decodedBytesScanned": 344317074,
+    "patterns": {
+      "unrelated_branding": "Ocean[\\s_-]*Lens|ocean-leans|oceanlens",
+      "analytics_configuration": "googletagmanager|google-analytics|gtag\\s*\\(|UA-\\d{4,}-\\d+|plausible\\.io|umami\\.(?:is|io)|posthog\\.(?:com|io)|segment\\.(?:io|com)|mixpanel\\.(?:com|io)|clarity\\.ms|sentry\\.io",
+      "credential_literals": "sk-(?:proj-)?[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{30,}|gh[pousr]_[A-Za-z0-9]{30,}|-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----|(?:api[_-]?key|password|access[_-]?token|secret)\\s*[:=]\\s*['\"][A-Za-z0-9/+=_-]{16,}['\"]",
+      "unrelated_marine_configuration": "marine\\.copernicus|cmems|aisstream|api\\.ais|AISSTREAM_API|vessel[_-]?(?:mmsi|imo)|AIS vessel|ship.?tracking",
+      "external_fonts_or_imagery": "fonts\\.googleapis|fonts\\.gstatic|@font-face|images\\.unsplash|images\\.pexels|source\\.unsplash",
+      "quoted_analytics_identifiers": "[\"']G-[A-Z0-9]{6,}[\"']"
+    },
+    "matches": [],
+    "matchDetailsOmitValues": true,
+    "limit": "Pattern scan for recognizable literals/configuration; not a proof against every possible encoded secret.",
+    "reviewedFalsePositiveMatches": [
+      {
+        "category": "analytics_configuration",
+        "path": "build/adapter-node.js",
+        "line": 10,
+        "matchedToken": "g-6rr97P1zS48AR5MRY8BOpo",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/_app/immutable/assets/0.9bydmmXc.css",
+        "line": 1,
+        "matchedToken": "g-heading",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/_app/immutable/assets/0.9bydmmXc.css.br",
+        "line": 1,
+        "matchedToken": "g-heading",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/_app/immutable/assets/0.9bydmmXc.css.gz",
+        "line": 1,
+        "matchedToken": "g-heading",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/_app/immutable/nodes/2.BJPwfMCy.js",
+        "line": 4223,
+        "matchedToken": "g-reason",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/_app/immutable/nodes/2.BJPwfMCy.js.br",
+        "line": 4223,
+        "matchedToken": "g-reason",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/_app/immutable/nodes/2.BJPwfMCy.js.gz",
+        "line": 4223,
+        "matchedToken": "g-reason",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/data/energy/a5cb74a5-a12d-4036-9f5f-3346d802bb07/energy.json",
+        "line": 1,
+        "matchedToken": "g-parent",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/data/energy/a5cb74a5-a12d-4036-9f5f-3346d802bb07/energy.json.br",
+        "line": 1,
+        "matchedToken": "g-parent",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/client/data/energy/a5cb74a5-a12d-4036-9f5f-3346d802bb07/energy.json.gz",
+        "line": 1,
+        "matchedToken": "g-parent",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/server/_app/immutable/assets/_layout.9bydmmXc.css",
+        "line": 1,
+        "matchedToken": "g-heading",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/server/chunks/server2.js.map",
+        "line": 1,
+        "matchedToken": "g-omission",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/server/entries/pages/_page.svelte.js",
+        "line": 207,
+        "matchedToken": "g-heading",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      },
+      {
+        "category": "analytics_configuration",
+        "path": "build/server/entries/pages/_page.svelte.js.map",
+        "line": 1,
+        "matchedToken": "g-heading",
+        "reason": "The case-insensitive broad G-* pattern matched ordinary code/data identifiers or generated filenames, not a quoted analytics measurement ID."
+      }
+    ]
+  },
+  "attribution": {
+    "sources": [
+      {
+        "id": "fmi-air-quality",
+        "provider": "HSY via Finnish Meteorological Institute",
+        "license": "CC BY 4.0",
+        "attribution": "HSY via Finnish Meteorological Institute; FMI Open Data",
+        "retrievedAt": "2026-10-08T11:15:33.720Z",
+        "vintage": "2026-10-08T07:00:00.000Z–2026-10-08T10:00:00.000Z",
+        "checksum": null
+      },
+      {
+        "id": "fmi-weather",
+        "provider": "Finnish Meteorological Institute",
+        "license": "CC BY 4.0",
+        "attribution": "Finnish Meteorological Institute; FMI Open Data",
+        "retrievedAt": "2026-10-08T11:15:33.654Z",
+        "vintage": "2026-10-08T07:00:00.000Z–2026-10-08T10:00:00.000Z",
+        "checksum": null
+      },
+      {
+        "id": "helsinki-atlas-atlas",
+        "provider": "City of Helsinki Energy and Climate Atlas",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki Energy and Climate Atlas, CC BY 4.0",
+        "retrievedAt": "2026-10-08T10:51:53.185Z",
+        "vintage": "Atlas archive; individual certificate and 2015–2016 fields",
+        "checksum": "189554eca2a960a271c2c4c86176c3c7828e2cf4a28f4a1b5c041197b9533a7b"
+      },
+      {
+        "id": "helsinki-atlas-heka",
+        "provider": "City of Helsinki Energy and Climate Atlas",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki Energy and Climate Atlas, CC BY 4.0",
+        "retrievedAt": "2026-10-08T10:53:04.961Z",
+        "vintage": "2015–2018",
+        "checksum": "b6ca846f9995410100aaaa355bd8b9e9fa51f15703f59f50d01a90e063e17349"
+      },
+      {
+        "id": "helsinki-atlas-identity",
+        "provider": "City of Helsinki",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki, CC BY 4.0",
+        "retrievedAt": "2026-10-08T10:51:53.185Z",
+        "vintage": "2017",
+        "checksum": "189554eca2a960a271c2c4c86176c3c7828e2cf4a28f4a1b5c041197b9533a7b"
+      },
+      {
+        "id": "helsinki-atlas-modeled",
+        "provider": "City of Helsinki Energy and Climate Atlas",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki Energy and Climate Atlas, CC BY 4.0",
+        "retrievedAt": "2026-10-08T10:51:57.732Z",
+        "vintage": "2020-10-21; scenarios 2020–2050",
+        "checksum": "944e2029355ccae0c590226731dfba266b46ea5d4c35c96e083aaa5f949710b3"
+      },
+      {
+        "id": "helsinki-atlas-solar",
+        "provider": "City of Helsinki",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki, CC BY 4.0",
+        "retrievedAt": "2026-10-08T14:01:52.289Z",
+        "vintage": "2017-08-08 export (HTTP Last-Modified; calculation/weather year unknown)",
+        "checksum": "7e9722393f621db32c4e99f4db285f708b768fd69c6fc173d810ce39776fb599"
+      },
+      {
+        "id": "helsinki-citygml-20190326",
+        "provider": "City of Helsinki, Helsinki 3D",
+        "license": "CC BY 4.0",
+        "attribution": "Helsinki 3D city information model, City of Helsinki (2019), CC BY 4.0",
+        "retrievedAt": "2026-10-08T10:45:13.763Z",
+        "vintage": "2019-03-26",
+        "checksum": "ef6a787068b82642e5a0be5e20268e137075bb41fdbf0ec88619ad79926e2299"
+      },
+      {
+        "id": "helsinki-land-water",
+        "provider": "City of Helsinki, land and water areas",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki, land and water areas, CC BY 4.0; downloaded 2026-10-08T11:47:22.191Z",
+        "retrievedAt": "2026-10-08T11:47:22.191Z",
+        "vintage": null,
+        "checksum": "cfe06109cffbe1bbef14e998762ad9bbe9f9c78a86f90118a2c87bfba8facacd"
+      },
+      {
+        "id": "helsinki-modeled-demand",
+        "provider": "City of Helsinki",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki, CC BY 4.0",
+        "retrievedAt": "2026-10-08T10:51:57.732Z",
+        "vintage": "2020-10-21 export; scenarios 2020–2050",
+        "checksum": "944e2029355ccae0c590226731dfba266b46ea5d4c35c96e083aaa5f949710b3"
+      },
+      {
+        "id": "helsinki-nuuka",
+        "provider": "City of Helsinki",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki, CC BY 4.0",
+        "retrievedAt": "2026-10-08T10:51:51.829Z",
+        "vintage": null,
+        "checksum": "3233f9bab1aa99f4742ae8bb7b1d636dbf7172a8582655796aa349c5913fc80c"
+      },
+      {
+        "id": "helsinki-rails",
+        "provider": "HSY and Helsinki region municipalities, Seutukartta",
+        "license": "CC BY 4.0",
+        "attribution": "HSY and Helsinki region municipalities, Seutukartta, CC BY 4.0; downloaded 2026-10-08T11:47:22.192Z",
+        "retrievedAt": "2026-10-08T11:47:22.192Z",
+        "vintage": null,
+        "checksum": "0c93636bb391052ee7ee50ce2c7198c3f5c934ea49ee43fd221d109dcc75c169"
+      },
+      {
+        "id": "helsinki-roads",
+        "provider": "City of Helsinki, register of public areas YLRE",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki, register of public areas YLRE, CC BY 4.0; downloaded 2026-10-08T11:47:22.192Z",
+        "retrievedAt": "2026-10-08T11:47:22.192Z",
+        "vintage": null,
+        "checksum": "818d71ea6e3a908cddd0be231a9847ae3531ad7e2d47d362d5054049a7618299"
+      },
+      {
+        "id": "helsinki-semantic-tiles",
+        "provider": "City of Helsinki, Helsinki 3D",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki, Helsinki 3D, CC BY 4.0; downloaded 2026-10-08T11:53:45.574Z",
+        "retrievedAt": "2026-10-08T11:53:45.574Z",
+        "vintage": null,
+        "checksum": "059578f562215babc3052e28b9c2c3ec1a18105909f929c36d36f73debac872d"
+      },
+      {
+        "id": "helsinki-terrain-2021",
+        "provider": "City of Helsinki, Kaupunkimittauspalvelut",
+        "license": "CC BY 4.0",
+        "attribution": "City of Helsinki, Kaupunkimittauspalvelut, CC BY 4.0; downloaded 2026-10-08T11:47:22.190Z",
+        "retrievedAt": "2026-10-08T11:47:22.190Z",
+        "vintage": "2021",
+        "checksum": "c3bc326d5ba15d5f42881124762a50bf675cc719a05c5a6f7c04736fac900ff3"
+      },
+      {
+        "id": "hsl-gtfs",
+        "provider": "Helsinki Region Transport (HSL)",
+        "license": "CC BY 4.0",
+        "attribution": "HSL / Digitransit",
+        "retrievedAt": "2026-10-08T10:54:54.985Z",
+        "vintage": "20261007–20261205 2026-10-08 04:57:02",
+        "checksum": "5d6b6a170f3150afcb7bc2e377de5f9c1e85ce835804df1f1e2ca9f39c296bbd"
+      },
+      {
+        "id": "hsl-hfp",
+        "provider": "Helsinki Region Transport (HSL)",
+        "license": "CC BY 4.0",
+        "attribution": "HSL / Digitransit",
+        "retrievedAt": "2026-10-08T11:16:03.051Z",
+        "vintage": "2026-10-08T11:15:33.689Z",
+        "checksum": null
+      },
+      {
+        "id": "hsy-solar",
+        "provider": "Helsinki Region Environmental Services Authority (HSY)",
+        "license": "CC BY 4.0",
+        "attribution": "Helsinki Region Environmental Services Authority (HSY), CC BY 4.0",
+        "retrievedAt": "2026-10-08T11:15:39.707Z",
+        "vintage": null,
+        "checksum": "6e152ebff6ccfe73156bbaa70c54e899bea341139ee93df42fa2ecbd4c913bcf"
+      }
+    ],
+    "sourceNoticeMissingIds": [],
+    "allSourceNoticesPresent": true,
+    "dependencyNotices": {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 699687,
+      "sha256": "971549e5da19d1a9990455adb47d803652db98fd369c49c0d9617e0fe3fc70dd",
+      "presentPackages": {
+        "three": true,
+        "svelte": true,
+        "@sveltejs/kit": true,
+        "@sveltejs/adapter-node": true,
+        "proj4": true,
+        "mqtt": true
+      },
+      "installedLockedProductionPackages": 303,
+      "allInstalledProductionPackagesCovered": true,
+      "missingPackageHeaders": []
+    },
+    "mediaFiles": [
+      "build/client/favicon.svg"
+    ],
+    "systemFontsOnly": true,
+    "photographicImagesDistributed": false,
+    "favicon": "Local procedural SVG branding; no external font/photo assets",
+    "unknownSourceVintageLabelsPreserved": [
+      "helsinki-land-water",
+      "helsinki-nuuka",
+      "helsinki-rails",
+      "helsinki-roads",
+      "helsinki-semantic-tiles",
+      "hsy-solar"
+    ]
+  },
+  "docsScreenshotFilesCurrentlyPresent": [
+    "docs/release-screenshots/472-fixture.png",
+    "docs/release-screenshots/chromium-building-energy.png",
+    "docs/release-screenshots/chromium-portrait-inspector.png",
+    "docs/release-screenshots/chromium-solar.png",
+    "docs/release-screenshots/chromium-station.png",
+    "docs/release-screenshots/chromium-tram.png",
+    "docs/release-screenshots/firefox-landscape-sources.png",
+    "docs/release-screenshots/performance-all-features.png",
+    "docs/release-screenshots/webgl-fallback-desktop.png"
+  ],
+  "notes": [
+    "Candidate complete build/data inventory verified during clean installation; final report/screenshots will be included by the next recursive docs package copy.",
+    "README historical Ocean Lens reference is expected documentation and was excluded from the public runtime configuration scan.",
+    "No docs/runtime/build/archive changes performed by this audit."
+  ]
+}

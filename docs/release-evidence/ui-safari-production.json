@@ -1,0 +1,26 @@
+{
+  "verifiedAt": "2026-10-08T15:26:15Z",
+  "browser": "Safari26.6.2 (21624.5.1.11.3)",
+  "method": "native Safari accessibility/UI control; production4185; real sources; no injected fixtures",
+  "windowScreenshotSize": [
+    2560,
+    1410
+  ],
+  "checks": [
+    "final build scene displays and stabilizes60FPS when foreground",
+    "search tram0040/00075 route1001 shows189s late with separately dated received/reported times",
+    "follow changes button to Stop following",
+    "route1001_20261007_To_2_1739 exact18stops",
+    "Kaisaniemi100971 partial latest unknown; latest valid values remain dated",
+    "Left key station history yields12.6degC at2026-10-08T12:30Z",
+    "building103027184J shows September property total173390.33kWh and baseline modeled59114kWh;2verified/1unresolved members; no allocation",
+    "building1030270784 shows modeled954213kWh and annual incident solar2112243.46kWh; no measured inference; weather year/date unknown",
+    "source dialog opens to Close sources and Escape closes; visible source-trigger focus ring"
+  ],
+  "exceptions": [
+    "Allow remote automation disabled; native UI used without changing preference",
+    "DOM focus after Escape cannot be independently asserted through native AX; Chromium/Firefox assertions cover exact focus restoration",
+    "Safari narrow/mobile,WebGL failure,reduced-motion automation,full assistive-technology audit untested",
+    "no formal Safari performance baseline; transient1FPS reports while native observations leave app in background"
+  ]
+}

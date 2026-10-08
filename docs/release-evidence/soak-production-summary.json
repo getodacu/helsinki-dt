@@ -1,0 +1,201 @@
+{
+  "status": "pass",
+  "startedAt": "2026-10-08T15:15:48.722Z",
+  "trafficEndedAt": "2026-10-08T15:45:48.807Z",
+  "trafficDurationSeconds": 1800.085,
+  "idleCleanupAt": "2026-10-08T15:46:19.011Z",
+  "finishedAt": "2026-10-08T15:46:19.012Z",
+  "pid": 80505,
+  "clients": 2,
+  "clientFrames": [
+    1800,
+    1800
+  ],
+  "clientFinalVehicleCounts": [
+    179,
+    179
+  ],
+  "clientStatesIdentical": true,
+  "liveFleetPeak": 196,
+  "sampledIdentityPeak": 217,
+  "sampledServerVehiclePeak": 194,
+  "identityLimit": 1000,
+  "upstreamConnectionPeak": 1,
+  "reconnects": [
+    0,
+    0
+  ],
+  "memorySamples": 31,
+  "heapUsedBytesRange": [
+    77359136,
+    191898240
+  ],
+  "rssBytesRange": [
+    426409984,
+    611844096
+  ],
+  "finalWindowMemory": {
+    "rss": 498712576,
+    "heapTotal": 294813696,
+    "heapUsed": 150499208,
+    "external": 48564973,
+    "arrayBuffers": 41562489
+  },
+  "tenMinuteMemoryFloors": [
+    {
+      "startMinute": 0,
+      "endMinute": 10,
+      "sampleCount": 10,
+      "heapFloorBytes": 77359136,
+      "rssFloorBytes": 426409984,
+      "heapPeakBytes": 161876688,
+      "rssPeakBytes": 588120064
+    },
+    {
+      "startMinute": 10,
+      "endMinute": 20,
+      "sampleCount": 10,
+      "heapFloorBytes": 140238504,
+      "rssFloorBytes": 546258944,
+      "heapPeakBytes": 149337424,
+      "rssPeakBytes": 599785472
+    },
+    {
+      "startMinute": 20,
+      "endMinute": 30,
+      "sampleCount": 10,
+      "heapFloorBytes": 140693752,
+      "rssFloorBytes": 549437440,
+      "heapPeakBytes": 191898240,
+      "rssPeakBytes": 611844096
+    }
+  ],
+  "memoryInterpretation": "Sampled RSS warmed from426.4MB to a611.8MB peak, then ended at498.7MB. Ten-minute heap floors were77.4,140.2,140.7MB; later two floors were nearly unchanged, while individual heap samples varied up to191.9MB. RSS floors for the later two blocks were546.3 and549.4MB. These point samples describe the tested local30minute workload and do not prove indefinite uptime or identify GC phases.",
+  "during": {
+    "accepted": 348229,
+    "rejected": 1391,
+    "duplicates": 382617,
+    "capacityDrops": 0,
+    "receivedMessages": 779196,
+    "receivedBytes": 233801990,
+    "maxPendingVehicles": 183,
+    "maxPendingRemovals": 2,
+    "upstreamConnections": 1,
+    "subscribers": 2,
+    "consumers": 2,
+    "vehicles": 179,
+    "identities": 211,
+    "pendingVehicles": 143,
+    "pendingRemovals": 0,
+    "timers": 1
+  },
+  "afterIdle": {
+    "accepted": 353982,
+    "rejected": 1391,
+    "duplicates": 388992,
+    "capacityDrops": 0,
+    "receivedMessages": 791875,
+    "receivedBytes": 237607136,
+    "maxPendingVehicles": 183,
+    "maxPendingRemovals": 2,
+    "upstreamConnections": 0,
+    "subscribers": 0,
+    "consumers": 0,
+    "vehicles": 0,
+    "identities": 0,
+    "pendingVehicles": 0,
+    "pendingRemovals": 0,
+    "timers": 0
+  },
+  "endpointCheckCount": 161,
+  "endpointCountsByPath": {
+    "/api/traffic": 31,
+    "/api/route": 31,
+    "/api/energy/catalog": 31,
+    "/api/observations": 31,
+    "/api/energy?property=091-001-0030-0001": 31,
+    "/data/manifest.json": 1,
+    "/data/city/manifest.json": 2,
+    "/data/city/generations/b39efe3f-ab77-459a-887f-04c90af3ef91/base.json": 1,
+    "/data/city/generations/b39efe3f-ab77-459a-887f-04c90af3ef91/tile_-6_-6_0.json": 1,
+    "/data/city/generations/b39efe3f-ab77-459a-887f-04c90af3ef91/tile_-6_-6_0_buildings.json": 1
+  },
+  "endpointStatuses": {
+    "200": 161
+  },
+  "sourceStateCounts": {
+    "fmi-weather": {
+      "current": 15,
+      "partial": 16
+    },
+    "fmi-air-quality": {
+      "current": 31
+    }
+  },
+  "cacheStateCounts": {
+    "energy": {
+      "current": 31
+    },
+    "catalog": {
+      "ready": 31
+    }
+  },
+  "finalSourceTimes": [
+    {
+      "id": "fmi-weather",
+      "state": "partial",
+      "observedAt": "2026-10-08T15:40:00.000Z",
+      "retrievedAt": "2026-10-08T15:40:58.228Z",
+      "lastAttemptAt": "2026-10-08T15:40:58.224Z"
+    },
+    {
+      "id": "fmi-air-quality",
+      "state": "current",
+      "observedAt": "2026-10-08T15:00:00.000Z",
+      "retrievedAt": "2026-10-08T15:30:54.517Z",
+      "lastAttemptAt": "2026-10-08T15:30:54.512Z"
+    }
+  ],
+  "finalEnergy": {
+    "status": "current",
+    "retrievedAt": "2026-10-08T14:13:18.564Z",
+    "period": {
+      "start": "2026-09-01",
+      "end": "2026-10-01"
+    },
+    "complete": true
+  },
+  "finalCatalog": {
+    "status": "ready",
+    "generatedAt": "2026-10-08T14:11:31.993Z"
+  },
+  "modes": {
+    "bus": {
+      "reports": 183316,
+      "firstReportedAt": "2026-10-08T15:15:49.215Z",
+      "lastReportedAt": "2026-10-08T15:45:47.755Z"
+    },
+    "tram": {
+      "reports": 116700,
+      "firstReportedAt": "2026-10-08T15:15:49.251Z",
+      "lastReportedAt": "2026-10-08T15:45:47.756Z"
+    },
+    "ferry": {
+      "reports": 225,
+      "firstReportedAt": "2026-10-08T15:16:03.000Z",
+      "lastReportedAt": "2026-10-08T15:45:42.000Z"
+    }
+  },
+  "latency": {
+    "count": 300241,
+    "p95BucketStartMs": 900,
+    "maxMs": 1129
+  },
+  "serverSha256": "bcac391aba4a3b20145936125edb6e4163b8be833d09940793aa181964f62583",
+  "serverExecutableFiles": 40,
+  "serverFingerprintUnchanged": true,
+  "staticManifestHashesUnchanged": true,
+  "packageComparison": ".cache/task-e/soak-package-comparison.json",
+  "rejectionSemantics": "Rejected reports fail schema, timestamp, value, size or rate bounds; counters do not retain raw payloads or identify which rule. Duplicate reports have a non-newer timestamp for an existing identity. Unseen out-of-area reports are ignored. No source values or vehicles are synthesized.",
+  "energyAcquisition": "Validated dated cache was served; no new Nuuka acquisition is claimed."
+}

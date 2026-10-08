@@ -1,0 +1,65 @@
+{
+  "route": {
+    "route_id": "1009",
+    "agency_id": "HSL",
+    "route_short_name": "9",
+    "route_long_name": "L\u00e4nsisatama - P\u00e4\u00e4rautatieas. - Kallio - Pasila as. - Ilmala",
+    "route_desc": "",
+    "route_type": "0",
+    "route_url": "http://aikataulut.hsl.fi/linjat/fi/h9.html"
+  },
+  "calendar": [
+    {
+      "service_id": "1009_20261007_20261101_To",
+      "monday": "0",
+      "tuesday": "0",
+      "wednesday": "0",
+      "thursday": "1",
+      "friday": "0",
+      "saturday": "0",
+      "sunday": "0",
+      "start_date": "20261007",
+      "end_date": "20261101"
+    }
+  ],
+  "calendarDates": [],
+  "trips": [
+    {
+      "route_id": "1009",
+      "service_id": "1009_20261007_20261101_To",
+      "trip_id": "1009_20261007_To_1_1327",
+      "trip_headsign": "Ilmala",
+      "direction_id": "0",
+      "shape_id": "1009_20260828_1",
+      "wheelchair_accessible": "1",
+      "bikes_allowed": "2",
+      "max_delay": "0"
+    }
+  ],
+  "firstStops": [
+    {
+      "trip_id": "1009_20261007_To_1_1327",
+      "arrival_time": "13:27:00",
+      "departure_time": "13:27:00",
+      "stop_id": "1203416",
+      "stop_sequence": "1",
+      "stop_headsign": "Ilmala via P\u00e4\u00e4rautatieas.",
+      "pickup_type": "0",
+      "drop_off_type": "1",
+      "shape_dist_traveled": "0.000",
+      "timepoint": "1"
+    }
+  ],
+  "feedInfo": [
+    {
+      "feed_publisher_name": "Helsingin seudun liikenne",
+      "feed_publisher_url": "http://www.hsl.fi/",
+      "feed_lang": "fi",
+      "feed_start_date": "20261007",
+      "feed_end_date": "20261205",
+      "feed_version": "2026-10-08 04:57:02"
+    }
+  ],
+  "inflatedBytes": 1003841287,
+  "scannedRows": 11187565
+}

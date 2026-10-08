@@ -1,0 +1,178 @@
+[
+  {
+    "topic": "/hfp/v2/journey/ongoing/vp/tram/0040/00100/1009/1/Ilmala/13:27/1220435/4/60;24/19/85/62",
+    "payload": {
+      "VP": {
+        "desi": "9",
+        "dir": "1",
+        "oper": 40,
+        "veh": 100,
+        "tst": "2026-10-08T10:54:06.754Z",
+        "tsi": 1791456846,
+        "spd": 4.59,
+        "hdg": 91,
+        "lat": 60.186933,
+        "long": 24.952203,
+        "acc": -0.33,
+        "dl": 31,
+        "odo": 5692,
+        "drst": 0,
+        "oday": "2026-10-08",
+        "jrn": 895,
+        "line": 39,
+        "start": "13:27",
+        "loc": "GPS",
+        "stop": null,
+        "route": "1009",
+        "occu": 0
+      }
+    },
+    "receivedAt": "2026-10-08T10:54:07.564Z"
+  },
+  {
+    "topic": "/hfp/v2/journey/ongoing/vp/tram/0040/00098/1003/1/Kuusitie/13:43/1020463/5/60;24/19/64/63",
+    "payload": {
+      "VP": {
+        "desi": "3",
+        "dir": "1",
+        "oper": 40,
+        "veh": 98,
+        "tst": "2026-10-08T10:54:06.755Z",
+        "tsi": 1791456846,
+        "spd": 5.41,
+        "hdg": 321,
+        "lat": 60.166848,
+        "long": 24.943212,
+        "acc": 0.12,
+        "dl": 58,
+        "odo": 2231,
+        "drst": 0,
+        "oday": "2026-10-08",
+        "jrn": 851,
+        "line": 31,
+        "start": "13:43",
+        "loc": "GPS",
+        "stop": null,
+        "route": "1003",
+        "occu": 0
+      }
+    },
+    "receivedAt": "2026-10-08T10:54:07.565Z"
+  },
+  {
+    "topic": "/hfp/v2/journey/ongoing/vp/bus/0022/00025/1037/1/Myyrm\u00e4ki as./13:48/1130103/5/60;24/19/72/62",
+    "payload": {
+      "VP": {
+        "desi": "37",
+        "dir": "1",
+        "oper": 22,
+        "veh": 25,
+        "tst": "2026-10-08T10:54:07.640Z",
+        "tsi": 1791456847,
+        "spd": 0,
+        "hdg": 8,
+        "lat": 60.176923,
+        "long": 24.922539,
+        "acc": 0,
+        "dl": -60,
+        "odo": 1224,
+        "drst": 1,
+        "oday": "2026-10-08",
+        "jrn": 329,
+        "line": 830,
+        "start": "13:48",
+        "loc": "GPS",
+        "stop": 1130103,
+        "route": "1037",
+        "occu": 0
+      }
+    },
+    "receivedAt": "2026-10-08T10:54:07.709Z"
+  },
+  {
+    "topic": "/hfp/v2/journey/ongoing/vp/bus/0012/01915/4400/1/Vantaankoski/13:41/1150101/5/60;24/19/91/00",
+    "payload": {
+      "VP": {
+        "desi": "400",
+        "dir": "1",
+        "oper": 12,
+        "veh": 1915,
+        "tst": "2026-10-08T10:54:07.677Z",
+        "tsi": 1791456847,
+        "spd": 0,
+        "hdg": 340,
+        "lat": 60.190948,
+        "long": 24.910719,
+        "acc": 0,
+        "dl": -60,
+        "odo": 2988,
+        "drst": 0,
+        "oday": "2026-10-08",
+        "jrn": 97,
+        "line": 1109,
+        "start": "13:41",
+        "loc": "GPS",
+        "stop": 1150101,
+        "route": "4400",
+        "occu": 0
+      }
+    },
+    "receivedAt": "2026-10-08T10:54:07.709Z"
+  },
+  {
+    "topic": "/hfp/v2/journey/ongoing/vp/ferry/0060/00005/1019E/2/Katajanokka/13:40/1080701/5/60;24/19/68/71",
+    "payload": {
+      "VP": {
+        "desi": "19E",
+        "dir": "2",
+        "oper": 60,
+        "veh": 5,
+        "tst": "2026-10-08T10:54:09.000Z",
+        "tsi": 1791456849,
+        "spd": 1.131768,
+        "hdg": 238,
+        "lat": 60.167688,
+        "acc": null,
+        "dl": null,
+        "odo": null,
+        "drst": null,
+        "oday": "2026-10-08",
+        "start": "13:40",
+        "loc": "GPS",
+        "route": "1019E",
+        "occu": 0,
+        "label": "EHRENSVAERD",
+        "long": 24.981047
+      }
+    },
+    "receivedAt": "2026-10-08T10:54:09.589Z"
+  },
+  {
+    "topic": "/hfp/v2/journey/ongoing/vp/ferry/0060/00005/1019E/2/Katajanokka/13:40/1080701/5/60;24/19/68/71",
+    "payload": {
+      "VP": {
+        "desi": "19E",
+        "dir": "2",
+        "oper": 60,
+        "veh": 5,
+        "tst": "2026-10-08T10:54:11.000Z",
+        "tsi": 1791456851,
+        "spd": 1.131768,
+        "hdg": 238,
+        "lat": 60.167672,
+        "acc": null,
+        "dl": null,
+        "odo": null,
+        "drst": null,
+        "oday": "2026-10-08",
+        "start": "13:40",
+        "loc": "GPS",
+        "route": "1019E",
+        "occu": 0,
+        "label": "EHRENSVAERD",
+        "long": 24.981012
+      }
+    },
+    "receivedAt": "2026-10-08T10:54:11.511Z"
+  }
+]

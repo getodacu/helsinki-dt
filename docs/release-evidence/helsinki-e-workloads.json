@@ -1,0 +1,100 @@
+{
+  "at": "2026-10-08T15:21:41.542Z",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "fixture": false,
+  "stages": [
+    {
+      "name": "City Centre",
+      "fps": "216",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487078",
+      "loadedChunks": "12",
+      "placedVehicles": "182",
+      "unplacedVehicles": "3",
+      "receiptLatencyMs": "4"
+    },
+    {
+      "name": "Harbour",
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "409460",
+      "loadedChunks": "12",
+      "placedVehicles": "183",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "3"
+    },
+    {
+      "name": "Suomenlinna",
+      "fps": "240",
+      "drawCalls": "20",
+      "geometries": "22",
+      "triangles": "277720",
+      "loadedChunks": "12",
+      "placedVehicles": "183",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "3"
+    },
+    {
+      "name": "Energy",
+      "fps": "239",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "452690",
+      "loadedChunks": "12",
+      "placedVehicles": "182",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "5"
+    },
+    {
+      "name": "24 repeated source-identity selections",
+      "fps": "42",
+      "drawCalls": "23",
+      "geometries": "22",
+      "triangles": "456989",
+      "loadedChunks": "12",
+      "placedVehicles": "185",
+      "unplacedVehicles": "1",
+      "receiptLatencyMs": "579"
+    },
+    {
+      "name": "all available geographic and transit layers disabled",
+      "fps": "240",
+      "drawCalls": "1",
+      "geometries": "21",
+      "triangles": "130877",
+      "loadedChunks": "12",
+      "placedVehicles": "0",
+      "unplacedVehicles": "0",
+      "receiptLatencyMs": "2"
+    },
+    {
+      "name": "all layers restored",
+      "fps": "240",
+      "drawCalls": "23",
+      "geometries": "22",
+      "triangles": "456977",
+      "loadedChunks": "12",
+      "placedVehicles": "184",
+      "unplacedVehicles": "1",
+      "receiptLatencyMs": "5"
+    }
+  ],
+  "selections": 24,
+  "layersDisabled": [
+    "Semantic buildings",
+    "Terrain & islands",
+    "Roads & rail",
+    "Trams",
+    "Buses",
+    "HSL Ferries",
+    "Weather stations",
+    "Air-quality stations"
+  ],
+  "heapStart": 100159730,
+  "heapEnd": 125291370
+}

@@ -1,0 +1,622 @@
+{
+  "at": "2026-10-08T15:17:19.879Z",
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+  "network": "20 Mbps/50 ms/cache disabled",
+  "interactiveMs": 1455,
+  "catalogUsableMs": 1988,
+  "initial": {
+    "heap": 217388243,
+    "metrics": {},
+    "resources": [
+      {
+        "name": "start.CJ5AC8OA.js",
+        "transfer": 584,
+        "encoded": 284,
+        "decoded": 522
+      },
+      {
+        "name": "payload.DSmR2FwN.js",
+        "transfer": 360,
+        "encoded": 60,
+        "decoded": 65
+      },
+      {
+        "name": "BaNbYf_w.js",
+        "transfer": 930,
+        "encoded": 630,
+        "decoded": 1398
+      },
+      {
+        "name": "CEzOKDha.js",
+        "transfer": 13468,
+        "encoded": 13168,
+        "decoded": 39655
+      },
+      {
+        "name": "app.COx2Dc6X.js",
+        "transfer": 822,
+        "encoded": 522,
+        "decoded": 1121
+      },
+      {
+        "name": "DKsiFBlZ.js",
+        "transfer": 2016,
+        "encoded": 1716,
+        "decoded": 4291
+      },
+      {
+        "name": "DLHExqHP.js",
+        "transfer": 16069,
+        "encoded": 15769,
+        "decoded": 45373
+      },
+      {
+        "name": "0.9bydmmXc.css",
+        "transfer": 4945,
+        "encoded": 4645,
+        "decoded": 22147
+      },
+      {
+        "name": "0.Du12VD4r.js",
+        "transfer": 413,
+        "encoded": 113,
+        "decoded": 146
+      },
+      {
+        "name": "2.BJPwfMCy.js",
+        "transfer": 179425,
+        "encoded": 179125,
+        "decoded": 801488
+      },
+      {
+        "name": "2.ROgHAM4Y.css",
+        "transfer": 603,
+        "encoded": 303,
+        "decoded": 890
+      },
+      {
+        "name": "favicon.svg",
+        "transfer": 449,
+        "encoded": 149,
+        "decoded": 185
+      },
+      {
+        "name": "1.Coc-Gemp.js",
+        "transfer": 510,
+        "encoded": 210,
+        "decoded": 322
+      },
+      {
+        "name": "traffic",
+        "transfer": 87365,
+        "encoded": 87065,
+        "decoded": 87065
+      },
+      {
+        "name": "observations",
+        "transfer": 39709,
+        "encoded": 39409,
+        "decoded": 39409
+      },
+      {
+        "name": "route",
+        "transfer": 3859,
+        "encoded": 3559,
+        "decoded": 3559
+      },
+      {
+        "name": "manifest.json",
+        "transfer": 3784,
+        "encoded": 3484,
+        "decoded": 14263
+      },
+      {
+        "name": "manifest.json",
+        "transfer": 6917,
+        "encoded": 6617,
+        "decoded": 59370
+      },
+      {
+        "name": "buildings.json",
+        "transfer": 17117,
+        "encoded": 16817,
+        "decoded": 218560
+      },
+      {
+        "name": "base.json",
+        "transfer": 687631,
+        "encoded": 687331,
+        "decoded": 3573417
+      },
+      {
+        "name": "tile_-6_-6_0_buildings.json",
+        "transfer": 4416,
+        "encoded": 4116,
+        "decoded": 44182
+      },
+      {
+        "name": "tile_-6_-5_0_buildings.json",
+        "transfer": 4245,
+        "encoded": 3945,
+        "decoded": 36215
+      },
+      {
+        "name": "tile_-6_-4_0_buildings.json",
+        "transfer": 2082,
+        "encoded": 1782,
+        "decoded": 13003
+      },
+      {
+        "name": "tile_-5_-5_0_buildings.json",
+        "transfer": 7074,
+        "encoded": 6774,
+        "decoded": 69380
+      },
+      {
+        "name": "tile_0_0_0.json",
+        "transfer": 75505,
+        "encoded": 75205,
+        "decoded": 709967
+      },
+      {
+        "name": "tile_0_0_0_buildings.json",
+        "transfer": 4535,
+        "encoded": 4235,
+        "decoded": 38984
+      },
+      {
+        "name": "tile_0_-1_0.json",
+        "transfer": 189172,
+        "encoded": 188872,
+        "decoded": 1816049
+      },
+      {
+        "name": "tile_0_-1_0_buildings.json",
+        "transfer": 11073,
+        "encoded": 10773,
+        "decoded": 118691
+      },
+      {
+        "name": "tile_-1_-1_0.json",
+        "transfer": 113467,
+        "encoded": 113167,
+        "decoded": 1137441
+      },
+      {
+        "name": "tile_-1_-1_0_buildings.json",
+        "transfer": 7724,
+        "encoded": 7424,
+        "decoded": 75423
+      },
+      {
+        "name": "tile_-1_0_0.json",
+        "transfer": 183152,
+        "encoded": 182852,
+        "decoded": 1807165
+      },
+      {
+        "name": "tile_-1_0_0_buildings.json",
+        "transfer": 9104,
+        "encoded": 8804,
+        "decoded": 93342
+      },
+      {
+        "name": "tile_0_-1_1.json",
+        "transfer": 12754,
+        "encoded": 12454,
+        "decoded": 110259
+      },
+      {
+        "name": "tile_0_-1_1_buildings.json",
+        "transfer": 1506,
+        "encoded": 1206,
+        "decoded": 7158
+      },
+      {
+        "name": "tile_-1_0_1.json",
+        "transfer": 11991,
+        "encoded": 11691,
+        "decoded": 108312
+      },
+      {
+        "name": "tile_-1_0_1_buildings.json",
+        "transfer": 1416,
+        "encoded": 1116,
+        "decoded": 7195
+      },
+      {
+        "name": "tile_1_0_1.json",
+        "transfer": 85992,
+        "encoded": 85692,
+        "decoded": 804624
+      },
+      {
+        "name": "tile_1_0_1_buildings.json",
+        "transfer": 5303,
+        "encoded": 5003,
+        "decoded": 49461
+      },
+      {
+        "name": "tile_1_0_0_buildings.json",
+        "transfer": 4714,
+        "encoded": 4414,
+        "decoded": 42595
+      },
+      {
+        "name": "tile_1_0_0.json",
+        "transfer": 184153,
+        "encoded": 183853,
+        "decoded": 1736368
+      },
+      {
+        "name": "tile_-2_-1_0.json",
+        "transfer": 82639,
+        "encoded": 82339,
+        "decoded": 810311
+      },
+      {
+        "name": "tile_-2_-1_0_buildings.json",
+        "transfer": 3834,
+        "encoded": 3534,
+        "decoded": 30406
+      },
+      {
+        "name": "tile_-1_1_0.json",
+        "transfer": 163940,
+        "encoded": 163640,
+        "decoded": 1644180
+      },
+      {
+        "name": "tile_-1_1_0_buildings.json",
+        "transfer": 11531,
+        "encoded": 11231,
+        "decoded": 121146
+      },
+      {
+        "name": "tile_0_-2_0.json",
+        "transfer": 105070,
+        "encoded": 104770,
+        "decoded": 1014488
+      },
+      {
+        "name": "tile_0_-2_0_buildings.json",
+        "transfer": 8322,
+        "encoded": 8022,
+        "decoded": 86723
+      },
+      {
+        "name": "tile_-2_0_0_buildings.json",
+        "transfer": 9531,
+        "encoded": 9231,
+        "decoded": 98236
+      },
+      {
+        "name": "tile_-2_0_0.json",
+        "transfer": 184648,
+        "encoded": 184348,
+        "decoded": 1850854
+      },
+      {
+        "name": "tile_-5_-6_0_buildings.json",
+        "transfer": 2311,
+        "encoded": 2011,
+        "decoded": 16710
+      },
+      {
+        "name": "tile_-5_-4_0_buildings.json",
+        "transfer": 6773,
+        "encoded": 6473,
+        "decoded": 70039
+      },
+      {
+        "name": "tile_-4_-6_0_buildings.json",
+        "transfer": 2977,
+        "encoded": 2677,
+        "decoded": 21037
+      },
+      {
+        "name": "tile_-4_-5_0_buildings.json",
+        "transfer": 4390,
+        "encoded": 4090,
+        "decoded": 39478
+      },
+      {
+        "name": "catalog",
+        "transfer": 843387,
+        "encoded": 843087,
+        "decoded": 16750291
+      },
+      {
+        "name": "tile_-4_-4_0_buildings.json",
+        "transfer": 8711,
+        "encoded": 8411,
+        "decoded": 95051
+      },
+      {
+        "name": "tile_-6_-1_0_buildings.json",
+        "transfer": 1419,
+        "encoded": 1119,
+        "decoded": 6316
+      },
+      {
+        "name": "tile_-6_-3_0_buildings.json",
+        "transfer": 1091,
+        "encoded": 791,
+        "decoded": 3158
+      },
+      {
+        "name": "tile_-6_1_0_buildings.json",
+        "transfer": 4250,
+        "encoded": 3950,
+        "decoded": 35034
+      },
+      {
+        "name": "tile_-6_0_0_buildings.json",
+        "transfer": 2022,
+        "encoded": 1722,
+        "decoded": 11768
+      },
+      {
+        "name": "tile_-5_-3_0_buildings.json",
+        "transfer": 2822,
+        "encoded": 2522,
+        "decoded": 20838
+      },
+      {
+        "name": "tile_-5_-1_0_buildings.json",
+        "transfer": 1552,
+        "encoded": 1252,
+        "decoded": 7563
+      },
+      {
+        "name": "tile_-5_-2_0_buildings.json",
+        "transfer": 2573,
+        "encoded": 2273,
+        "decoded": 16537
+      },
+      {
+        "name": "tile_-5_0_0_buildings.json",
+        "transfer": 2548,
+        "encoded": 2248,
+        "decoded": 16869
+      },
+      {
+        "name": "tile_-5_1_0_buildings.json",
+        "transfer": 4201,
+        "encoded": 3901,
+        "decoded": 36454
+      },
+      {
+        "name": "tile_-4_-3_0_buildings.json",
+        "transfer": 6338,
+        "encoded": 6038,
+        "decoded": 61308
+      },
+      {
+        "name": "tile_-4_-2_0_buildings.json",
+        "transfer": 8537,
+        "encoded": 8237,
+        "decoded": 90667
+      },
+      {
+        "name": "tile_-6_2_0_buildings.json",
+        "transfer": 1480,
+        "encoded": 1180,
+        "decoded": 7377
+      },
+      {
+        "name": "tile_-4_0_0_buildings.json",
+        "transfer": 5306,
+        "encoded": 5006,
+        "decoded": 48087
+      },
+      {
+        "name": "tile_-4_1_0_buildings.json",
+        "transfer": 5051,
+        "encoded": 4751,
+        "decoded": 46848
+      },
+      {
+        "name": "tile_-4_-1_0_buildings.json",
+        "transfer": 6879,
+        "encoded": 6579,
+        "decoded": 69889
+      },
+      {
+        "name": "tile_-5_2_0_buildings.json",
+        "transfer": 5468,
+        "encoded": 5168,
+        "decoded": 50668
+      },
+      {
+        "name": "tile_-6_3_0_buildings.json",
+        "transfer": 861,
+        "encoded": 561,
+        "decoded": 1453
+      },
+      {
+        "name": "tile_-5_3_0_buildings.json",
+        "transfer": 5431,
+        "encoded": 5131,
+        "decoded": 54494
+      },
+      {
+        "name": "tile_-5_4_0_buildings.json",
+        "transfer": 1442,
+        "encoded": 1142,
+        "decoded": 6291
+      },
+      {
+        "name": "tile_-4_3_0_buildings.json",
+        "transfer": 2615,
+        "encoded": 2315,
+        "decoded": 18276
+      },
+      {
+        "name": "tile_-4_2_0_buildings.json",
+        "transfer": 4878,
+        "encoded": 4578,
+        "decoded": 44296
+      },
+      {
+        "name": "tile_-4_4_0_buildings.json",
+        "transfer": 2322,
+        "encoded": 2022,
+        "decoded": 15470
+      },
+      {
+        "name": "tile_-4_6_0_buildings.json",
+        "transfer": 1828,
+        "encoded": 1528,
+        "decoded": 9941
+      },
+      {
+        "name": "tile_-5_6_0_buildings.json",
+        "transfer": 1412,
+        "encoded": 1112,
+        "decoded": 5658
+      },
+      {
+        "name": "tile_-5_7_0_buildings.json",
+        "transfer": 1277,
+        "encoded": 977,
+        "decoded": 4422
+      },
+      {
+        "name": "tile_-3_-6_0_buildings.json",
+        "transfer": 2990,
+        "encoded": 2690,
+        "decoded": 22391
+      },
+      {
+        "name": "tile_-3_-5_0_buildings.json",
+        "transfer": 2179,
+        "encoded": 1879,
+        "decoded": 14587
+      }
+    ],
+    "navigation": [
+      {
+        "transfer": 11842,
+        "encoded": 11542
+      }
+    ]
+  },
+  "frames": [
+    {
+      "fps": "211",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487126",
+      "loadedChunks": "12",
+      "placedVehicles": "186",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "144"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487150",
+      "loadedChunks": "12",
+      "placedVehicles": "188",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "51"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487150",
+      "loadedChunks": "12",
+      "placedVehicles": "188",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "51"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487150",
+      "loadedChunks": "12",
+      "placedVehicles": "188",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "37"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487138",
+      "loadedChunks": "12",
+      "placedVehicles": "187",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "39"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487138",
+      "loadedChunks": "12",
+      "placedVehicles": "187",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "39"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487162",
+      "loadedChunks": "12",
+      "placedVehicles": "189",
+      "unplacedVehicles": "0",
+      "receiptLatencyMs": "80"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487150",
+      "loadedChunks": "12",
+      "placedVehicles": "188",
+      "unplacedVehicles": "1",
+      "receiptLatencyMs": "41"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487150",
+      "loadedChunks": "12",
+      "placedVehicles": "188",
+      "unplacedVehicles": "1",
+      "receiptLatencyMs": "41"
+    },
+    {
+      "fps": "240",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487150",
+      "loadedChunks": "12",
+      "placedVehicles": "188",
+      "unplacedVehicles": "1",
+      "receiptLatencyMs": "85"
+    }
+  ],
+  "receiptLatency": {
+    "count": 1799,
+    "p50": 430,
+    "p95": 935,
+    "max": 1022,
+    "sourceAgeP95": 173
+  },
+  "final": {
+    "heap": 121892921,
+    "resources": {
+      "transfer": 4123225,
+      "encoded": 4056625,
+      "decoded": 42805268
+    }
+  }
+}

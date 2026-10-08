@@ -1,0 +1,88 @@
+{
+  "verifiedAt": "2026-10-08T15:01:24.202626+00:00",
+  "status": "pass",
+  "runtimeDefectsFound": 0,
+  "focusedTests": {
+    "passed": 49,
+    "failed": 0,
+    "skipped": 0,
+    "log": ".cache/task-e/resilience-regression.log"
+  },
+  "command": "node --test tests/traffic.test.ts tests/observations.test.ts tests/energy-service.test.ts tests/io.test.ts",
+  "newChecks": [
+    "HSL disconnection retains original report time at stale30s, expires120s, then recovers both SSE clients with current reports and cleans up last-client demand",
+    "FMI malformed refresh retains dated validated readings; valid recovery clears failure status while preserving partial/missing coverage",
+    "FMI TimeoutError retains measurement/retrieval dates and waits for normal next attempt cadence",
+    "Real AbortSignal deadline rejects a stalled response body after successful headers",
+    "Energy failed refresh retains dated values; retry replaces them; corrupt durable cache fails closed then repairs from a valid source and survives restart"
+  ],
+  "existingChecks": [
+    "bounded HSL retry backoff1000\u201330000ms",
+    "1000 identity/current/pending/removal limits",
+    "1MiB slow SSE reader release without disrupting active reader",
+    "15s heartbeat, abort/cancel/idle30s cleanup",
+    "FMI fixed station/six-hour/2MiB/30s/5000records bounds",
+    "Nuuka15s/256KiB/366rows/4inflight/24startsperminute/64memory-and-disk entries bounds",
+    "cache checksums/city-generation/source/membership gates, durable atomic replacement"
+  ],
+  "httpAdapterAudit": {
+    "package": "@sveltejs/kit",
+    "version": "3.0.0",
+    "resolvedSource": "/Users/radu/.opensrc/repos/github.com/sveltejs/kit/3.0.0/packages/kit/src/exports/node/index.js",
+    "behavior": "setResponse cancels Web stream on response close/error, pauses reading when res.write returnsfalse and resumes on drain; no unbounded replay array",
+    "initialSourceResolution": "sandbox network failure; opensrc escalation resolved installedversion"
+  },
+  "productionHarness": {
+    "script": "scripts/verify-release-soak.ts",
+    "smokeEvidence": ".cache/task-e/soak-harness-check.json",
+    "fullEvidence": ".cache/task-e/soak-production.json",
+    "seconds": 1800,
+    "clients": 2,
+    "diagnostics": "private loopback Node inspector + temporary ignored preload imports actual compiled shared TrafficFeed; no public diagnostics endpoint"
+  },
+  "limits": [
+    "Deterministic provider failures use labelled injected responses/errors and clock controls; provider live health remains separate evidence",
+    "Missing-chunk browser recovery is coordinated with UI owner",
+    "No deployment or long-term uptime claim"
+  ],
+  "doubledFixture": {
+    "evidence": ".cache/task-e/soak-doubled-fixture.json",
+    "log": ".cache/task-e/soak-doubled-fixture.log",
+    "method": "Existing scripts/verify-traffic.ts copied to ignored task-e path with only relative import and output directory adjustments, preserving historical B evidence",
+    "requestedSeconds": 300,
+    "peak": 472,
+    "slowClientReleased": true,
+    "clientCounts": [
+      300,
+      300
+    ],
+    "final": {
+      "accepted": 141128,
+      "rejected": 0,
+      "duplicates": 0,
+      "capacityDrops": 0,
+      "receivedMessages": 141128,
+      "receivedBytes": 42500528,
+      "maxPendingVehicles": 472,
+      "maxPendingRemovals": 0,
+      "upstreamConnections": 0,
+      "subscribers": 0,
+      "consumers": 0,
+      "vehicles": 0,
+      "identities": 0,
+      "pendingVehicles": 0,
+      "pendingRemovals": 0,
+      "timers": 0
+    }
+  },
+  "productionSoak": {
+    "status": "pass",
+    "evidence": ".cache/task-e/soak-production.json",
+    "summary": ".cache/task-e/soak-production-summary.json",
+    "durationSeconds": 1800.085,
+    "serverSha256": "bcac391aba4a3b20145936125edb6e4163b8be833d09940793aa181964f62583",
+    "unchanged": true,
+    "fleetPeak": 196,
+    "sampledIdentityPeak": 217
+  }
+}

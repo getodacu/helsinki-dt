@@ -1,0 +1,22 @@
+{
+  "target": "tile_0_0_0",
+  "attempts": 2,
+  "failed": "Some city geometry could not load. Retrying.",
+  "returned": "Some city geometry could not load. Retrying.",
+  "awayCleared": true,
+  "final": {
+    "error": null,
+    "metrics": {
+      "fps": "140",
+      "drawCalls": "22",
+      "geometries": "22",
+      "triangles": "487150",
+      "loadedChunks": "12",
+      "placedVehicles": "188",
+      "unplacedVehicles": "2",
+      "receiptLatencyMs": "31005"
+    }
+  },
+  "verificationMode": "Deliberate aborted chunk request; browser clock advanced31s for retry backoff. FPS/latency fields are not performance evidence.",
+  "logWrittenAt": "2026-10-08T15:17:03.146118+00:00"
+}

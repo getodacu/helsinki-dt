@@ -1,0 +1,175 @@
+{
+  "attribution": "City of Helsinki Helsinki 3D (2019), CC BY 4.0",
+  "source": "https://3d.hel.ninja/data/citygml/Helsinki3D_CityGML_Kalasatama_20190326.zip",
+  "sourceSha256": "ef6a787068b82642e5a0be5e20268e137075bb41fdbf0ec88619ad79926e2299",
+  "retrievedAt": "2026-10-08T10:45:13.763Z",
+  "notes": "Actual converted highest-LoD mesh extents of three named buildings. Tests reconstruct the extents, not building surfaces.",
+  "extents": [
+    {
+      "building": {
+        "id": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+        "gmlId": "BID_29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+        "vtjPrt": "103027184J",
+        "ratu": "216",
+        "uuid": "29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+        "longitude": 24.952867730318225,
+        "latitude": 60.16834501461571,
+        "chunkRef": "senate-square",
+        "sourceId": "helsinki-citygml-20190326",
+        "attributes": {
+          "Kerroksia": "3.0",
+          "Kerrosala_(m2)": "10947.0",
+          "ID": "793553.0",
+          "BuildingHeightNN": "18.0",
+          "Rakennuksen_tila": "voimassa",
+          "C_KAYTTARK": "151",
+          "CODE": "2018-111",
+          "Rakennustunnus_(VTJ-PRT)": "103027184J",
+          "UUID": "29d5c8c9-a6e1-439b-ad4e-cceab20d9f9e",
+          "TYYPPI": "6",
+          "TILA": "2",
+          "REPAIRED": null,
+          "RoofNames": "flat",
+          "LowestRoof": "18.5",
+          "HighestRoof": "18.5",
+          "GroundLevel": "-12.1",
+          "TILA_KOODI": "0",
+          "Rakennustunnus_(RATU)": "216",
+          "KG_KRAKENN": "216",
+          "creationDate": "2018-12-13",
+          "bldg:function": "151",
+          "sourceEnvelopeMinimumElevation": "1.9",
+          "sourceEnvelopeMaximumElevation": "20.63",
+          "sourceCrsDeclaration": "urn:ogc:drf:crs:EPSG::3879",
+          "BuildingHeightNN__conflictingValues": "[\"18.0\",\"21.0\"]",
+          "RoofNames__conflictingValues": "[\"flat\",\"flat;gabled;shed;gabled;gabled;shed\"]",
+          "LowestRoof__conflictingValues": "[\"18.5\",\"7.0\"]",
+          "HighestRoof__conflictingValues": "[\"18.5\",\"20.6\"]",
+          "sourceRecordCount": "2",
+          "selectedLod": "2",
+          "availableLods": "2,1"
+        }
+      },
+      "min": [
+        11.04906789958477,
+        1.9000000000000004,
+        89.70924435555935
+      ],
+      "max": [
+        85.11006790027022,
+        20.630000000000003,
+        167.72524435538799
+      ]
+    },
+    {
+      "building": {
+        "id": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+        "gmlId": "BID_4d58c091-9185-42fd-a8be-78f1f6eb891f",
+        "vtjPrt": "103027179C",
+        "ratu": "211",
+        "uuid": "4d58c091-9185-42fd-a8be-78f1f6eb891f",
+        "longitude": 24.952177094304467,
+        "latitude": 60.17037761750897,
+        "chunkRef": "senate-square",
+        "sourceId": "helsinki-citygml-20190326",
+        "attributes": {
+          "Rakennustunnus_(VTJ-PRT)": "103027179C",
+          "Kayttotarkoitus": "Muu k�ytt�tarkoitus",
+          "Rakennuksen_tila": "voimassa",
+          "Rakennusaine": "Tiili",
+          "Katuosoite": "Hallituskatu 7",
+          "C_KAYTTARK": "341",
+          "CODE": "111",
+          "UUID": "4d58c091-9185-42fd-a8be-78f1f6eb891f",
+          "REPAIRED": "no",
+          "BREC_RoofNames": "flat",
+          "Rakennustunnus_(RATU)": "211",
+          "Kokonaisala": "4855",
+          "Tilavuus": "45194",
+          "TILA_KOODI": "2",
+          "KG_KRAKENN": "211",
+          "Kerrosala": "3528.0",
+          "Kerroksia": "3.0",
+          "ID": "740432.0",
+          "BREC_BuildingHeightNN": "38.51",
+          "LowestRoof": "38.51",
+          "HighestRoof": "38.51",
+          "GroundLevel": "13.44",
+          "Valmistunut": "1852-12-31",
+          "creationDate": "2016-05-23",
+          "sourceEnvelopeMinimumElevation": "13.438",
+          "sourceEnvelopeMaximumElevation": "72.33",
+          "sourceCrsDeclaration": "urn:ogc:drf:crs:EPSG::3879",
+          "sourceRecordCount": "1",
+          "selectedLod": "2",
+          "availableLods": "2,1"
+        }
+      },
+      "min": [
+        -19.501932099461555,
+        13.438,
+        -127.16575564444065
+      ],
+      "max": [
+        39.306067898869514,
+        72.33,
+        -68.37975564412773
+      ]
+    },
+    {
+      "building": {
+        "id": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+        "gmlId": "BID_cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+        "vtjPrt": "103036769R",
+        "ratu": "330",
+        "uuid": "cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+        "longitude": 24.950271695419577,
+        "latitude": 60.170336823106375,
+        "chunkRef": "senate-square",
+        "sourceId": "helsinki-citygml-20190326",
+        "attributes": {
+          "Rakennustunnus_(RATU)": "330",
+          "Kokonaisala": "22002",
+          "Tilavuus": "78735",
+          "TILA_KOODI": "2",
+          "KG_KRAKENN": "330",
+          "Rakennusaine": "Tiili",
+          "Katuosoite": "Yliopistonkatu 1",
+          "C_KAYTTARK": "322",
+          "CODE": "111",
+          "Rakennustunnus_(VTJ-PRT)": "103036769R",
+          "UUID": "cf43c58b-5f52-4da0-9e2a-2cb440430d86",
+          "Kayttotarkoitus": "Muu k�ytt�tarkoitus",
+          "Rakennuksen_tila": "voimassa",
+          "REPAIRED": "no",
+          "BREC_RoofNames": "flat",
+          "Valmistunut": "1847-12-31",
+          "Kerrosala": "6796.0",
+          "Kerroksia": "6.0",
+          "ID": "740762.0",
+          "BREC_BuildingHeightNN": "30.49",
+          "LowestRoof": "30.49",
+          "HighestRoof": "30.49",
+          "GroundLevel": "12.27",
+          "creationDate": "2016-05-23",
+          "sourceEnvelopeMinimumElevation": "12.27",
+          "sourceEnvelopeMaximumElevation": "40.25",
+          "sourceCrsDeclaration": "urn:ogc:drf:crs:EPSG::3879",
+          "sourceRecordCount": "1",
+          "selectedLod": "2",
+          "availableLods": "2,1"
+        }
+      },
+      "min": [
+        -118.89493210241199,
+        12.270000000000001,
+        -117.3757556444034
+      ],
+      "max": [
+        -72.85593210160732,
+        40.25,
+        -69.23575564473867
+      ]
+    }
+  ]
+}

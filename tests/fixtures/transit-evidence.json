@@ -1,0 +1,158 @@
+{
+  "sources": [
+    {
+      "id": "hsl-hfp",
+      "provider": "Helsinki Region Transport (HSL)",
+      "url": "mqtts://mqtt.hsl.fi:8883",
+      "license": "CC BY 4.0",
+      "attribution": "HSL / Digitransit",
+      "retrievedAt": "2026-10-08T10:54:51.164Z",
+      "vintage": "2026-10-08T10:54:06.754Z",
+      "units": [
+        "m/s",
+        "degrees",
+        "seconds"
+      ],
+      "coverage": "Release bounds; 150 independent reports",
+      "method": "bounded HFP vehicle position subscription",
+      "checksum": null,
+      "coordinateReference": "WGS84 / EPSG:4326",
+      "axisOrder": "named payload long / lat fields",
+      "verticalReference": null
+    },
+    {
+      "id": "hsl-gtfs",
+      "provider": "Helsinki Region Transport (HSL)",
+      "url": "https://infopalvelut.storage.hsldev.com/gtfs/hsl.zip",
+      "license": "CC BY 4.0",
+      "attribution": "HSL / Digitransit",
+      "retrievedAt": "2026-10-08T10:54:51.167Z",
+      "vintage": "20261007\u201320261205 2026-10-08 04:57:02",
+      "units": [
+        "service-day seconds"
+      ],
+      "coverage": "Filtered active route 1009",
+      "method": "streamed ZIP/CSV, earliest stop retained for active route trips",
+      "checksum": "5d6b6a170f3150afcb7bc2e377de5f9c1e85ce835804df1f1e2ca9f39c296bbd",
+      "coordinateReference": null,
+      "axisOrder": null,
+      "verticalReference": null
+    }
+  ],
+  "evidence": [
+    {
+      "id": "hfp-tram",
+      "url": "mqtts://mqtt.hsl.fi:8883",
+      "queriedAt": "2026-10-08T10:54:06.135Z",
+      "durationMs": 45029,
+      "status": "bounded MQTT session completed",
+      "decodedCount": 94,
+      "bytes": 136680,
+      "freshness": "1 seconds since latest report",
+      "authentication": "Anonymous MQTT over TLS; no API key",
+      "notes": [
+        "Coarse region /60;24/19/# until first in-bounds vehicle per mode, then follow selected vehicle; duration <= 45000 ms",
+        "Session totals: 459 messages, 0 rejected payloads; byte count shared by mode probes",
+        "Independent owner/id/tst reports: 94; null positions: 0",
+        "Observed intervals seconds: 0.999\u20131.001",
+        "One selected tram vehicle followed without geographic filter to include null positions: 0040/00100",
+        "HFP dl is timetable deviation: normalized displayed delaySeconds = -dl; raw deviation retained"
+      ]
+    },
+    {
+      "id": "hfp-bus",
+      "url": "mqtts://mqtt.hsl.fi:8883",
+      "queriedAt": "2026-10-08T10:54:06.135Z",
+      "durationMs": 45029,
+      "status": "bounded MQTT session completed",
+      "decodedCount": 47,
+      "bytes": 136680,
+      "freshness": "2 seconds since latest report",
+      "authentication": "Anonymous MQTT over TLS; no API key",
+      "notes": [
+        "Coarse region /60;24/19/# until first in-bounds vehicle per mode, then follow selected vehicle; duration <= 45000 ms",
+        "Session totals: 459 messages, 0 rejected payloads; byte count shared by mode probes",
+        "Independent owner/id/tst reports: 47; null positions: 0",
+        "Observed intervals seconds: 0.999\u20131.002",
+        "One selected bus vehicle followed without geographic filter to include null positions: 0022/00025",
+        "HFP dl is timetable deviation: normalized displayed delaySeconds = -dl; raw deviation retained"
+      ]
+    },
+    {
+      "id": "hfp-ferry",
+      "url": "mqtts://mqtt.hsl.fi:8883",
+      "queriedAt": "2026-10-08T10:54:06.135Z",
+      "durationMs": 45029,
+      "status": "bounded MQTT session completed",
+      "decodedCount": 9,
+      "bytes": 136680,
+      "freshness": "9 seconds since latest report",
+      "authentication": "Anonymous MQTT over TLS; no API key",
+      "notes": [
+        "Coarse region /60;24/19/# until first in-bounds vehicle per mode, then follow selected vehicle; duration <= 45000 ms",
+        "Session totals: 459 messages, 0 rejected payloads; byte count shared by mode probes",
+        "Independent owner/id/tst reports: 9; null positions: 0",
+        "Observed intervals seconds: 1\u20138",
+        "One selected ferry vehicle followed without geographic filter to include null positions: 0060/00005",
+        "HFP dl is timetable deviation: normalized displayed delaySeconds = -dl; raw deviation retained"
+      ]
+    },
+    {
+      "id": "hsl-gtfs",
+      "url": "https://infopalvelut.storage.hsldev.com/gtfs/hsl.zip",
+      "queriedAt": "2026-10-08T10:54:51.167Z",
+      "durationMs": 3835,
+      "status": 200,
+      "decodedCount": 218,
+      "bytes": 76200482,
+      "freshness": null,
+      "authentication": "Anonymous GTFS ZIP; no API key",
+      "notes": [
+        "Filtered route 1009, service 2026-10-08; 11187565 scanned CSV rows, 1003841287 inflated bytes",
+        "Match exact; candidates 1009_20261007_To_1_1327",
+        "Route ID + direction 1/2\u21920/1 + active calendar/exception + first-stop departure clock; labels not used",
+        "GTFS ZIP <=128 MiB; aggregate inflation <=1536 MiB, individual entry <=1024 MiB; retained <=5000 selected trips"
+      ]
+    }
+  ],
+  "gates": {
+    "tram": {
+      "status": "pass",
+      "evidence": [
+        "hfp-tram: 94 real decoded reports"
+      ],
+      "nextAction": null
+    },
+    "bus": {
+      "status": "pass",
+      "evidence": [
+        "hfp-bus: 47 real decoded reports"
+      ],
+      "nextAction": null
+    },
+    "ferry": {
+      "status": "pass",
+      "evidence": [
+        "hfp-ferry: 9 real decoded reports"
+      ],
+      "nextAction": null
+    },
+    "gtfs_journey": {
+      "status": "pass",
+      "evidence": [
+        "0040/00100 2026-10-08 1009/1 13:27: exact 1009_20261007_To_1_1327"
+      ],
+      "nextAction": null
+    }
+  },
+  "match": {
+    "vehicleId": "0040/00100",
+    "tripId": "1009_20261007_To_1_1327",
+    "status": "exact",
+    "candidates": [
+      "1009_20261007_To_1_1327"
+    ],
+    "departureAt": "2026-10-08T10:27:00.000Z",
+    "firstStopId": "1203416"
+  }
+}

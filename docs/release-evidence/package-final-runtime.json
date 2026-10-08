@@ -1,0 +1,105 @@
+{
+  "checkedAt": "2026-10-08T15:18:57.651Z",
+  "node": "v24.19.0",
+  "releaseId": "helsinki-lens-0.1.0-a523eab230af",
+  "release": "/private/tmp/helsinki-release-e-final-runtime-drelhbgq",
+  "releaseFileBytes": 138791387,
+  "activeDataAssets": 369,
+  "verifiedReleaseFiles": 1252,
+  "first": {
+    "rootStatus": 200,
+    "cityGeneratedAt": "2026-10-08T12:10:39.077Z",
+    "routeStatus": "ready",
+    "forbiddenEncodingsStatus": 406,
+    "forbiddenEncodingsEmptyBody": true,
+    "energyStatus": "ready",
+    "energyEncoding": "gzip",
+    "energyCompressedBytes": 843087,
+    "seriesStatus": "current",
+    "seriesRetrievedAt": "2026-10-08T14:13:18.564Z",
+    "seriesRecords": 30,
+    "seriesPeriod": {
+      "start": "2026-09-01",
+      "end": "2026-10-01"
+    },
+    "rssKiB": 394704
+  },
+  "restarted": {
+    "rootStatus": 200,
+    "cityGeneratedAt": "2026-10-08T12:10:39.077Z",
+    "routeStatus": "ready",
+    "forbiddenEncodingsStatus": 406,
+    "forbiddenEncodingsEmptyBody": true,
+    "energyStatus": "ready",
+    "energyEncoding": "gzip",
+    "energyCompressedBytes": 843087,
+    "seriesStatus": "current",
+    "seriesRetrievedAt": "2026-10-08T14:13:18.564Z",
+    "seriesRecords": 30,
+    "seriesPeriod": {
+      "start": "2026-09-01",
+      "end": "2026-10-01"
+    },
+    "rssKiB": 392240
+  },
+  "firstExit": [
+    0,
+    null
+  ],
+  "restartExit": [
+    0,
+    null
+  ],
+  "cacheBefore": [
+    {
+      "name": "125223298c2166e9d891a94020f494f821e73ab8db42bd2e5ebd571c3bfa8bdb.json",
+      "bytes": 53743,
+      "sha256": "d09d4c66c0698d52955ac766836bd4cb16a7b259a926e54e3ed622e0787de016"
+    },
+    {
+      "name": "2da1f7564debbae7929c1d4219a54f2528b8c121d58148fe5f8f513c92037394.json",
+      "bytes": 53743,
+      "sha256": "cfd3cdd8bc8fd3843f1b781f9d99845fc402d1c1fe3fc60f6fda0cc2b3ac4849"
+    }
+  ],
+  "cacheAfterFirst": [
+    {
+      "name": "125223298c2166e9d891a94020f494f821e73ab8db42bd2e5ebd571c3bfa8bdb.json",
+      "bytes": 53743,
+      "sha256": "d09d4c66c0698d52955ac766836bd4cb16a7b259a926e54e3ed622e0787de016"
+    },
+    {
+      "name": "2da1f7564debbae7929c1d4219a54f2528b8c121d58148fe5f8f513c92037394.json",
+      "bytes": 53743,
+      "sha256": "cfd3cdd8bc8fd3843f1b781f9d99845fc402d1c1fe3fc60f6fda0cc2b3ac4849"
+    }
+  ],
+  "cacheAfterRestart": [
+    {
+      "name": "125223298c2166e9d891a94020f494f821e73ab8db42bd2e5ebd571c3bfa8bdb.json",
+      "bytes": 53743,
+      "sha256": "d09d4c66c0698d52955ac766836bd4cb16a7b259a926e54e3ed622e0787de016"
+    },
+    {
+      "name": "2da1f7564debbae7929c1d4219a54f2528b8c121d58148fe5f8f513c92037394.json",
+      "bytes": 53743,
+      "sha256": "cfd3cdd8bc8fd3843f1b781f9d99845fc402d1c1fe3fc60f6fda0cc2b3ac4849"
+    }
+  ],
+  "cachePreserved": true,
+  "candidate": true,
+  "docsFinalPending": true,
+  "artifact": "/Users/radu/Projects/helsinki-dt/.cache/task-e/releases/helsinki-lens-0.1.0-a523eab230af",
+  "serverInventoryHash": "bbc9e3a4bd9438ef43bf3480b1605ea4a9fe43e2bf7d2fd14a7f3cd8548ef3c0",
+  "sourceBuildServerInventoryHash": "bbc9e3a4bd9438ef43bf3480b1605ea4a9fe43e2bf7d2fd14a7f3cd8548ef3c0",
+  "initialServerInventoryHash": "56a704380611423e8f89e9a4eca01b9219fc5a47ad275610e2442bc04830ac3f",
+  "npm": "11.17.0",
+  "installPackages": 303,
+  "installMode": "npm ci --omit=dev --offline; exact locked registry tarball cache from earlier clean network install",
+  "diskKiB": {
+    "releaseAllocated": 155240,
+    "installedRuntimeDependencies": 166948,
+    "runtimeCache": 112,
+    "extractedInstallationTotal": 305732
+  }
+}

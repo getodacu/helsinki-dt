@@ -1,0 +1,220 @@
+{
+  "attribution": "City of Helsinki municipal service property energy / Nuuka, CC BY 4.0",
+  "requestUrl": "https://helsinki-openapi.nuuka.cloud/api/v1.0/EnergyData/Daily/ListByProperty?Record=PropertyCode&SearchString=091-001-0030-0001&ReportingGroup=Electricity&StartTime=2025-10-01&EndTime=2026-09-30",
+  "retrievedAt": "2026-10-08T13:52:15.920Z",
+  "responseSha256": "add3492aa4625aa240c256518da00a536ba65ce174d49d2540aa707f8b4d4b98",
+  "propertyCode": "091-001-0030-0001",
+  "timezoneNote": "Daily timestamps have no timezone suffix; source calendar labels displayed in Europe/Helsinki.",
+  "rows": [
+    {
+      "timestamp": "2026-09-01T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 7811.645999999997,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-02T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 7609.906000000001,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-03T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 7703.869000000001,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-04T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 7716.0109999999995,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-05T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6433.039999999998,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-06T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6414.023,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-07T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 7861.3200000000015,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-08T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 7138.342999999998,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-09T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6322.921000000001,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-10T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6215.653999999999,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-11T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 5801.544000000001,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-12T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 3018.637999999999,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-13T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 2897.137999999999,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-14T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6141.989000000001,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-15T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6034.817999999999,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-16T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6126.937999999998,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-17T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 5974.4039999999995,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-18T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 5956.884999999999,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-19T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 2851.288,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-20T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 2712.819,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-21T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 5803.237000000003,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-22T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6042.551000000001,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-23T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6434.584,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-24T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6133.871,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-25T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 5987.715999999999,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-26T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 3031.445999999999,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-27T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 2888.7539999999995,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-28T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6017.496,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-29T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6052.133000000001,
+      "unit": "kWh"
+    },
+    {
+      "timestamp": "2026-09-30T00:00:00",
+      "reportingGroup": "Electricity",
+      "locationName": "1761 K30, Leijonakortteli",
+      "value": 6255.350999999999,
+      "unit": "kWh"
+    }
+  ]
+}

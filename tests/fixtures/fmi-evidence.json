@@ -1,0 +1,127 @@
+{
+  "sources": [
+    {
+      "id": "fmi-weather",
+      "provider": "Finnish Meteorological Institute",
+      "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=fmi%3A%3Aobservations%3A%3Aweather%3A%3Atimevaluepair&fmisid=100971&parameters=t2m%2Cws_10min%2Cwg_10min&timestep=60&starttime=2026-10-08T06%3A00%3A00.000Z&endtime=2026-10-08T09%3A00%3A00.000Z",
+      "license": "CC BY 4.0",
+      "attribution": "Finnish Meteorological Institute; FMI Open Data",
+      "retrievedAt": "2026-10-08T10:53:10.911Z",
+      "vintage": "2026-10-08T06:00:00.000Z\u20132026-10-08T09:00:00.000Z",
+      "units": [
+        "degC",
+        "m/s"
+      ],
+      "coverage": "Station 100971; 12 parameter/time observations",
+      "method": "station observation",
+      "checksum": null,
+      "coordinateReference": "EPSG:4258",
+      "axisOrder": "latitude longitude in upstream gml:pos; normalized longitude latitude",
+      "verticalReference": null
+    },
+    {
+      "id": "fmi-air-quality",
+      "provider": "HSY via Finnish Meteorological Institute",
+      "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=urban%3A%3Aobservations%3A%3Aairquality%3A%3Ahourly%3A%3Atimevaluepair&fmisid=100742&parameters=NO2_PT1H_avg&timestep=60&starttime=2026-10-08T06%3A00%3A00.000Z&endtime=2026-10-08T09%3A00%3A00.000Z",
+      "license": "CC BY 4.0",
+      "attribution": "HSY via Finnish Meteorological Institute; FMI Open Data",
+      "retrievedAt": "2026-10-08T10:53:11.022Z",
+      "vintage": "2026-10-08T06:00:00.000Z\u20132026-10-08T09:00:00.000Z",
+      "units": [
+        "ug/m3"
+      ],
+      "coverage": "Station 100742; 4 parameter/time observations",
+      "method": "station observation",
+      "checksum": null,
+      "coordinateReference": "EPSG:4258",
+      "axisOrder": "latitude longitude in upstream gml:pos; normalized longitude latitude",
+      "verticalReference": null
+    }
+  ],
+  "evidence": [
+    {
+      "id": "fmi-query-list",
+      "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=ListStoredQueries",
+      "queriedAt": "2026-10-08T10:53:10.570Z",
+      "durationMs": 207,
+      "status": 200,
+      "decodedCount": 0,
+      "bytes": 66273,
+      "freshness": null,
+      "authentication": "Anonymous WFS; no API key",
+      "notes": []
+    },
+    {
+      "id": "fmi-query-description",
+      "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=DescribeStoredQueries&storedquery_id=fmi%3A%3Aobservations%3A%3Aweather%3A%3Atimevaluepair%2Curban%3A%3Aobservations%3A%3Aairquality%3A%3Ahourly%3A%3Atimevaluepair",
+      "queriedAt": "2026-10-08T10:53:10.777Z",
+      "durationMs": 63,
+      "status": 200,
+      "decodedCount": 2,
+      "bytes": 8702,
+      "freshness": null,
+      "authentication": "Anonymous WFS; no API key",
+      "notes": []
+    },
+    {
+      "id": "fmi-parameters",
+      "url": "https://opendata.fmi.fi/meta?observableProperty=observation&param=t2m%2Cws_10min%2Cwg_10min%2CNO2_PT1H_avg&language=eng",
+      "queriedAt": "2026-10-08T10:53:10.852Z",
+      "durationMs": 59,
+      "status": 200,
+      "decodedCount": 4,
+      "bytes": 2436,
+      "freshness": null,
+      "authentication": "Anonymous WFS; no API key",
+      "notes": []
+    },
+    {
+      "id": "fmi-weather",
+      "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=fmi%3A%3Aobservations%3A%3Aweather%3A%3Atimevaluepair&fmisid=100971&parameters=t2m%2Cws_10min%2Cwg_10min&timestep=60&starttime=2026-10-08T06%3A00%3A00.000Z&endtime=2026-10-08T09%3A00%3A00.000Z",
+      "queriedAt": "2026-10-08T10:53:10.911Z",
+      "durationMs": 106,
+      "status": 200,
+      "decodedCount": 12,
+      "bytes": 15212,
+      "freshness": "6791 seconds since latest observed value",
+      "authentication": "Anonymous WFS; no API key",
+      "notes": [
+        "EPSG:4258 response positions are latitude longitude; station observations only",
+        "No quality flags exposed by selected timevaluepair response; normalized quality unknown",
+        "Hourly query timestep does not override parameter aggregation metadata"
+      ]
+    },
+    {
+      "id": "fmi-air-quality",
+      "url": "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetFeature&storedquery_id=urban%3A%3Aobservations%3A%3Aairquality%3A%3Ahourly%3A%3Atimevaluepair&fmisid=100742&parameters=NO2_PT1H_avg&timestep=60&starttime=2026-10-08T06%3A00%3A00.000Z&endtime=2026-10-08T09%3A00%3A00.000Z",
+      "queriedAt": "2026-10-08T10:53:11.022Z",
+      "durationMs": 61,
+      "status": 200,
+      "decodedCount": 4,
+      "bytes": 6309,
+      "freshness": "6791 seconds since latest observed value",
+      "authentication": "Anonymous WFS; no API key",
+      "notes": [
+        "EPSG:4258 response positions are latitude longitude; station observations only",
+        "No quality flags exposed by selected timevaluepair response; normalized quality unknown",
+        "Hourly query timestep does not override parameter aggregation metadata"
+      ]
+    }
+  ],
+  "gates": {
+    "weather": {
+      "status": "pass",
+      "evidence": [
+        "fmi-weather: 12 decoded observations at station 100971, units degC, m/s"
+      ],
+      "nextAction": null
+    },
+    "air_quality": {
+      "status": "pass",
+      "evidence": [
+        "fmi-air-quality: 4 decoded observations at station 100742, units ug/m3"
+      ],
+      "nextAction": null
+    }
+  }
+}

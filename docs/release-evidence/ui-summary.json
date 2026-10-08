@@ -1,0 +1,123 @@
+{
+  "verifiedAt": "2026-10-08T15:23:53.786866+00:00",
+  "finalProduction": "http://127.0.0.1:4185/",
+  "uiSourcesUnchangedAfterBuild": "2026-10-08T15:11:49Z; final runtime-only gzip406 rebuild15:15:36Z",
+  "results": {
+    "ui-chrome-production": {
+      "resultFile": ".cache/task-e/ui-chrome-production.json",
+      "checks": 30,
+      "browser": "154.0.8037.99",
+      "completedAt": "2026-10-08T15:13:20.162Z"
+    },
+    "ui-firefox-production": {
+      "resultFile": ".cache/task-e/ui-firefox-production.json",
+      "checks": 30,
+      "browser": "156.0",
+      "completedAt": "2026-10-08T15:13:19.448Z"
+    },
+    "ui-webgl-production": {
+      "resultFile": ".cache/task-e/ui-webgl-production.json",
+      "checks": 16,
+      "browser": "154.0.8037.99",
+      "completedAt": "2026-10-08T15:20:25.886Z"
+    },
+    "ui-chunk-production": {
+      "resultFile": ".cache/task-e/ui-chunk-production.json",
+      "checks": 0,
+      "browser": null,
+      "completedAt": null,
+      "logWrittenAt": "2026-10-08T15:17:03.146118+00:00"
+    },
+    "ui-natural-keyboard": {
+      "resultFile": ".cache/task-e/ui-natural-keyboard.json",
+      "checks": 0,
+      "browser": null,
+      "completedAt": "2026-10-08T15:19:45.279Z"
+    },
+    "ui-final-smoke": {
+      "resultFile": ".cache/task-e/ui-final-smoke.json",
+      "checks": 0,
+      "browser": "154.0.8037.99",
+      "completedAt": "2026-10-08T15:21:43.840Z"
+    }
+  },
+  "viewports": [
+    [
+      1440,
+      900
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      844,
+      390
+    ]
+  ],
+  "nativeSafari": "Parent verified26.6.2 desktop journey and focus; see parent evidence",
+  "exceptions": [
+    "Native Safari narrow viewports and VoiceOver not tested.",
+    "Native installed Firefox123.0.1 is old and not tested; matching Firefox156.0 automation engine tested.",
+    "No physical touchscreen, GPU/device matrix or screen-reader audit."
+  ],
+  "errors": {
+    "uncaughtApplicationErrors": 0,
+    "expectedFailureConsole": "Deliberate WebGL creation failure and blocked chunk request emit expected browser console/network errors."
+  },
+  "svelte": {
+    "version": "5.57.1",
+    "autofixerIssues": 0,
+    "checkErrors": 0,
+    "checkWarnings": 0,
+    "reviewedSuggestions": "Existing imperative fetch effects and nonreactive mutable fleet Map; no additional changes needed."
+  },
+  "changedFiles": {
+    "src/routes/+page.svelte": "80e33b587028a17cbf8e8272a1ec721921c3cc144ec570683e243d1297dc2d8c",
+    "src/lib/components/StationHistory.svelte": "fea752f48d1182803af6b575eabc47643792bdf7aedaeea5e825ea0091227155",
+    "src/app.css": "0273a1c8c3a41555e92008b3f888ba7ff76ec4ed11cdf3238473f9daa7c35297",
+    "src/app.html": "4692b74b18786ce551f8fc84a0baa030fed4154eee4d4ab8334b01b92320ad9c",
+    "static/favicon.svg": "c64451922963b47197bb84284679d2e310c45146db76adb59d12e03d756b8bbd"
+  },
+  "screenshots": [
+    "output/playwright/task-e-firefox-building-energy.png",
+    "output/playwright/task-e-firefox-portrait-scene.png",
+    "output/playwright/task-e-webgl-fallback-desktop.png",
+    "output/playwright/task-e-chromium-desktop.png",
+    "output/playwright/task-e-chromium-building-energy.png",
+    "output/playwright/task-e-firefox-station.png",
+    "output/playwright/task-e-firefox-portrait-inspector.png",
+    "output/playwright/task-e-final-production-desktop.png",
+    "output/playwright/task-e-chromium-tram.png",
+    "output/playwright/task-e-firefox-solar.png",
+    "output/playwright/task-e-firefox-portrait-sources.png",
+    "output/playwright/task-e-chromium-solar.png",
+    "output/playwright/task-e-chromium-portrait-sources.png",
+    "output/playwright/task-e-missing-chunk.png",
+    "output/playwright/task-e-chromium-portrait-scene.png",
+    "output/playwright/task-e-firefox-landscape-sources.png",
+    "output/playwright/task-e-chromium-portrait-inspector.png",
+    "output/playwright/task-e-chromium-portrait-conditions.png",
+    "output/playwright/task-e-firefox-landscape-conditions.png",
+    "output/playwright/task-e-firefox-portrait-conditions.png",
+    "output/playwright/task-e-chromium-landscape-inspector.png",
+    "output/playwright/task-e-natural-keyboard-focus.png",
+    "output/playwright/task-e-firefox-landscape-inspector.png",
+    "output/playwright/task-e-webgl-fallback-portrait.png",
+    "output/playwright/task-e-chromium-station.png",
+    "output/playwright/task-e-firefox-desktop.png",
+    "output/playwright/task-e-chromium-landscape-conditions.png",
+    "output/playwright/task-e-firefox-landscape-scene.png",
+    "output/playwright/task-e-recovered-chunk.png",
+    "output/playwright/task-e-webgl-fallback-landscape.png",
+    "output/playwright/task-e-chromium-landscape-scene.png",
+    "output/playwright/task-e-chromium-landscape-sources.png",
+    "output/playwright/task-e-firefox-tram.png"
+  ],
+  "supersededDefectScreenshot": "output/playwright/task-e-dialog-defect.png (before height fix; not release screenshot)",
+  "knownInteractionLimits": [
+    "Reselecting the same already-selected identity keeps the current list scroll/focus. The inspector remains accessible by scrolling; new selections and essential journey work. Accepted as minor by parent; no further UI rebuild."
+  ],
+  "contrastScope": "6.11:1 minimum calculated for muted panel text composited over a white backdrop. This verifies the lowest-contrast panel text pairing, not every scene/legend/chart pixel or a full WCAG audit.",
+  "naturalKeyboardEvidence": "ui-natural-keyboard.json: actual Tab/Enter path, without locator focus, from skip link to search to tram, then focus-visible inspector."
+}

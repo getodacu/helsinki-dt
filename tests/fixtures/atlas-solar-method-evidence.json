@@ -1,0 +1,15 @@
+{
+  "retrievedAt": "2026-10-08T13:54:58.375322Z",
+  "source": "https://kartta.hel.fi/3d/data/buildings_solar/tileset.json",
+  "httpLastModified": "2017-08-08T10:58:49Z",
+  "dateSemantics": "HTTP export modification time; calculation date and meteorological reference year not supplied",
+  "checksums": {
+    "solar-config.json": "83646a5fb227f032c92be6616c568237627d8f6f77a903a062badca27f8b5b3a",
+    "solar-tileset.json": "89bdf2639e54ca5cae3770ea92320a58f040e691fbc2186742c81cdf849402e3",
+    "solar-custom.js": "459c431d5ea12cb7be3df07bdec2f82ce1fabcce971122ead95fe58dda985767"
+  },
+  "methodSources": [
+    "https://www.asg.ed.tum.de/en/gis/research-areas/cities-and-energy/",
+    "https://kaupunkitieto.hel.fi/fi/helsingin-energiatietojen-esittaminen-3d-kaupunkimallissa-tuo-tyokaluja-ilmastonmuutoksen-hillintaan"
+  ]
+}
