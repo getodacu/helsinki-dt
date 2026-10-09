@@ -24,10 +24,10 @@ const assetPath = (value: unknown): value is string => typeof value === 'string'
   && /^\/data\/city\/generations\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\.json$/.test(value);
 
 async function readAsset<T>(url: string, fetcher: typeof fetch, maxBytes: number, signal?: AbortSignal,
-  cache?: CityAssetCache, background = false, validate?: (value: T) => void): Promise<T> {
+  cache?: CityAssetCache, background = false, validate?: (value: T) => void, scheduling: 'semantic' | 'map' = 'semantic'): Promise<T> {
   if (cache) return cache.read(url, maxBytes, bytes => {
     const value = JSON.parse(new TextDecoder().decode(bytes)) as T; validate?.(value); return value;
-  }, signal, background ? 'background' : 'foreground');
+  }, signal, background ? 'background' : 'foreground', true, scheduling);
   const boundedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000);
   const response = await fetcher(url, { signal: boundedSignal });
   if (!response.ok || !response.body) throw new Error(`City asset unavailable (${response.status})`);
@@ -76,7 +76,7 @@ export async function loadCityManifest(fetcher: typeof fetch = fetch, signal?: A
 }
 
 export async function loadCityBase(manifest: CityManifest, fetcher: typeof fetch = fetch, signal?: AbortSignal, cache?: CityAssetCache): Promise<CityBase> {
-  return readAsset<CityBase>(manifest.baseUrl, fetcher, 12_000_000, signal, cache, false, validateCityBase);
+  return readAsset<CityBase>(manifest.baseUrl, fetcher, 12_000_000, signal, cache, false, validateCityBase, 'map');
 }
 
 function validateCityBase(base: CityBase) {

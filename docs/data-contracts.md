@@ -12,7 +12,7 @@ The authoritative TypeScript records are in `src/lib/types.ts`. Source-specific 
 
 ## Geometry and coordinates
 
-Release bounds are WGS84 `[24.90, 60.135, 25.04, 60.195]`, and the Senate district is `[24.944, 60.164, 24.958, 60.174]`. Bounds are ordered west, south, east, north. Scene origin is longitude 24.952, latitude 60.1695, N2000 elevation 0 m.
+Release bounds are WGS84 `[24.86, 60.135, 25.06, 60.225]`, and the Senate district is `[24.944, 60.164, 24.958, 60.174]`. Bounds are ordered west, south, east, north. Scene origin is longitude 24.952, latitude 60.1695, N2000 elevation 0 m.
 
 CityGML tuples are ETRS-GK25 / EPSG:3879 easting, northing, elevation in metres, with N2000 vertical reference. The published sample contains the malformed declaration `urn:ogc:drf:crs:EPSG::3879`; retain it as source evidence while using verified EPSG:3879. The projection uses the GRS80 ellipsoid, central meridian 25°, scale 1 and false easting 25,500,000m. Local Three coordinates are `[E−E0, H−H0, −(N−N0)]`; WGS84 is retained for exchange. Projection does not perform a vertical datum conversion.
 

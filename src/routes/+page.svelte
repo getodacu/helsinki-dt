@@ -39,6 +39,7 @@
   let theme = $derived(buildingEnergyTheme(energy.catalog, activeTheme));
   let scene = $state.raw<CitySceneController | null>(null);
   let layers = $state<Layers>({ ...INITIAL_LAYERS, weather: true, airQuality: true });
+  let keyboardNavigation = $state(true);
   let buildings = $state.raw<Building[]>([]);
   let searchBuildings = $state.raw<Building[]>([]);
   let indexState = $state('loading');
@@ -73,7 +74,7 @@
     status: { state: 'idle', connectedAt: null, lastPositionAt: null, retryAt: null } });
   let browserConnected = $state(false);
   let loading = $state(true);
-  let mapCovered = $derived(loading || !['ready', 'available'].includes(mapLoad.phase));
+  let mapCovered = $derived(loading || !ready);
   const modes: TransitMode[] = ['tram', 'bus', 'ferry'];
   const modeNames: Record<TransitMode, string> = { tram: 'Trams', bus: 'Buses', ferry: 'HSL Ferries' };
   const age = (vehicle: { reportedAt: string }) => `${Math.max(0, Math.floor(trafficAge(vehicle, now) / 1000))} s ago`;
@@ -115,7 +116,7 @@
       if (selection) mobilePanel = 'inspect';
       void tick().then(() => {
         document.getElementById('identity-inspector')?.scrollTo({ top: 0 });
-        document.getElementById('inspection-heading')?.focus({ preventScroll: true });
+        document.getElementById(selection ? 'inspection-heading' : 'object-browser')?.focus({ preventScroll: true });
       });
     }
     selected = selection; selectionMessage = message;
@@ -276,7 +277,7 @@
   </header>
   <main class="city-workspace" data-scene-ready={!mapCovered} aria-busy={mapCovered}>
     {#if city}
-      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} {stations} {route} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
+      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} {keyboardNavigation} {stations} {route} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
         onbuildings={(value) => buildings = value} onstats={(value) => stats = value} onhover={(value) => hovered = value}
         onerror={(value) => sceneError = value} oninteraction={() => following = false} onready={() => ready = true}
         oncontroller={(value) => scene = value} />
@@ -312,6 +313,7 @@
       <div class="mobile-sheet-heading"><strong>Layers & conditions</strong><button class="icon-button" aria-label="Close controls sheet" onclick={() => setMobilePanel(null)}>×</button></div>
       <section class="panel layers-panel"><div class="panel-heading"><h2>Layers</h2><span>GEOGRAPHIC CONTEXT</span></div>
         <div class="layer-list">
+          <label class="layer-control"><input type="checkbox" bind:checked={keyboardNavigation} /><span class="layer-symbol" aria-hidden="true">⌨</span><span>WASD navigation</span></label>
           <label class="layer-control"><input type="checkbox" bind:checked={layers.imagery} /><span class="layer-symbol" aria-hidden="true">▧</span><span>Aerial imagery & textures</span></label>
           {#if layers.imagery}<p class="panel-note">Helsinki orthophoto 2025 · textured LoD2 buildings.<br /><a href="https://kartta.hel.fi/3d/" target="_blank" rel="noreferrer">© City of Helsinki · CC BY 4.0 ↗</a></p>{#if appearanceStatus}<p class="panel-note" role="status">{appearanceStatus}</p>{/if}{/if}
           {#each [['buildings', 'Semantic buildings'], ['terrain', 'Terrain & islands'], ['roads', 'Roads & rail']] as [key, name] (key)}
@@ -358,7 +360,8 @@
     </aside>
     <aside class="right-stack" class:mobile-active={mobilePanel === 'inspect'} id="identity-inspector" aria-label="Identity inspector and searchable objects">
       <div class="mobile-sheet-heading"><strong>Inspect & search</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setMobilePanel(null)}>×</button></div>
-      <section class="panel inspector"><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1">{selected?.kind === 'building' ? 'Building identity' : selected?.kind === 'vehicle' ? 'Vehicle identity' : selected?.kind === 'station' ? 'Station observations' : 'Explore the city'}</h2>{#if selected}<button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button>{:else}<span>SELECT</span>{/if}</div>
+      {#if selected}
+      <section class="panel inspector"><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1">{selected.kind === 'building' ? 'Building identity' : selected.kind === 'vehicle' ? 'Vehicle identity' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
         <div class="panel-content">
           {#if selected?.kind === 'building'}
             <span class="eyebrow">SEMANTIC BUILDING</span><h3>{buildingName(selected.building)}</h3>
@@ -386,12 +389,12 @@
             <dl class="properties"><div><dt>Station ID</dt><dd>{selected.station.id}</dd></div><div><dt>Latest value</dt><dd>{stationLatest?.value ?? 'Unknown'} {stationLatest?.value !== null ? stationLatest?.unit ?? '' : ''}</dd></div><div><dt>Observed</dt><dd>{formatDate(stationLatest?.observedAt)}</dd></div><div><dt>Received</dt><dd>{formatDate(stationLatest?.receivedAt)}</dd></div><div><dt>Quality</dt><dd>{stationLatest?.quality ?? 'Unknown — not supplied'}</dd></div><div><dt>Aggregation</dt><dd>{stationLatest?.aggregation ?? 'Unknown — not supplied'}</dd></div><div><dt>Scope</dt><dd>Station observation</dd></div><div><dt>Coordinates</dt><dd>{selected.station.latitude.toFixed(5)}, {selected.station.longitude.toFixed(5)}</dd></div></dl>
             {#each selectedStationSources as source (source.id)}<p class="notice">{label(source.state)} · {source.message}</p><a class="source-link" href={source.url} target="_blank" rel="noreferrer">{source.provider} source reference ↗</a>{/each}
             {#key `${selected.station.id}/${displayedStationParameter}`}<StationHistory history={stationHistory} parameter={selectedStationParameters.find(parameter => parameter.id === displayedStationParameter)?.label ?? displayedStationParameter} hours={observationSnapshot?.historyHours ?? 6} />{/key}
-          {:else}<div class="inspect-symbol" aria-hidden="true">⌖</div><h3>A city, with identity.</h3><p class="panel-note">Select a building, vehicle or station to inspect its identifiers and source times. Search offers the same selections by keyboard.</p><p class="panel-note">Drag to orbit · scroll to zoom</p>{/if}
-          {#if selectionMessage}<p class="notice" role="status">{selectionMessage}</p>{/if}
+          {/if}
         </div>
       </section>
+      {/if}
       <section class="panel object-browser" id="object-browser" tabindex="-1"><div class="panel-heading"><h2>Search the city</h2><span>KEYBOARD</span></div>
-        <div class="search-content"><label class="search-label">Vehicle, route, building, address or station<input type="search" bind:value={query} placeholder="Route 4, street or original ID" /></label><p class="panel-note" data-index-state={indexState}>{indexMessage}</p>{#if query}<button class="text-button" onclick={() => query = ''}>Clear search</button>{/if}</div>
+        <div class="search-content">{#if selectionMessage}<p class="notice" role="status">{selectionMessage}</p>{/if}<label class="search-label">Vehicle, route, building, address or station<input type="search" bind:value={query} placeholder="Route 4, street or original ID" /></label><p class="panel-note" data-index-state={indexState}>{indexMessage}</p>{#if query}<button class="text-button" onclick={() => query = ''}>Clear search</button>{/if}</div>
         <details open><summary>Vehicles <span>{matchingVehicles.length}</span></summary><div class="object-list">{#each matchingVehicles.slice(0, 60) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {routeName(vehicle.routeId)}</strong><small>{vehicle.ownerOperatorId}/{vehicle.vehicleId} · {trafficIsStale(vehicle, now) ? 'stale' : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching current vehicles in visible modes / route.</p>{/each}{#if matchingVehicles.length > 60}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div></details>
         <details open={!!query}><summary>Routes <span>{matchingRoutes.length}</span></summary><div class="object-list">{#each matchingRoutes.slice(0, 60) as item (item.routeId)}<button onclick={() => chooseRoute(item.routeId)}><span class="mode-swatch" style:background={MODE_COLOURS[item.mode]}></span><span><strong>Route {item.label} · {label(item.mode)}</strong><small>{item.name} · {item.routeId}</small></span></button>{:else}<p class="panel-note">{routeCatalogLoading ? 'Loading prepared route labels…' : routeCatalog?.reason ?? 'No matching prepared route labels.'}</p>{/each}{#if matchingRoutes.length > 60}<p class="panel-note">First 60 routes. Refine your search.</p>{/if}</div></details>
         <details open={!!query || !!(activeRyhtiTheme && ryhtiCategoryKey)}><summary>{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'Matching buildings' : sceneError && !scene ? 'Available buildings' : 'Loaded buildings'} <span>{filteredBuildings.length}</span></summary><div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong><small>{building.vtjPrt ?? building.ratu ?? building.id}</small></span></button>{:else}<p class="panel-note">{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}</div></details>
@@ -399,7 +402,7 @@
       </section>
     </aside>
     <nav class="camera-presets" aria-label="Camera presets"><span>VIEW</span>{#each [['city', 'City Centre'], ['harbour', 'Harbour'], ['suomenlinna', 'Suomenlinna'], ['energy', 'Energy']] as [id, name] (id)}<button class:active={preset === id} aria-pressed={preset === id} disabled={!scene} onclick={() => choosePreset(id as CameraPreset)}>{name}</button>{/each}</nav>
-    <div class="scene-footer"><span>{hovered || 'Drag to orbit · scroll to zoom'}</span>{#if stats}<span class="performance" aria-label="Scene performance" data-fps={stats.fps} data-draw-calls={stats.drawCalls} data-geometries={stats.geometries} data-triangles={stats.triangles} data-loaded-chunks={stats.loadedChunks} data-placed-vehicles={stats.vehicles} data-unplaced-vehicles={stats.unplacedVehicles} data-receipt-latency-ms={stats.lastReceiptLatencyMs ?? ''}>{stats.fps} FPS · {stats.drawCalls} draws · {stats.loadedChunks} chunks</span>{/if}</div>
+    <div class="scene-footer"><span>{hovered || (keyboardNavigation ? 'WASD to pan · drag to orbit · scroll to zoom' : 'Drag to orbit · scroll to zoom')}</span>{#if stats}<span class="performance" aria-label="Scene performance" data-fps={stats.fps} data-draw-calls={stats.drawCalls} data-geometries={stats.geometries} data-triangles={stats.triangles} data-loaded-chunks={stats.loadedChunks} data-placed-vehicles={stats.vehicles} data-unplaced-vehicles={stats.unplacedVehicles} data-receipt-latency-ms={stats.lastReceiptLatencyMs ?? ''}>{stats.fps} FPS · {stats.drawCalls} draws · {stats.loadedChunks} chunks</span>{/if}</div>
     {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
     <nav class="mobile-panel-nav" aria-label="Mobile scene panels"><button aria-controls="scene-controls" aria-expanded={mobilePanel === 'controls'} onclick={() => setMobilePanel(mobilePanel === 'controls' ? null : 'controls')}>Layers & conditions</button><button aria-controls="identity-inspector" aria-expanded={mobilePanel === 'inspect'} onclick={() => setMobilePanel(mobilePanel === 'inspect' ? null : 'inspect')}>Inspect & search{selected ? ' •' : ''}</button><button onclick={() => setMobilePanel(null)} aria-pressed={mobilePanel === null}>Scene</button></nav>
   </main>

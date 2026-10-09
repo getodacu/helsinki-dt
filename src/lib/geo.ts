@@ -2,7 +2,8 @@ import proj4 from "proj4";
 import { SCENE_ORIGIN } from "./area.ts";
 
 export const GK25 = "+proj=tmerc +lat_0=0 +lon_0=25 +k=1 +x_0=25500000 +y_0=0 +ellps=GRS80 +units=m +no_defs";
-export const PROJECTED_ORIGIN = proj4("EPSG:4326", GK25, [SCENE_ORIGIN.longitude, SCENE_ORIGIN.latitude]);
+const toGK25 = proj4("EPSG:4326", GK25);
+export const PROJECTED_ORIGIN = toGK25.forward([SCENE_ORIGIN.longitude, SCENE_ORIGIN.latitude]);
 
 export function gk25ToWgs84(east: number, north: number): [number, number] {
   if (![east, north].every(Number.isFinite)) throw new Error("Non-finite projected coordinate");
@@ -19,6 +20,6 @@ export function wgs84ToScene(longitude: number, latitude: number, elevation = 0)
   if (![longitude, latitude].every(Number.isFinite) || Math.abs(longitude) > 180 || Math.abs(latitude) > 90) {
     throw new Error("Invalid WGS84 longitude/latitude");
   }
-  const [east, north] = proj4("EPSG:4326", GK25, [longitude, latitude]);
+  const [east, north] = toGK25.forward([longitude, latitude]);
   return gk25ToScene(east, north, elevation);
 }

@@ -81,3 +81,12 @@ The cached successful preparation at **2026-10-08T14:11:31.993Z** (attempt start
 Focused preparation/legacy energy checks on 8 October passed **13/13** offline tests, including deterministic ordering, exact and conflicting identities, national-ID reuse, multi-building membership, missing values, original legacy solar decoding, >500-row release retention with complete source counts, source-version rejection, split-batch denominator and failure retention. Type checking passed with zero errors/warnings. Full application/build/browser acceptance is recorded separately in [D results](milestone-results/D.md).
 
 Limitations: solar preparation covers the stated district tiles, meteorological reference year and exact optional solar-run settings are unknown, and source models are indicative historical calculations. No modeled allocation, panel-capacity/yield estimate or physical-height/energy survey is claimed.
+
+
+## Expanded release compatibility (9 October 2026)
+
+The catalog generated at **2026-10-09T17:51:26.604Z** matches city generation **2026-10-09T17:42:21.702Z** and its **22,686 unique buildings**. The original 8,909 building identities remain unchanged and the semantic source index checksum is unchanged. Modeled and Atlas workbook checksum pins, source units, scenario assumptions, identity-conflict exclusions and measured property boundaries are preserved.
+
+The verified modeled workbook still contains **46,641** source rows. Wider release coordinates and identifiers retain **13,043** rows: **12,032** exact matches, **677** unmatched, **250** ambiguous and **84** conflicting. The catalog contains **84,224** annual scenario records. Solar sampling retains the same **12** district-intersecting source tiles and **772** building parents, yielding **695** exact associations; no wider solar source coverage is inferred. The Nuuka property retains two exact declared member matches and one unresolved member.
+
+The new catalog is **39,405,989 bytes**. Its necessary preparation budgets are 30,000 retained workbook rows, 100,000 energy records, and 48MiB per catalog; ZIP inflation, source checksum, record validation, safe-path, body checksum, geometry-generation and atomic publication checks remain enforced. A regression accepts catalogs beyond the former 50,000-record limit while rejecting malformed records and catalogs beyond the new bound. The earlier sections remain dated evidence for the original central release.

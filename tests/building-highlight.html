@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Building highlight GPU regression</title>
+<h1>Building highlight GPU regression</h1>
+<pre id="result">Running…</pre>
+<script type="module">
+import * as THREE from 'three';
+import { BuildingHighlight } from '/src/lib/building-highlight.ts';
+import { createCityRenderer, makeChunkGeometry } from '/src/lib/scene.ts';
+try {
+  const renderer = createCityRenderer(); renderer.setSize(512,512); document.body.append(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color('black');
+  const chunk = { positions: [-100,20,-100,100,20,-100,0,20,0, 100,20,-100,100,20,100,0,20,0,
+    100,20,100,-100,20,100,0,20,0, -100,20,100,-100,20,-100,0,20,0],
+    ranges: [{buildingId:'selected',firstTriangle:0,triangleCount:4}] };
+  const mesh = new THREE.Mesh(makeChunkGeometry(chunk), new THREE.MeshBasicMaterial({color:'#808080',side:THREE.DoubleSide}));
+  scene.add(mesh);
+  const highlight = new BuildingHighlight(['selected']); highlight.apply(mesh);
+  const camera = new THREE.PerspectiveCamera(42,1,1,24000), target = new THREE.WebGLRenderTarget(512,512);
+  const pixels = new Uint8Array(512*512*4), original = new Uint8Array(pixels.length), selected = new Uint8Array(pixels.length);
+  let samples = 0, frames = 0;
+  const read = into => { renderer.render(scene,camera); renderer.readRenderTargetPixels(target,0,0,512,512,into); };
+  renderer.setRenderTarget(target);
+  for (const distance of [180,500,1450]) for (const ratio of [0.15,0.5,0.8]) for (let frame=0;frame<12;frame++) {
+    const angle=0.5+frame*0.0005, horizontal=distance*Math.sqrt(1-ratio*ratio);
+    camera.position.set(horizontal*Math.sin(angle),20+distance*ratio,horizontal*Math.cos(angle)); camera.lookAt(0,20,0); camera.updateMatrixWorld();
+    highlight.set(null,null); read(original);
+    highlight.set('selected',null); read(selected);
+    if (renderer.info.render.calls !== 1) throw new Error('Highlight added a competing draw');
+    let coverage = 0;
+    for (let y=1;y<511;y++) for (let x=1;x<511;x++) {
+      const i=(y*512+x)*4;
+      if (![-513,-512,-511,-1,0,1,511,512,513].every(offset=>original[i+offset*4]>20)) continue;
+      if (selected[i+1]-selected[i]<30) throw new Error('Untinted pixels inside selected surface');
+      coverage++;
+    }
+    if (!coverage) throw new Error('No surface pixels measured'); samples+=coverage;
+    highlight.set('selected','selected'); read(pixels);
+    if (!pixels.every((value,index)=>value===selected[index])) throw new Error('Hover overrides selection');
+    highlight.set(null,null); read(pixels);
+    if (!pixels.every((value,index)=>value===original[index])) throw new Error('Clearing selection changed the source material');
+    frames++;
+  }
+  const occluder = new THREE.Mesh(new THREE.PlaneGeometry(1000,1000), new THREE.MeshBasicMaterial({color:'red',side:THREE.DoubleSide}));
+  occluder.rotation.x=-Math.PI/2; occluder.position.y=40; scene.add(occluder);
+  camera.position.set(0,200,0); camera.lookAt(0,20,0); camera.updateMatrixWorld();
+  highlight.set('selected',null); read(pixels);
+  const center=(256*512+256)*4;
+  if (pixels[center]<200 || pixels[center+1]>10) throw new Error('Highlight shows through another surface');
+  renderer.setRenderTarget(null); renderer.render(scene,camera); target.dispose(); renderer.dispose();
+  document.querySelector('#result').textContent=JSON.stringify({verdict:'PASS',frames,samples,checks:['coverage','single draw','selection precedence','reset','occlusion']},null,2);
+} catch (error) { document.querySelector('#result').textContent='FAIL: '+error.stack; console.error(error); }
+</script>

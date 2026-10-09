@@ -52,10 +52,11 @@ test('overnight 25:10 departure keeps the previous service date and wraps only t
   assert.equal(routeForJourney({...overnight,startTime:'25:10'},index).status,'missing');
 });
 test('shape clipping retains boundary crossings and separate reentries without connecting an outside gap', () => {
-  const clipped=boundedShape([[24.89,60.17],[24.91,60.17],[24.89,60.18],[24.91,60.18]]);
+  const west=RELEASE_BOUNDS[0];
+  const clipped=boundedShape([[west-0.01,60.17],[west+0.01,60.17],[west-0.01,60.18],[west+0.01,60.18]]);
   assert.equal(clipped.length,2); assert.ok(clipped.flat().every(([lon,lat])=>inBounds(lon,lat,RELEASE_BOUNDS)));
   assert.equal(clipped[0][0][0],RELEASE_BOUNDS[0]); assert.equal(clipped[1][0][0],RELEASE_BOUNDS[0]);
-  assert.deepEqual(boundedShape([[24.8,60.17],[24.85,60.17]]),[]);
+  assert.deepEqual(boundedShape([[west-0.06,60.17],[west-0.02,60.17]]),[]);
 });
 test('journey query validates exact bounded identifiers, duplicate inputs and calendar dates', () => {
   const url=new URL(routeRequestUrl(vehicle),'http://fixture'); assert.equal(journeyIdentity(url.searchParams).id,vehicle.id);

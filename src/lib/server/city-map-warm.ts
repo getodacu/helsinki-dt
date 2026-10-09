@@ -15,14 +15,14 @@ const preparedFetch = (async (input: RequestInfo | URL) => {
 }) as typeof fetch;
 
 /** Resuming enumerates the same URLs and skips all validated disk entries. */
-export async function warmCityArea(cache: CityMapCache = cityMapCache, changed: (state: BackgroundProgress) => void = () => {}, refresh = false) {
+export async function warmCityArea(cache: CityMapCache = cityMapCache, changed: (state: BackgroundProgress) => void = () => {}, refresh = false, allLevels = false) {
   let state: BackgroundProgress = { phase: 'discovering', completed: 0, total: 0, failed: 0 };
   const report = () => changed({ ...state }); report();
   const manifest = await loadCityManifest(preparedFetch), base = await loadCityBase(manifest, preparedFetch);
   const signal = new AbortController().signal;
   const discovered = await discoverTexturedEntries(base, async url => {
     const asset = await cache.read(url, true, refresh); return validateTileIndex(Uint8Array.from(asset.body).buffer, url);
-  }, () => true, () => 10, signal);
+  }, () => true, () => 10, signal, allLevels);
   if (discovered.failed.length) console.warn('Map cache source indices awaiting retry:', discovered.failed.join(', '));
   const loader = new CityChunkLoader(manifest, preparedFetch);
   const tasks = [...manifest.chunks.map(entry => async () => {

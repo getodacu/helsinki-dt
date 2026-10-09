@@ -3,7 +3,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import type { EnergyCatalog, EnergyCatalogState, EnergyManifest } from '../energy-types.ts';
 
-export const ENERGY_CATALOG_MAX_BYTES = 32 * 1024 ** 2;
+export const ENERGY_CATALOG_MAX_BYTES = 48 * 1024 ** 2;
 export const ENERGY_CITY_MANIFEST_MAX_BYTES = 1024 ** 2;
 class GeometryVersionError extends Error {}
 export function object(value: unknown): Record<string, unknown> {
@@ -40,7 +40,7 @@ function validSource(value: unknown): boolean {
 export function validateEnergyCatalog(value: unknown): EnergyCatalog {
   const catalog = object(value);
   if (catalog.version !== 1 || !timestamp(catalog.generatedAt) || !timestamp(catalog.cityGeneratedAt)) throw new Error('Unsupported or undated energy catalog');
-  const sources = list(catalog.sources, 32), energy = list(catalog.energy, 50000), solar = list(catalog.solar, 50000);
+  const sources = list(catalog.sources, 32), energy = list(catalog.energy, 100000), solar = list(catalog.solar, 50000);
   const properties = list(catalog.properties, 128), reports = list(catalog.reports, 32);
   if (!sources.every(validSource)) throw new Error('Invalid energy source provenance');
   const sourceIds = sources.map(value => object(value).id);

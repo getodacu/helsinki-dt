@@ -16,3 +16,12 @@ test('bounds include edges and reject nonfinite/outside points', () => {
   assert.equal(inBounds(NaN, 60.17, DISTRICT_BOUNDS), false);
   assert.equal(inBounds(24.95, Infinity, DISTRICT_BOUNDS), false);
 });
+
+
+test('wider release includes western, northern and eastern districts without extending to the metropolitan area', () => {
+  for (const [longitude, latitude] of [[24.88,60.16],[24.875,60.198],[24.932,60.20],[24.945,60.217],[25.04,60.20]]) {
+    assert.ok(inBounds(longitude, latitude, RELEASE_BOUNDS));
+  }
+  assert.equal(inBounds(24.66,60.205,RELEASE_BOUNDS),false);
+  assert.equal(inBounds(25.04,60.293,RELEASE_BOUNDS),false);
+});

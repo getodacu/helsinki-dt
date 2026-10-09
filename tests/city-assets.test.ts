@@ -1,14 +1,15 @@
 import { test } from 'node:test';
+import { writeArrayBuffer } from 'geotiff';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { SCENE_ORIGIN } from '../src/lib/area.ts';
+import { RELEASE_BOUNDS, SCENE_ORIGIN } from '../src/lib/area.ts';
 import { CityChunkLoader, loadCityBase, loadCityManifest, sampleTerrainHeight, type CityManifest, type CityBase } from '../src/lib/city-assets.ts';
 import { buildingIdForTriangle } from '../src/lib/data/geometry.ts';
 import { partitionCityBuildings } from '../scripts/city-buildings.ts';
 import { decodeCityTile, releaseTilePaths } from '../scripts/city-tiles.ts';
-import { rasterLandMask } from '../scripts/city-base.ts';
+import { TERRAIN_URL, LAND_URL, ROADS_URL, RAILS_URL, contextCachePath, decodeTerrain, rasterLandMask } from '../scripts/city-base.ts';
 import { publishCityAssets } from '../scripts/prepare-city.ts';
 import type { Building, BuildingChunk, DatasetSource } from '../src/lib/types.ts';
 
@@ -126,4 +127,34 @@ test('failed city publication preserves the previous manifest and generation byt
     await assert.rejects(publishCityAssets(broken, fixture.root), /triangle lookup/);
     assert.deepEqual(await readFile(join(fixture.root, 'manifest.json')), before);
   } finally { await rm(fixture.root, { recursive: true, force: true }); }
+});
+
+
+test('context requests cover the release and stale URLs use separate cache files', () => {
+  for (const url of [LAND_URL,ROADS_URL,RAILS_URL]) {
+    assert.equal(new URL(url).searchParams.get('bbox'),RELEASE_BOUNDS.join(',')+',EPSG:4326');
+    const stale=new URL(url); stale.searchParams.set('bbox','24.9,60.135,25.04,60.195,EPSG:4326');
+    assert.notEqual(contextCachePath(url),contextCachePath(stale.href));
+  }
+  assert.equal(new URL(ROADS_URL).searchParams.get('maxFeatures'),'20000');
+});
+
+test('terrain decoder agrees with expanded WCS extent, pixel centres and NoData', async () => {
+  const query=new URL(TERRAIN_URL).searchParams;
+  const width=Number(query.get('width')),height=Number(query.get('height'));
+  const [west,south,east,north]=query.get('bbox')!.split(',').map(Number);
+  assert.equal(width,557); assert.equal(height,503);
+  assert.equal((east-west)/width,20); assert.equal((north-south)/height,20);
+  const values=new Float32Array(width*height).fill(12.25); values[0]=-32767;
+  const raster=(overrides: Record<string,unknown>={})=>writeArrayBuffer(values,{width,height,BitsPerSample:[32],SampleFormat:[3],
+    GTModelTypeGeoKey:1,GTRasterTypeGeoKey:1,ProjectedCSTypeGeoKey:3879,ModelPixelScale:[20,20,0],
+    ModelTiepoint:[0,0,0,west,north,0],GDAL_NODATA:'-32767',...overrides});
+  const grid=await decodeTerrain(new Uint8Array(await raster()));
+  assert.equal(grid.width,width); assert.equal(grid.height,height); assert.deepEqual(grid.step,[20,20]);
+  assert.equal(grid.elevations[0],null); assert.equal(grid.elevations[1],12.25);
+  const { PROJECTED_ORIGIN }=await import('../src/lib/geo.ts');
+  assert.deepEqual(grid.origin,[west+10-PROJECTED_ORIGIN[0],-(north-10-PROJECTED_ORIGIN[1])]);
+  await assert.rejects(async()=>decodeTerrain(new Uint8Array(await raster({ProjectedCSTypeGeoKey:4326}))),/Unexpected terrain/);
+  await assert.rejects(async()=>decodeTerrain(new Uint8Array(await raster({ModelTiepoint:[0,0,0,west+20,north,0]}))),/Unexpected terrain/);
+  await assert.rejects(async()=>decodeTerrain(new Uint8Array(await raster({width:width-1}))),/Unexpected terrain/);
 });

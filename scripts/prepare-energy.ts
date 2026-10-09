@@ -80,7 +80,7 @@ async function cityBuildings(): Promise<{ buildings: Building[]; source: Dataset
     lists.push(...values);
   }
   const buildings = uniqueBuildings(lists), source = manifest.sources.find((source: DatasetSource) => source.id === 'helsinki-semantic-tiles');
-  if (buildings.length !== 8909 || !source) throw new Error('Release building denominator or semantic source changed; review compatibility before preparing energy');
+  if (buildings.length !== 22686 || !source) throw new Error('Release building denominator or semantic source changed; review compatibility before preparing energy');
   return { buildings, source, generatedAt: manifest.generatedAt };
 }
 
@@ -103,7 +103,7 @@ export async function prepareEnergy(refresh = false) {
     try { inspection = JSON.parse(await readFile(inspectionPath, 'utf8')); }
     catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-      inspection = await inspectWorkbook(modelPath, buildings, { maxRetainedRows: 12_000,
+      inspection = await inspectWorkbook(modelPath, buildings, { maxRetainedRows: 30_000,
         retain: values => typeof values.SQ_2020_Longitude === 'number' && typeof values.SQ_2020_Latitude === 'number'
           && inBounds(values.SQ_2020_Longitude, values.SQ_2020_Latitude, RELEASE_BOUNDS) });
       await writeFile(inspectionPath, JSON.stringify(inspection));
@@ -114,7 +114,7 @@ export async function prepareEnergy(refresh = false) {
       return { sourceId: `modeled:${sheet.name}:${row.row}`, gmlId: row.values.gmlid, vtjPrt: row.values.vtj_prt, values: row.values };
     }));
     const modeled = prepareModeled(modelRows, buildings);
-    const atlas = await inspectWorkbook(atlasPath, buildings, { maxRetainedRows: 12_000 });
+    const atlas = await inspectWorkbook(atlasPath, buildings, { maxRetainedRows: 30_000 });
     const crosswalk = new Map<string, string[]>();
     for (const sheet of atlas.sheets) for (const row of sheet.rows) {
       const uuid = row.values.UUID, vtj = row.values.VTJ_PRT;

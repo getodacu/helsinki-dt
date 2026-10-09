@@ -11,6 +11,7 @@ import { prepareModeled, prepareSolar, prepareProperty, joinIdentities, joinRepo
 import { decodeSolarTile } from '../scripts/energy-solar.ts';
 import { inspectWorkbook } from '../scripts/energy-workbooks.ts';
 import { publishEnergy, recordEnergyFailure } from '../scripts/prepare-energy.ts';
+import { validateEnergyCatalog } from '../src/lib/server/energy-catalog.ts';
 
 const fixture = JSON.parse(await readFile(new URL('./fixtures/energy-static-original.json', import.meta.url), 'utf8'));
 const modeled = prepareModeled(fixture.modeledRows, fixture.buildings);
@@ -122,4 +123,12 @@ test('failed publication and a changed source preserve the dated valid generatio
     assert.equal(second.refresh.status, 'current');
     assert.notEqual(second.asset.path, first.asset.path);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+
+test('expanded energy catalogs exceed the old row cap while retaining record validation and a hard bound', () => {
+  const energy=Array.from({length:50001},(_,index)=>({...modeled.energy[0],id:'expanded-'+index}));
+  assert.equal(validateEnergyCatalog({...catalog,energy}).energy.length,50001);
+  assert.throws(()=>validateEnergyCatalog({...catalog,energy:[{...energy[0],value:NaN},...energy.slice(1)]}),/Invalid prepared energy record/);
+  assert.throws(()=>validateEnergyCatalog({...catalog,energy:Array(100001).fill(modeled.energy[0])}),/Energy list exceeds its bound/);
 });

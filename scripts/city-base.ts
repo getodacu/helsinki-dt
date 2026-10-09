@@ -1,17 +1,34 @@
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { RELEASE_BOUNDS } from '../src/lib/area.ts';
 import { fromArrayBuffer } from 'geotiff';
 import { cachedDownload } from './geometry.ts';
 import { CITY_CACHE } from './city-buildings.ts';
-import { PROJECTED_ORIGIN, gk25ToScene } from '../src/lib/geo.ts';
+import { PROJECTED_ORIGIN, gk25ToScene, wgs84ToScene } from '../src/lib/geo.ts';
 import { sampleTerrainHeight, type CityBase, type TerrainGrid } from '../src/lib/city-assets.ts';
 
 const WFS = 'https://kartta.hel.fi/ws/geoserver/avoindata/wfs';
-// ponytail: 20m sampling omits tiny coastal details; increase resolution when street-level terrain becomes required.
-export const TERRAIN_URL = 'https://kartta.hel.fi/ws/geoserver/avoindata/wcs?service=WCS&version=1.0.0&request=GetCoverage&coverage=avoindata:Korkeusmalli_2021_1m&crs=EPSG:3879&bbox=25494300,6669000,25502300,6675900&width=400&height=345&format=GeoTIFF';
+// shortcut: 20m sampling omits tiny coastal details, increase resolution for street-level terrain.
+const terrainStep = 20;
+const corners = [RELEASE_BOUNDS[0], RELEASE_BOUNDS[2]].flatMap(longitude =>
+  [RELEASE_BOUNDS[1], RELEASE_BOUNDS[3]].map(latitude => {
+    const [x, , z] = wgs84ToScene(longitude, latitude);
+    return [PROJECTED_ORIGIN[0] + x, PROJECTED_ORIGIN[1] - z];
+  }));
+const terrainBounds = [Math.floor(Math.min(...corners.map(point => point[0])) / terrainStep) * terrainStep,
+  Math.floor(Math.min(...corners.map(point => point[1])) / terrainStep) * terrainStep,
+  Math.ceil(Math.max(...corners.map(point => point[0])) / terrainStep) * terrainStep,
+  Math.ceil(Math.max(...corners.map(point => point[1])) / terrainStep) * terrainStep];
+const terrainWidth = (terrainBounds[2] - terrainBounds[0]) / terrainStep;
+const terrainHeight = (terrainBounds[3] - terrainBounds[1]) / terrainStep;
+export const TERRAIN_URL = 'https://kartta.hel.fi/ws/geoserver/avoindata/wcs?service=WCS&version=1.0.0&request=GetCoverage&coverage=avoindata:Korkeusmalli_2021_1m&crs=EPSG:3879&bbox=' + terrainBounds.join(',')
+  + '&width=' + terrainWidth + '&height=' + terrainHeight + '&format=GeoTIFF';
+export const contextCachePath = (url: string) => CITY_CACHE + '/context-' + createHash('sha256').update(url).digest('hex')
+  + (url === TERRAIN_URL ? '.tif' : '.json');
 const query = (layers: string, count: number) => WFS + '?service=WFS&version=1.0.0&request=GetFeature&typeName=' + layers
-  + '&outputFormat=application/json&srsName=EPSG:3879&bbox=24.90,60.135,25.04,60.195,EPSG:4326&maxFeatures=' + count;
+  + '&outputFormat=application/json&srsName=EPSG:3879&bbox=' + RELEASE_BOUNDS.join(',') + ',EPSG:4326&maxFeatures=' + count;
 export const LAND_URL = query('avoindata:Maavesi_manner,avoindata:Maavesi_saaret', 1000);
-export const ROADS_URL = query('avoindata:YLRE_Katu_ja_viherosat_ajorata_alue', 10000);
+export const ROADS_URL = query('avoindata:YLRE_Katu_ja_viherosat_ajorata_alue', 20000);
 export const RAILS_URL = query('avoindata:Seutukartta_liikenne_juna_rata,avoindata:Seutukartta_liikenne_metro_rata', 2000);
 type Polygon = number[][][];
 interface FeatureCollection {
@@ -20,7 +37,7 @@ interface FeatureCollection {
 }
 function parseFeatures(text: string): FeatureCollection {
   const value = JSON.parse(text) as FeatureCollection;
-  if (value.type !== 'FeatureCollection' || !Array.isArray(value.features) || value.features.length > 10000
+  if (value.type !== 'FeatureCollection' || !Array.isArray(value.features) || value.features.length > 20000
     || !Number.isInteger(value.totalFeatures) || value.totalFeatures !== value.features.length
     || value.crs?.properties?.name !== 'urn:ogc:def:crs:EPSG::3879') throw new Error('Incomplete or invalid municipal geometry');
   return value;
@@ -69,10 +86,10 @@ export async function decodeTerrain(bytes: Uint8Array) {
   const image = await tiff.getImage(), width = image.getWidth(), height = image.getHeight();
   const [west, south, east, north] = image.getBoundingBox();
   const origin = image.getOrigin();
-  if (width !== 400 || height !== 345 || width * height > 1_000_000 || image.getSamplesPerPixel() !== 1
+  if (width !== terrainWidth || height !== terrainHeight || width * height > 1_000_000 || image.getSamplesPerPixel() !== 1
     || image.getGeoKeys()?.ProjectedCSTypeGeoKey !== 3879 || !image.pixelIsArea()
     || origin[0] !== west || origin[1] !== north
-    || [west, south, east, north].some((value, axis) => Math.abs(value - [25494300, 6669000, 25502300, 6675900][axis]) > 0.01)) {
+    || [west, south, east, north].some((value, axis) => Math.abs(value - terrainBounds[axis]) > 0.01)) {
     throw new Error('Unexpected terrain dimensions, orientation, CRS or extent');
   }
   const dx = (east - west) / width, dz = (north - south) / height;
@@ -125,15 +142,15 @@ function contextPaths(lines: number[][][], terrain: TerrainGrid, bounds: number[
 
 export async function prepareCityBase() {
   const downloads = await Promise.all([
-    cachedDownload(TERRAIN_URL, CITY_CACHE + '/terrain.tif', 4_000_000),
-    cachedDownload(LAND_URL, CITY_CACHE + '/land.json', 12_000_000),
-    cachedDownload(ROADS_URL, CITY_CACHE + '/roads.json', 24_000_000),
-    cachedDownload(RAILS_URL, CITY_CACHE + '/rails.json', 2_000_000)
+    cachedDownload(TERRAIN_URL, contextCachePath(TERRAIN_URL), 4_000_000),
+    cachedDownload(LAND_URL, contextCachePath(LAND_URL), 12_000_000),
+    cachedDownload(ROADS_URL, contextCachePath(ROADS_URL), 48_000_000),
+    cachedDownload(RAILS_URL, contextCachePath(RAILS_URL), 2_000_000)
   ]);
-  const landDocument = parseFeatures(await readFile(CITY_CACHE + '/land.json', 'utf8'));
-  const roadDocument = parseFeatures(await readFile(CITY_CACHE + '/roads.json', 'utf8'));
-  const railDocument = parseFeatures(await readFile(CITY_CACHE + '/rails.json', 'utf8'));
-  const terrain = await decodeTerrain(await readFile(CITY_CACHE + '/terrain.tif'));
+  const landDocument = parseFeatures(await readFile(contextCachePath(LAND_URL), 'utf8'));
+  const roadDocument = parseFeatures(await readFile(contextCachePath(ROADS_URL), 'utf8'));
+  const railDocument = parseFeatures(await readFile(contextCachePath(RAILS_URL), 'utf8'));
+  const terrain = await decodeTerrain(await readFile(contextCachePath(TERRAIN_URL)));
   const land = polygons(landDocument), mask = rasterLandMask(land, terrain);
   let sourceUnknown = 0, landSamples = 0;
   terrain.elevations = terrain.elevations.map((value, index) => {

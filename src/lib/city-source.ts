@@ -6,8 +6,8 @@ export const TEXTURED_BUILDINGS_URL = 'https://kartta.hel.fi/3d/datasource-data/
 export const ORTHOPHOTO_LAYER = 'avoindata:Ortoilmakuva_2025_5cm';
 export type Bounds = [number, number, number, number];
 export interface Tile { boundingVolume: { region: number[] }; transform?: number[]; geometricError: number; content?: { uri: string }; children?: Tile[] }
-export interface ModelEntry { url: string; bounds: Bounds; transform: THREE.Matrix4 }
-export interface AppearanceEntry { url: string; bounds: Bounds; transform?: THREE.Matrix4 }
+export interface ModelEntry { url: string; bounds: Bounds; transform: THREE.Matrix4; ancestors: string[] }
+export interface AppearanceEntry { url: string; bounds: Bounds; transform?: THREE.Matrix4; ancestors?: string[] }
 
 export function imageryUrl(bounds: Bounds) {
   const [west, south, east, north] = bounds;
@@ -38,7 +38,7 @@ export function tileLocation(tile: Tile, parent: THREE.Matrix4, source: string) 
 }
 
 /** The provider uses embedded glTF and uint32 string offsets for original GML IDs. */
-export function texturedBuildingIds(bytes: ArrayBuffer): Set<string> {
+export function texturedBuildingFeatures(bytes: ArrayBuffer): string[] {
   const view = new DataView(bytes);
   if (bytes.byteLength < 28 || bytes.byteLength > 8_000_000 || view.getUint32(0, true) !== 0x46546c67
     || view.getUint32(4, true) !== 2 || view.getUint32(8, true) !== bytes.byteLength || view.getUint32(16, true) !== 0x4e4f534a) throw new Error('Invalid textured glTF');
@@ -47,7 +47,7 @@ export function texturedBuildingIds(bytes: ArrayBuffer): Set<string> {
   const document = JSON.parse(new TextDecoder().decode(new Uint8Array(bytes, 20, length)));
   if (document.buffers?.length !== 1 || document.buffers[0].uri || document.buffers[0].byteLength > bytes.byteLength - binary
     || !Array.isArray(document.accessors) || document.accessors.some((accessor: { count: number }) => !Number.isInteger(accessor.count) || accessor.count < 1 || accessor.count > 600_000)
-    || document.images?.length > 8 || document.images?.some((image: { uri?: string }) => image.uri) || document.extensionsRequired?.some((name: string) => name !== 'KHR_texture_basisu')) throw new Error('Unsupported textured resources');
+    || document.images?.length > 64 || document.images?.some((image: { uri?: string }) => image.uri) || document.extensionsRequired?.some((name: string) => name !== 'KHR_texture_basisu')) throw new Error('Unsupported textured resources');
   const table = document.extensions?.EXT_structural_metadata?.propertyTables?.[0];
   const property = table?.properties?.id;
   if (!property || !Number.isInteger(table.count) || table.count < 1 || table.count > 5000 || (property.stringOffsetType && property.stringOffsetType !== 'UINT32')) throw new Error('Missing textured building identities');
@@ -55,14 +55,18 @@ export function texturedBuildingIds(bytes: ArrayBuffer): Set<string> {
   for (const entry of [strings, offsets]) if (!entry || entry.buffer !== 0 || !Number.isInteger(entry.byteLength) || entry.byteLength < 0
     || !Number.isInteger(entry.byteOffset ?? 0) || (entry.byteOffset ?? 0) < 0 || binary + (entry.byteOffset ?? 0) + entry.byteLength > bytes.byteLength) throw new Error('Invalid textured metadata buffer');
   if (offsets.byteLength !== (table.count + 1) * 4) throw new Error('Invalid textured identity offsets');
-  const indices = new DataView(bytes, binary + (offsets.byteOffset ?? 0), offsets.byteLength), ids = new Set<string>();
+  const indices = new DataView(bytes, binary + (offsets.byteOffset ?? 0), offsets.byteLength), ids: string[] = [];
   for (let index = 0; index < table.count; index++) {
     const start = indices.getUint32(index * 4, true), end = indices.getUint32((index + 1) * 4, true);
     if (start > end || end > strings.byteLength || end - start > 200) throw new Error('Invalid textured identity');
     const id = new TextDecoder().decode(new Uint8Array(bytes, binary + (strings.byteOffset ?? 0) + start, end - start));
-    if (id.startsWith('BID_')) ids.add(id);
+    ids.push(id);
   }
   return ids;
+}
+
+export function texturedBuildingIds(bytes: ArrayBuffer): Set<string> {
+  return new Set(texturedBuildingFeatures(bytes).filter(id => id.startsWith('BID_')));
 }
 
 export function validateTileIndex(bytes: ArrayBuffer, source = TEXTURED_BUILDINGS_URL): Tile {
@@ -88,25 +92,35 @@ export function aerialEntries(base: CityBase): AppearanceEntry[] {
 
 /** Failed subtrees remain incomplete while other parts can finish loading. */
 export async function discoverTexturedEntries(base: CityBase, readIndex: (url: string) => Promise<Tile>,
-  visible: (bounds: Bounds) => boolean, threshold: (bounds: Bounds) => number, signal: AbortSignal) {
-  const entries: ModelEntry[] = [], failed: string[] = [];
-  const index = async (url: string, parent: THREE.Matrix4, depth: number) => {
-    try { await visit(await readIndex(url), parent, url, depth); }
-    catch (error) { signal.throwIfAborted(); failed.push(url); }
+  visible: (bounds: Bounds) => boolean, threshold: (bounds: Bounds) => number, signal: AbortSignal, allLevels = false) {
+  const entries: ModelEntry[] = [], failed: string[] = [], blocked = new Set<string>();
+  const models = new Set<string>(), indices = new Map<string, Promise<Tile>>();
+  const index = async (url: string, parent: THREE.Matrix4, depth: number, ancestors: string[]) => {
+    try {
+      let tile = allLevels ? indices.get(url) : undefined;
+      if (!tile) { tile = readIndex(url); if (allLevels) indices.set(url, tile); }
+      await visit(await tile, parent, url, depth, ancestors);
+    } catch (error) {
+      signal.throwIfAborted();
+      if (!allLevels || !failed.includes(url)) failed.push(url);
+      for (const ancestor of ancestors) blocked.add(ancestor);
+    }
   };
-  const visit = async (tile: Tile, parent: THREE.Matrix4, source: string, depth: number): Promise<void> => {
+  const visit = async (tile: Tile, parent: THREE.Matrix4, source: string, depth: number, ancestors: string[]): Promise<void> => {
     signal.throwIfAborted();
     if (depth > 24) throw new Error('Textured tile hierarchy too deep');
     const entry = tileLocation(tile, parent, source), [west, south, east, north] = entry.bounds;
     if (west >= base.bounds[2] || east <= base.bounds[0] || south >= base.bounds[3] || north <= base.bounds[1] || !visible(entry.bounds)) return;
-    if (entry.url?.endsWith('.glb') && (tile.geometricError <= threshold(entry.bounds) || !tile.children?.length)) {
-      entries.push({ ...entry, url: entry.url }); return;
+    if (entry.url?.endsWith('.glb') && (allLevels || tile.geometricError <= threshold(entry.bounds) || !tile.children?.length)) {
+      if (!allLevels || !models.has(entry.url)) { entries.push({ ...entry, url: entry.url, ancestors }); models.add(entry.url); }
+      if (!allLevels) return;
     }
-    if (entry.url?.endsWith('.json')) await index(entry.url, entry.transform, depth + 1);
-    else for (const child of tile.children ?? []) await visit(child, entry.transform, source, depth + 1);
+    const lineage = entry.url?.endsWith('.glb') ? [...ancestors, entry.url] : ancestors;
+    if (entry.url?.endsWith('.json')) await index(entry.url, entry.transform, depth + 1, lineage);
+    if (allLevels || !entry.url?.endsWith('.json')) for (const child of tile.children ?? []) await visit(child, entry.transform, source, depth + 1, lineage);
   };
-  await index(TEXTURED_BUILDINGS_URL, new THREE.Matrix4(), 0);
-  return { entries, failed };
+  await index(TEXTURED_BUILDINGS_URL, new THREE.Matrix4(), 0, []);
+  return { entries, failed, blocked };
 }
 
 /** Only this prepared municipal source and bounded aerial cells can be proxied. */

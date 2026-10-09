@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BuildingHighlight } from './building-highlight.ts';
 import { CityAppearance } from './city-appearance.ts';
 import { CityAssetCache } from './city-cache.ts';
 import { AssetRetries, ViewLoading, type BackgroundProgress, type SceneLoadState } from './city-loading.ts';
@@ -29,12 +30,33 @@ export type SceneStats = { fps: number; drawCalls: number; triangles: number; ge
 type Callbacks = { onSelection: (selection: Selection | null, message?: string) => void;
   onBuildings: (buildings: Building[]) => void; onStats: (stats: SceneStats) => void;
   onHover: (label: string) => void; onError: (message: string) => void;
-  onCameraInteraction: () => void; onReady: () => void; onAppearanceStatus: (message: string) => void; onLoadState: (state: SceneLoadState) => void };
+  onCameraInteraction: () => void; onReady: () => void; onAppearanceStatus: (message: string) => void; onLoadState: (state: SceneLoadState) => void; onScale?: (scale: SceneScale | null) => void };
 export type CitySceneController = ReturnType<typeof createCityScene>;
+export type SceneScale = { metres: number; pixels: number };
+
+/** Perspective ground distance is local to the horizontal row through the view centre. */
+export function measureGroundScale(camera: THREE.PerspectiveCamera, width: number, groundHeight: number): SceneScale | null {
+  if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(groundHeight) || camera.position.y <= groundHeight) return null;
+  const span = Math.min(120, width / 3), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -groundHeight);
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(new THREE.Vector2(-span / width, 0), camera);
+  const left = raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+  raycaster.setFromCamera(new THREE.Vector2(span / width, 0), camera);
+  const right = raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+  if (!left || !right) return null;
+  const distance = Math.hypot(right.x - left.x, right.z - left.z);
+  if (!Number.isFinite(distance) || distance <= 0) return null;
+  const magnitude = 10 ** Math.floor(Math.log10(distance));
+  const metres = (distance >= 5 * magnitude ? 5 : distance >= 2 * magnitude ? 2 : 1) * magnitude;
+  return { metres, pixels: Math.round(span * metres / distance * 10) / 10 };
+}
 
 export function makeChunkGeometry(chunk: BuildingChunk) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(chunk.positions, 3));
+  const features = new Float32Array(chunk.positions.length / 3);
+  chunk.ranges.forEach((range, index) => features.fill(index, range.firstTriangle * 3, (range.firstTriangle + range.triangleCount) * 3));
+  geometry.setAttribute('_feature_id_0', new THREE.BufferAttribute(features, 1));
   geometry.computeVertexNormals(); geometry.computeBoundingSphere();
   return geometry;
 }
@@ -49,15 +71,6 @@ export function applyBuildingColours(geometry: THREE.BufferGeometry, chunk: Buil
     for (let vertex = range.firstTriangle * 3; vertex < (range.firstTriangle + range.triangleCount) * 3; vertex++) attribute.setXYZ(vertex, colour.r, colour.g, colour.b);
   }
   geometry.setAttribute('color', attribute);
-}
-
-/** Chunk identities are kept independently of their disposable render geometry. */
-export function buildingHighlight(chunk: BuildingChunk, id: string) {
-  const positions: number[] = [];
-  for (const range of chunk.ranges) if (range.buildingId === id) {
-    for (let i = range.firstTriangle * 9; i < (range.firstTriangle + range.triangleCount) * 9; i++) positions.push(chunk.positions[i]);
-  }
-  return positions;
 }
 
 /** Hidden texture-covered ranges still participate in semantic raycasts. */
@@ -145,6 +158,24 @@ export function waterGeometry(base: CityBase) {
   geometry.computeVertexNormals(); return geometry;
 }
 
+/** Move across the ground without changing the orbit camera's height or viewing angle. */
+export function panKeyboardCamera(camera: THREE.PerspectiveCamera, target: THREE.Vector3, keys: ReadonlySet<string>, elapsedSeconds: number) {
+  const sideways = Number(keys.has('KeyD')) - Number(keys.has('KeyA'));
+  const ahead = Number(keys.has('KeyW')) - Number(keys.has('KeyS'));
+  if ((!sideways && !ahead) || elapsedSeconds <= 0) return;
+  const forward = new THREE.Vector3().subVectors(target, camera.position); forward.y = 0; forward.normalize();
+  const right = new THREE.Vector3(-forward.z, 0, forward.x);
+  const shift = forward.multiplyScalar(ahead).addScaledVector(right, sideways).normalize()
+    .multiplyScalar(Math.max(120, camera.position.distanceTo(target) * 0.4) * Math.min(elapsedSeconds, 0.05));
+  camera.position.add(shift); target.add(shift);
+}
+
+/** Keep source tiles that straddle the edge inside the rendered ground rectangle. */
+export function mapClippingPlanes([west, south, east, north]: CityBase['bounds']) {
+  return [new THREE.Plane(new THREE.Vector3(1, 0, 0), -west), new THREE.Plane(new THREE.Vector3(-1, 0, 0), east),
+    new THREE.Plane(new THREE.Vector3(0, 0, 1), -south), new THREE.Plane(new THREE.Vector3(0, 0, -1), north)];
+}
+
 export function createCityRenderer() {
   // Preserve centimetre-scale separation between imagery and terrain across the city view.
   return new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
@@ -160,17 +191,18 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const motionChange = () => { reducedMotion = reducedQuery.matches; controls.enableDamping = !reducedMotion; };
   reducedQuery.addEventListener('change', motionChange);
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#0c202b');
-  scene.fog = new THREE.Fog('#0c202b', 7_000, 16_000);
+  scene.fog = new THREE.Fog('#0c202b', 14_000, 32_000);
   const renderer = createCityRenderer();
+  renderer.clippingPlanes = mapClippingPlanes(base.bounds);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75)); renderer.setClearColor('#0c202b');
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
-  renderer.domElement.setAttribute('aria-label', 'Helsinki 3D city. Use search and station lists to select objects with the keyboard.');
+  renderer.domElement.setAttribute('aria-label', 'Helsinki 3D city. Hold WASD to pan when keyboard navigation is enabled. Use search and station lists to select objects with the keyboard.');
   renderer.domElement.setAttribute('role', 'img');
-  const camera = new THREE.PerspectiveCamera(42, 1, 1, 24_000);
+  const camera = new THREE.PerspectiveCamera(42, 1, 1, 40_000);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = !reducedMotion; controls.dampingFactor = 0.12;
-  controls.minDistance = 45; controls.maxDistance = 10_000; controls.maxPolarAngle = Math.PI / 2 - 0.08;
+  controls.minDistance = 45; controls.maxDistance = 18_000; controls.maxPolarAngle = Math.PI / 2 - 0.08;
   scene.add(new THREE.HemisphereLight('#edf9ff', '#697463', 2.2));
   const sun = new THREE.DirectionalLight('#fff0d4', 2.3); sun.position.set(-2000, 3500, 800); scene.add(sun);
   const land = new THREE.Group(), context = new THREE.Group(), buildings = new THREE.Group();
@@ -188,10 +220,9 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   }
   const fleet = new LiveFleet((x, z) => sampleTerrainHeight(base.terrain, x, z), base.waterLevel); scene.add(fleet.root);
   let hoveredVehicleId: string | null = null;
-  const flags = new VehicleFlags(container, vehicle => { if (loadState.phase === 'ready' || loadState.phase === 'available') select({ kind: 'vehicle', vehicle }); },
+  const flags = new VehicleFlags(container, vehicle => { if (initiallyReady) select({ kind: 'vehicle', vehicle }); },
     (id, label) => { hoveredVehicleId = id; callbacks.onHover(label); });
   void fleet.loadModels(modelUrls, callbacks.onError);
-  const selectedHighlight = new THREE.Group(), hoverHighlight = new THREE.Group(); scene.add(selectedHighlight, hoverHighlight);
   const vehicleRing = new THREE.Mesh(new THREE.RingGeometry(12, 16, 40), new THREE.MeshBasicMaterial({ color: '#d5f6e6', side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.95 }));
   vehicleRing.rotation.x = -Math.PI / 2; vehicleRing.renderOrder = 4; vehicleRing.visible = false; scene.add(vehicleRing);
   const viewLoading = new ViewLoading();
@@ -201,8 +232,9 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   let backgroundRunning = false, serverCacheIssue = '';
   let cachePoll: ReturnType<typeof setTimeout> | undefined;
   const backgroundAbort = new AbortController();
-  let reportLoad = () => {};
-  const loader = new CityChunkLoader(manifest, fetch, cache), chunks = new Map<string, { chunk: BuildingChunk; mesh: THREE.Mesh; buildings: Building[] }>();
+  let reportLoad = () => {}, scheduleRetry = () => {};
+  let retryTimer: ReturnType<typeof setTimeout> | undefined, retryAt = Infinity;
+  const loader = new CityChunkLoader(manifest, fetch, cache), chunks = new Map<string, { chunk: BuildingChunk; mesh: THREE.Mesh; buildings: Building[]; highlight: BuildingHighlight }>();
   const identities = new Map<string, Building>();
   const refreshAppearance = () => {
     const textured = layers.imagery && !buildingThemed;
@@ -226,19 +258,10 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   };
   const refreshHighlights = () => {
     refreshContext();
-    for (const [group, id, colour] of [[selectedHighlight, selected?.kind === 'building' ? selected.building.id : null, '#82e3be'], [hoverHighlight, hoverId, '#efd4a2']] as const) {
-      disposeTree(group);
-      if (!id) continue;
-      for (const { chunk } of chunks.values()) {
-        const positions = buildingHighlight(chunk, id);
-        if (!positions.length) continue;
-        const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        const overlay = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.72,
-          depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }));
-        group.add(overlay);
-      }
-      group.visible = layers.buildings;
-    }
+    const id = selected?.kind === 'building' ? selected.building.id : null;
+    const focus = selected?.kind === 'building' ? new THREE.Vector3(...wgs84ToScene(selected.building.longitude, selected.building.latitude)) : null;
+    for (const item of chunks.values()) item.highlight.set(id, hoverId);
+    appearance.setSelection(id, hoverId, focus);
   };
   const reportBuildings = () => {
     callbacks.onBuildings([...new Map([...chunks.values()].flatMap(item => item.buildings).map(building => [building.id, building])).values()]);
@@ -288,36 +311,59 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     const usable = loadState.phase === 'ready' || loadState.phase === 'available';
     cache.setBackgroundAllowed(usable && !document.hidden);
     const signature = JSON.stringify(loadState);
-    if (signature !== loadSignature) { loadSignature = signature; callbacks.onLoadState(loadState); }
+    if (signature !== loadSignature) { loadSignature = signature; callbacks.onLoadState(loadState); scheduleRetry(); }
     if (usable && !initiallyReady) { initiallyReady = true; callbacks.onReady(); }
     if (usable && !backgroundRunning && background.phase === 'idle') void prefetch(true);
   };
-  const updateChunks = () => {
-    if (disposed || document.hidden) return;
+  let appearanceDirty = false;
+  const updateCameraView = () => {
     camera.updateMatrixWorld(); projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(projection);
+  };
+  const updateAppearance = () => {
+    if (disposed || document.hidden) return;
+    updateCameraView(); appearance.update(controls.target, camera.position.distanceTo(controls.target), frustum);
+    scheduleRetry();
+  };
+  const updateChunks = () => {
+    if (disposed || document.hidden || !cache.viewSettled) return;
+    updateCameraView();
     viewKey = [layers.buildings, layers.terrain, layers.imagery, buildingThemed,
       ...projection.elements.map(value => value.toFixed(4))].join('/');
     wanted = new Set(layers.buildings ? visibleChunks(manifest.chunks, controls.target, camera.position.distanceTo(controls.target), frustum) : []);
-    appearance.update(controls.target, camera.position.distanceTo(controls.target), frustum);
     for (const [id, controller] of pending) if (!wanted.has(id)) { controller.abort(); pending.delete(id); }
     trimChunks();
     for (const id of wanted) if (!chunks.has(id) && !pending.has(id) && failedUntil.ready(id)) {
       const abort = new AbortController(); pending.set(id, abort);
-      void loader.load(id, abort.signal).then(result => {
+      void loader.load(id, abort.signal).then(async result => {
+        await cache.whenViewSettled(abort.signal);
         if (disposed || abort.signal.aborted || !wanted.has(id)) { loader.unload(id); return; }
         const geometry = makeChunkGeometry(result.chunk); applyBuildingColours(geometry, result.chunk, buildingColours);
         const material = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.92, side: THREE.DoubleSide });
         const hidden = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
         applyTextureCoverage(geometry, result.chunk, layers.imagery && !buildingThemed ? appearance.buildingIds : new Set());
         const mesh = new THREE.Mesh(geometry, [material, hidden]);
+        const highlight = new BuildingHighlight(result.chunk.ranges.map(range => range.buildingId)); highlight.apply(mesh);
         mesh.userData.chunkId = id; buildings.add(mesh);
-        chunks.set(id, { ...result, mesh }); semanticRevision++;
+        chunks.set(id, { ...result, mesh, highlight }); semanticRevision++;
         result.buildings.forEach(building => identities.set(building.id, building)); reportBuildings();
         failedUntil.delete(id); trimChunks();
       }).catch(() => { if (!abort.signal.aborted && !disposed) failedUntil.fail(id); })
         .finally(() => { if (pending.get(id) === abort) pending.delete(id); reportLoad(); });
     }
-    reportLoad();
+    reportLoad(); scheduleRetry();
+  };
+  cache.onViewSettled = updateChunks;
+  scheduleRetry = () => {
+    const due = disposed || document.hidden ? Infinity
+      : Math.min(cache.viewSettled ? failedUntil.nextDue([...wanted].filter(id => !pending.has(id))) : Infinity, appearance.nextRetryAt());
+    if (due === retryAt) return;
+    clearTimeout(retryTimer); retryAt = due;
+    if (due < Infinity) retryTimer = setTimeout(() => { retryAt = Infinity; updateAppearance(); updateChunks(); }, Math.max(0, due - Date.now()));
+  };
+  const requestViewUpdate = () => {
+    appearanceDirty = true;
+    if (!initiallyReady && cache.viewSettled) { updateAppearance(); appearanceDirty = false; updateChunks(); }
+    else { cache.viewChanged(); scheduleRetry(); }
   };
   const preset = (id: CameraPreset) => {
     followId = null;
@@ -325,22 +371,46 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     const [x, , z] = wgs84ToScene(location[0], location[1]);
     controls.enableDamping = false; controls.update();
     controls.target.set(x, 8, z); camera.position.set(x + location[2] * 0.48, location[2] * 0.72, z + location[2] * 0.85);
-    controls.update(); controls.enableDamping = !reducedMotion; updateChunks();
+    controls.update(); controls.enableDamping = !reducedMotion; requestViewUpdate();
   };
-  const interaction = () => { followId = null; callbacks.onCameraInteraction(); };
-  const cameraChanged = () => updateChunks();
+  let followViewDirty = false, scaleDirty = true;
+  let lastScale: SceneScale | null = null;
+  let keyboardNavigation = true, pointerInteracting = false;
+  const heldKeys = new Set<string>();
+  const keyboardBlocked = (target: EventTarget | null = document.activeElement) => !keyboardNavigation || !initiallyReady || document.hidden
+    || (target instanceof HTMLElement && (target.isContentEditable || !!target.closest('input, textarea, select, [role="textbox"]')))
+    || !!document.querySelector('dialog[open]');
+  const stopKeyboard = () => { if (!heldKeys.size) return; heldKeys.clear(); cache.setInteracting(pointerInteracting); };
+  const windowBlur = () => { pointerInteracting = false; stopKeyboard(); cache.setInteracting(false); };
+  const keyDown = (event: KeyboardEvent) => {
+    if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey || keyboardBlocked(event.target)) { stopKeyboard(); return; }
+    if (event.defaultPrevented || !['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return;
+    event.preventDefault();
+    if (!heldKeys.size) { followId = null; cache.setInteracting(true); scheduleRetry(); callbacks.onCameraInteraction(); }
+    heldKeys.add(event.code);
+  };
+  const keyUp = (event: KeyboardEvent) => { if (heldKeys.delete(event.code) && !heldKeys.size) cache.setInteracting(pointerInteracting); };
+  const focusChanged = () => { if (keyboardBlocked()) stopKeyboard(); };
+  window.addEventListener('keydown', keyDown); window.addEventListener('keyup', keyUp); window.addEventListener('blur', windowBlur);
+  document.addEventListener('focusin', focusChanged);
+  const interaction = () => { pointerInteracting = true; followId = null; cache.setInteracting(true); scheduleRetry(); callbacks.onCameraInteraction(); };
+  const interactionEnded = () => { pointerInteracting = false; cache.setInteracting(heldKeys.size > 0); };
+  const cameraChanged = () => { scaleDirty = true; appearanceDirty = true; if (followId) followViewDirty = true; else requestViewUpdate(); };
   controls.addEventListener('change', cameraChanged);
   controls.addEventListener('start', interaction);
-  const resize = () => { if (disposed) return; const width = Math.max(1, container.clientWidth), height = Math.max(1, container.clientHeight);
-    camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height); };
+  controls.addEventListener('end', interactionEnded);
+  const resize = () => { if (disposed) return; scaleDirty = true; const width = Math.max(1, container.clientWidth), height = Math.max(1, container.clientHeight);
+    camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height);
+    requestViewUpdate(); };
   const observer = new ResizeObserver(resize); observer.observe(container); resize(); preset('city');
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
   function pick(event: PointerEvent): Selection | null {
-    if (loadState.phase !== 'ready' && loadState.phase !== 'available') return null;
+    if (!initiallyReady) return null;
     const rect = renderer.domElement.getBoundingClientRect(); pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const objects: THREE.Object3D[] = [...(layers.buildings ? buildings.children : []), ...[...fleet.meshes.values()].filter(mesh => mesh.visible), ...stations.children.filter(marker => marker.visible)];
     for (const hit of raycaster.intersectObjects(objects, false)) {
+      if (renderer.clippingPlanes.some(plane => plane.distanceToPoint(hit.point) < 0)) continue;
       const station = stationForHit(hit); if (station) return { kind: 'station', station };
       const id = fleet.idForHit(hit);
       if (id) { const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) return { kind: 'vehicle', vehicle }; }
@@ -353,7 +423,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const select = (selection: Selection | null, message?: string) => { selected = selection; followId = null; refreshHighlights(); callbacks.onSelection(selection, message); };
   let down: { x: number; y: number } | null = null, hoverAt = 0;
   const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; };
-  const pointerUp = (event: PointerEvent) => { if (down && (loadState.phase === 'ready' || loadState.phase === 'available') && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) select(pick(event)); down = null; };
+  const pointerUp = (event: PointerEvent) => { if (down && initiallyReady && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) select(pick(event)); down = null; };
   const pointerMove = (event: PointerEvent) => { if (event.buttons || performance.now() - hoverAt < 100) return; hoverAt = performance.now();
     const feature = pick(event), id = feature?.kind === 'building' ? feature.building.id : null;
     hoveredVehicleId = feature?.kind === 'vehicle' ? feature.vehicle.id : null;
@@ -363,10 +433,15 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const pointerLeave = () => { hoverId = null; hoveredVehicleId = null; refreshHighlights(); callbacks.onHover(''); };
   renderer.domElement.addEventListener('pointerdown', pointerDown); renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('pointermove', pointerMove); renderer.domElement.addEventListener('pointerleave', pointerLeave);
-  let frames = 0, statsAt = performance.now(), chunksAt = 0;
+  let frames = 0, statsAt = performance.now(), followedAt = 0, navigationAt = performance.now();
   const animate = (now: number) => {
     if (disposed || document.hidden) return;
     frame = requestAnimationFrame(animate);
+    const elapsedSeconds = (now - navigationAt) / 1000; navigationAt = now;
+    if (heldKeys.size) {
+      if (keyboardBlocked()) stopKeyboard();
+      else panKeyboardCamera(camera, controls.target, heldKeys, elapsedSeconds);
+    }
     fleet.update(Date.now(), layers, reducedMotion, routeFilter);
     if (selected?.kind === 'vehicle') {
       const latest = fleet.motion.tracks.get(selected.vehicle.id)?.vehicle;
@@ -380,22 +455,33 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
         if (followId) { const shift = new THREE.Vector3(position.x, controls.target.y, position.z).sub(controls.target); camera.position.add(shift); controls.target.add(shift); }
       }
     } else vehicleRing.visible = false;
-    refreshContext(); controls.update(); camera.updateMatrixWorld();
+    refreshContext(); controls.update();
+    if (appearanceDirty) { appearanceDirty = false; updateAppearance(); }
+    camera.updateMatrixWorld();
+    if (scaleDirty && callbacks.onScale) {
+      scaleDirty = false;
+      const height = sampleTerrainHeight(base.terrain, controls.target.x, controls.target.z) ?? base.waterLevel;
+      const scale = measureGroundScale(camera, container.clientWidth, height);
+      if (scale?.metres !== lastScale?.metres || scale?.pixels !== lastScale?.pixels) { lastScale = scale; callbacks.onScale(scale); }
+    }
     flags.update(fleet.placements, camera, container.clientWidth, container.clientHeight,
       selected?.kind === 'vehicle' && !selected.removed ? selected.vehicle.id : null, hoveredVehicleId);
     const renderedRevision = semanticRevision + appearance.revision; renderer.render(scene, camera); frames++;
     viewLoading.rendered(renderedRevision); reportLoad();
-    if (now - chunksAt > 700) { updateChunks(); chunksAt = now; }
+    if (followId && followViewDirty && cache.viewSettled && now - followedAt >= 1500) {
+      updateChunks(); followedAt = now; followViewDirty = false;
+    }
     if (now - statsAt >= 1500) { callbacks.onStats({ fps: Math.round(frames * 1000 / (now - statsAt)), drawCalls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, loadedChunks: chunks.size, vehicles: fleet.visibleCount,
       unplacedVehicles: fleet.unplacedCount, lastReceiptLatencyMs }); frames = 0; statsAt = now; }
   };
   const visibility = () => {
-    cancelAnimationFrame(frame);
+    cancelAnimationFrame(frame); navigationAt = performance.now();
+    if (document.hidden) windowBlur(); else stopKeyboard();
     cache.setPaused(document.hidden);
-    clearTimeout(cachePoll);
+    clearTimeout(cachePoll); scheduleRetry();
     if (document.hidden) { appearance.pause(); for (const controller of pending.values()) controller.abort(); pending.clear(); }
-    else { statsAt = performance.now(); frames = 0; updateChunks(); frame = requestAnimationFrame(animate);
+    else { statsAt = performance.now(); frames = 0; requestViewUpdate(); frame = requestAnimationFrame(animate);
       if (initiallyReady && !backgroundRunning && !['complete', 'stopped'].includes(background.phase)) void prefetch(background.phase === 'idle'); }
   };
   document.addEventListener('visibilitychange', visibility); frame = requestAnimationFrame(animate);
@@ -403,9 +489,9 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     preset,
     retryLoad() { failedUntil.clear(); appearance.retry(); viewLoading.retry();
       if (!backgroundRunning && background.phase === 'partial') background = { ...background, phase: 'idle' };
-      updateChunks(); },
+      requestViewUpdate(); },
     openAvailableMap() { appearance.openAvailable(); viewLoading.openAvailable(); reportLoad(); },
-    setLayers(next: Layers) { layers = { ...next }; if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); updateChunks(); },
+    setLayers(next: Layers) { layers = { ...next }; if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); requestViewUpdate(); },
     setStations(next: SceneStation[]) {
       disposeTree(stations);
       for (const station of next) { const marker = makeStationMarker(station, base); if (marker) stations.add(marker); }
@@ -430,7 +516,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       }
       refreshContext();
     },
-    setBuildingColours(next: ReadonlyMap<string, string>, themed = false) { buildingColours = next; buildingThemed = themed; for (const { chunk, mesh } of chunks.values()) applyBuildingColours(mesh.geometry, chunk, next); semanticRevision++; refreshAppearance(); updateChunks(); },
+    setBuildingColours(next: ReadonlyMap<string, string>, themed = false) { buildingColours = next; buildingThemed = themed; for (const { chunk, mesh } of chunks.values()) applyBuildingColours(mesh.geometry, chunk, next); semanticRevision++; refreshAppearance(); requestViewUpdate(); },
     setRouteFilter(next: string | null) { routeFilter = next; refreshContext(); },
     setTraffic(snapshot: TrafficSnapshot) {
       const now = Date.now(); fleet.setVehicles(snapshot.vehicles);
@@ -441,44 +527,47 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
         if (selected.removed) followId = null; callbacks.onSelection(selected); }
     },
     select(selection: Selection | null) {
-      if (selection && loadState.phase !== 'ready' && loadState.phase !== 'available') return;
+      if (selection && !initiallyReady) return;
       if (selection?.kind === 'building') {
         const building = selection.building;
         if (!manifest.chunks.some(chunk => chunk.id === building.chunkRef)) { select(null, 'This building is outside the available city coverage.'); return; }
         identities.set(building.id, building); select(selection);
         const [x, , z] = wgs84ToScene(building.longitude, building.latitude);
         const offset = camera.position.clone().sub(controls.target); controls.target.set(x, sampleTerrainHeight(base.terrain, x, z) ?? 0, z);
-        camera.position.copy(controls.target).add(offset); controls.update(); updateChunks();
+        camera.position.copy(controls.target).add(offset); controls.update(); requestViewUpdate();
       } else if (selection?.kind === 'vehicle') {
         const vehicle = fleet.motion.tracks.get(selection.vehicle.id)?.vehicle;
         if (vehicle) select({ kind: 'vehicle', vehicle });
       } else select(selection);
     },
     selectStation(id: string) {
-      if (loadState.phase !== 'ready' && loadState.phase !== 'available') return;
+      if (!initiallyReady) return;
       const station = stations.children.map(marker => marker.userData.station as SceneStation).find(station => station.id === id);
       if (station) select({ kind: 'station', station });
     },
     selectBuilding(id: string) {
-      if (loadState.phase !== 'ready' && loadState.phase !== 'available') return;
+      if (!initiallyReady) return;
       const building = identities.get(id);
       if (!building || !manifest.chunks.some(chunk => chunk.id === building.chunkRef)) { select(null, 'This building is outside the available city coverage.'); return; }
       select({ kind: 'building', building });
       const [x, , z] = wgs84ToScene(building.longitude, building.latitude);
       const offset = camera.position.clone().sub(controls.target); controls.target.set(x, sampleTerrainHeight(base.terrain, x, z) ?? 0, z);
-      camera.position.copy(controls.target).add(offset); controls.update(); updateChunks();
+      camera.position.copy(controls.target).add(offset); controls.update(); requestViewUpdate();
     },
-    selectVehicle(id: string) { if (loadState.phase !== 'ready' && loadState.phase !== 'available') return; const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) select({ kind: 'vehicle', vehicle }); },
+    selectVehicle(id: string) { if (!initiallyReady) return; const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) select({ kind: 'vehicle', vehicle }); },
     setRoutes(routes: RouteCatalog['routes']) { flags.setRoutes(routes); },
+    setKeyboardNavigation(enabled: boolean) { keyboardNavigation = enabled; if (!enabled) stopKeyboard(); },
     followVehicle(id: string | null) { followId = id; },
     clearSelection() { select(null); },
     dispose() {
-      if (disposed) return; disposed = true; cancelAnimationFrame(frame); observer.disconnect();
+      if (disposed) return; stopKeyboard(); disposed = true; cancelAnimationFrame(frame); observer.disconnect();
+      window.removeEventListener('keydown', keyDown); window.removeEventListener('keyup', keyUp); window.removeEventListener('blur', windowBlur);
+      document.removeEventListener('focusin', focusChanged);
       document.removeEventListener('visibilitychange', visibility); reducedQuery.removeEventListener('change', motionChange);
       renderer.domElement.removeEventListener('pointerdown', pointerDown); renderer.domElement.removeEventListener('pointerup', pointerUp);
       renderer.domElement.removeEventListener('pointermove', pointerMove); renderer.domElement.removeEventListener('pointerleave', pointerLeave);
-      controls.removeEventListener('start', interaction); controls.removeEventListener('change', cameraChanged); controls.dispose();
-      clearTimeout(cachePoll); backgroundAbort.abort(); cache.dispose();
+      controls.removeEventListener('start', interaction); controls.removeEventListener('end', interactionEnded); controls.removeEventListener('change', cameraChanged); controls.dispose();
+      clearTimeout(cachePoll); clearTimeout(retryTimer); backgroundAbort.abort(); cache.dispose();
       for (const controller of pending.values()) controller.abort(); pending.clear(); loader.dispose();
       appearance.aerial.removeFromParent(); appearance.buildings.removeFromParent(); appearance.dispose();
       flags.dispose(); fleet.root.removeFromParent(); fleet.dispose(); disposeTree(scene); chunks.clear(); identities.clear(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();

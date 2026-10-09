@@ -32,6 +32,11 @@ export class AssetRetries {
   }
   has(key: string) { return this.failures.has(key); }
   ready(key: string, now = Date.now()) { return now >= (this.failures.get(key)?.due ?? 0); }
+  nextDue(keys: Iterable<string>) {
+    let due = Infinity;
+    for (const key of keys) due = Math.min(due, this.failures.get(key)?.due ?? Infinity);
+    return due;
+  }
   delete(key: string) { this.failures.delete(key); }
   clear() { this.failures.clear(); }
 }
