@@ -5,19 +5,22 @@ export const TRAFFIC_REMOVE_MS = 120_000;
 export const TRAFFIC_IDLE_MS = 30_000;
 export const TRAFFIC_HEARTBEAT_MS = 15_000;
 export const TRAFFIC_MAX_VEHICLES = 1_000;
-export const TRAFFIC_MAX_QUEUE_BYTES = 1024 * 1024;
+// The queue must fit one bounded snapshot of both providers.
+export const TRAFFIC_MAX_QUEUE_BYTES = 8 * 1024 * 1024;
 
 export interface TrafficStatus {
   state: 'idle' | 'connecting' | 'live' | 'reconnecting';
   connectedAt: string | null;
   lastPositionAt: string | null;
   retryAt: string | null;
+  error?: string | null;
 }
 export interface TrafficSnapshot {
   type: 'snapshot';
   generatedAt: string;
   vehicles: Vehicle[];
   status: TrafficStatus;
+  sources?: { hsl: TrafficStatus; rail: TrafficStatus };
 }
 export interface TrafficUpdate {
   type: 'update';
@@ -25,6 +28,7 @@ export interface TrafficUpdate {
   vehicles: Vehicle[];
   removed: string[];
   status: TrafficStatus;
+  sources?: { hsl: TrafficStatus; rail: TrafficStatus };
 }
 export type TrafficEvent = TrafficSnapshot | TrafficUpdate;
 

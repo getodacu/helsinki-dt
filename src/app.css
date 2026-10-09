@@ -42,6 +42,7 @@ select{font:inherit;color:inherit;background:#09202b;border:1px solid var(--bord
 @media(max-width:780px), (max-width:1100px) and (max-height:500px){.map-scale{left:13px;bottom:92px}}
 .station-flags { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .station-flag { position: absolute; top: 0; left: 0; width: 44px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3px; border: 1px solid currentColor; border-radius: 4px; background: #112936f2; color: #88c9eb; box-shadow: 0 2px 9px #0006; cursor: pointer; pointer-events: auto; }
+.station-flag.rail { color: #b29bd8; }
 .station-flag.air-quality { color: #d8b5e8; }
 .station-flag::after { content: ''; position: absolute; top: 100%; left: 50%; height: 26px; border-left: 2px solid #d8e4e9; pointer-events: none; }
 .station-flag svg { width: 26px; height: 26px; flex-shrink: 0; }

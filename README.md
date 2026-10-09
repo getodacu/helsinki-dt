@@ -1,6 +1,6 @@
 # Helsinki Lens
 
-Helsinki Lens is a 3D view of central Helsinki combining selectable buildings, live HSL trams, buses and ferries, scheduled routes, station weather and air quality, and verified building energy and solar records. It keeps original building identifiers, source attribution and data age visible. Displayed times use `Europe/Helsinki`.
+Helsinki Lens is a 3D view of central Helsinki combining selectable buildings, live HSL trams, buses and ferries, Fintraffic trains, scheduled routes, station weather and air quality, and verified building energy and solar records. It keeps original building identifiers, source attribution and data age visible. Displayed times use `Europe/Helsinki`.
 
 The map covers the prepared release area, WGS84 `[24.86, 60.135, 25.06, 60.225]` in west, south, east, north order. It is a bounded city view, not a complete Finland dataset. Missing readings remain missing; prepared samples never replace live feeds during an outage.
 
@@ -41,6 +41,7 @@ npm run city:prepare
 npm run energy:prepare
 npm run ryhti:prepare
 npm run routes:prepare
+npm run rail:prepare
 npm run entities:prepare
 ```
 
@@ -68,6 +69,7 @@ flowchart LR
     Municipal[Municipal imagery and textured models] --> Cache[Shared disk map cache]
     Cache --> App
     HSL[HSL live MQTT] --> App
+    Rail[Fintraffic rail positions and timetables] --> App
     Observations[FMI and HSY station observations] --> App
     Nuuka[Nuuka property electricity] --> App
     App --> Browser[Svelte UI and Three.js scene]
@@ -77,7 +79,7 @@ Preparation converts and validates source data once, publishes immutable generat
 
 Browsers load prepared `/data/` geometry and its visible-chunk metadata, then request visible municipal imagery and textured buildings through `/api/city-asset`. The Node server validates and caches these municipal assets on disk for all visitors. Browser Cache Storage is an optional additional cache; it is independent of the server cache and of GPU resources.
 
-Each Node process shares one demand-driven HSL MQTT connection across its browsers and forwards snapshots/updates through SSE. Station observations and measured electricity use separate server services. A small entity catalog summary supplies themes and source status. Building search, inspection and theme values use SQLite-backed APIs; TanStack Svelte Query caches bounded responses by dataset generation. Run one application process; multiple workers would need shared live-feed coordination.
+Each Node process shares one demand-driven HSL MQTT connection and one Digitraffic rail position poll across its browsers and forwards snapshots/updates through SSE. Station observations and measured electricity use separate server services. A small entity catalog summary supplies themes and source status. Building search, inspection and theme values use SQLite-backed APIs; TanStack Svelte Query caches bounded responses by dataset generation. Run one application process; multiple workers would need shared live-feed coordination.
 
 Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.js `[east, elevation, -north]` coordinates around longitude 24.952, latitude 60.1695, elevation 0. Heights retain the N2000 datum; projection does not perform a vertical datum conversion. See [data contracts](docs/data-contracts.md) and [coordinate controls](docs/coordinate-controls-evidence.md).
 
@@ -95,6 +97,7 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 | `docs/` | Source contracts, coverage/method evidence, operations and dated acceptance results. |
 | `static/data/manifest.json` and `static/data/generations/` | Foundation sample pointer and immutable generations. |
 | `static/data/city/` | City manifest, terrain/context, semantic geometry and building metadata. |
+| `static/data/rail-index.json` | Separate Digitraffic train numbers, active calendars, clipped shapes and ordered stops. |
 | `static/data/route-index.json` | Prepared route labels, trips, shapes and stop patterns. |
 | `static/data/energy-manifest.json` and `static/data/energy/` | Energy catalog pointer and immutable catalogs. |
 | `server/data/entities/` | Private immutable SQLite generations and their active manifest; rebuilt from prepared data with `entities:prepare`. |
@@ -109,7 +112,7 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 
 Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Keyboard navigation pauses in form controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow. Turn off **WASD navigation** in the scene controls to disable these shortcuts; it starts enabled on each page load.
 
-Choose City Centre, South Harbour, Suomenlinna or the Senate district energy preset, then use the scene controls to navigate. Toggle buildings, terrain, roads, imagery, transit modes and station layers. Search covers available building metadata/addresses, vehicles and prepared route labels; search and scene picking use the same selection contract. Escape clears selection, and compact layouts expose separate controls and inspection sheets.
+Choose City Centre, South Harbour, Suomenlinna, the Senate district energy preset, Central Station or Pasila, then use the scene controls to navigate. Toggle buildings, terrain, roads, imagery, transit modes and station layers. Search covers available building metadata/addresses, vehicles and prepared route labels; search and scene picking use the same selection contract. Escape clears selection, and compact layouts expose separate controls and inspection sheets.
 
 Selecting a building opens its source identifiers and compatible energy/solar records. Selection and hover tint the displayed building, with selection taking precedence. Selecting a vehicle shows its real report age, deviation and exact scheduled journey when available; following ends when you interact with the camera. Station inspectors show a recent six-hour history without changing current traffic into historical playback. **Sources & status** explains dates, coverage, attribution and gaps. Search/inspection provide a metadata fallback when WebGL is unavailable.
 
@@ -200,6 +203,25 @@ Positions become stale after **30 seconds** and leave the displayed fleet after 
 
 Routes are scheduled context. Matching requires complete owner/operator, vehicle, route, direction, service date and start-time identity, including GTFS calendar/DST handling. Missing, expired or ambiguous matches show no guessed route. Raw vehicle positions are never snapped to scheduled shapes.
 
+### Trains and railway stations
+
+**Trains** and **Rail stations** start enabled. Category filters cover commuter, long-distance, freight and other trains. Search accepts train number, public line, destination and station name. Selecting a train shows its timetable, report age, speed, verified route and **Follow train**. Station markers and search open the next 12 passenger departures, refreshed every 30 seconds while visible, with links to available live trains.
+
+The process polls Digitraffic's bounded JSON positions every five seconds while traffic consumers exist. HSL never supplies duplicate commuter-train markers. Provider failures are independent; successful empty snapshots remove rail reports, while failed requests retain them until the normal age limit. Rail movement uses a 12-second buffer of received reports and never extrapolates. Models are representative two-car exteriors; reported horizontal coordinates remain unchanged and terrain height is approximate. Trains without known terrain stay searchable but have no 3D placement.
+
+Rail identity is provider + departure date + train number. Undated reports remain visible without journey linkage. GTFS matching uses the train number and the calendar active on that departure date: Digitraffic's trip-ID date suffix is a timetable period, **not** the departure date. Missing or competing active journeys have no highlighted path. HSL retains its separate matching rules.
+
+Delay belongs to a named timetable event; missing estimates mean unknown delay. Scheduled, estimated and actual times use Helsinki time. Next-stop inference is labelled schedule-based. Failed or old timetable refreshes never change position age. Source outages, fleet age, delayed and unknown-delay counts remain visible.
+
+Refresh the independent rail index daily and after timetable changes, then rebuild production assets:
+
+```sh
+npm run rail:prepare
+npm run build
+```
+
+An offline rebuild may use `npm run rail:prepare -- .cache/rail/gtfs-all.zip`. Its retrieval sidecar is trusted only when the archive checksum matches. Failed preparation preserves the previous index. Rail adds no scheduler or database. See [rail source evidence and verification](docs/rail-evidence.md) for exact limits, attribution and sampled coverage.
+
 ### Weather and air quality
 
 Weather uses Kaisaniemi station **100971**; air quality uses Mannerheimintie station **100742** through FMI/HSY. Requests cover a fixed recent six-hour window. The process shares requests and becomes eligible to refresh weather every five minutes and air quality every fifteen minutes. These intervals are not claims about provider publication cadence.
@@ -265,7 +287,7 @@ npm start
 
 Keep the process working directory at the project or extracted release root so file readers resolve the correct data. Give it access to prepared assets and write permission for both runtime cache directories.
 
-For a transferable release, run `npm run release:package` after building. It checks the private database checksum and source generations, active source checksums, city/energy compatibility, route availability and equality between prepared data and `build/client/data`. Output lives under `.cache/task-e/releases/helsinki-lens-<version>-<content-hash>/`; `release.json` records file and data checksums. Archive unused old generations before the final build, since the build's static inventory and packaged files must stay consistent.
+For a transferable release, run `npm run release:package` after building. It checks the private database checksum and source generations, active source checksums, city/energy compatibility, HSL route availability, the validated rail index and equality between prepared data and `build/client/data`. Output lives under `.cache/task-e/releases/helsinki-lens-<version>-<content-hash>/`; `release.json` records file and data checksums. Archive unused old generations before the final build, since the build's static inventory and packaged files must stay consistent.
 
 The bundle includes `build/`, the active private SQLite database and manifest under `server/data/entities/`, npm manifests/lockfile, `.nvmrc`, `.env.example`, dependency notices and documentation. It contains a relative `static/data` symlink to `build/client/data`; preserve it when copying or archiving. It excludes `.env`, credentials, `node_modules`, raw downloads and runtime caches. It serves prepared assets and cannot run source preparation, rebuilds, tests or the cache CLI.
 
@@ -314,9 +336,9 @@ Do not clear valid caches as a routine restart or source-outage remedy. Use [ope
 
 ## Vehicle models
 
-Bus, articulated tram and double-ended ferry exteriors are original Helsinki-inspired Blender models. The editable source is `assets/blender/helsinki-transit.blend`; enable one collection at a time. Self-contained GLB exports in `static/models/` are checked in and ship with the normal SvelteKit build. No external textures, model downloads or new runtime dependencies are needed.
+Bus, articulated tram, double-ended ferry and two-car train exteriors are original Helsinki-inspired Blender models. The editable sources are `assets/blender/helsinki-transit.blend` and `assets/blender/helsinki-train.blend`; enable one collection at a time. Self-contained GLB exports in `static/models/` are checked in and ship with the normal SvelteKit build. No external textures, model downloads or new runtime dependencies are needed.
 
-Models use metres, with glTF -Z forward and +Y up. Tyres contact Y=0; the ferry hull extends below its Y=0 waterline. Approximate lengths are 12 m, 27.6 m and 36 m. These are representative exteriors; HSL position reports do not identify the exact physical fleet variant. Opaque tinted windows avoid transparency sorting across instanced vehicles. Each model shares three material batches across the entire fleet. Route banners use prepared GTFS labels, retain route IDs when a label is unavailable, and prioritize selected/hovered vehicles when banners overlap. At most 80 non-overlapping banners are displayed; all vehicles remain available through search.
+Models use metres, with glTF -Z forward and +Y up. Tyres contact Y=0; the ferry hull extends below its Y=0 waterline. Approximate lengths are 12 m, 27.6 m, 36 m and 44.5 m. These are representative exteriors; Live position reports do not identify the exact physical fleet variant or carriage formation. Opaque tinted windows avoid transparency sorting across instanced vehicles. Each model shares three material batches across the entire fleet. Route banners use prepared GTFS labels, retain route IDs when a label is unavailable, and prioritize selected/hovered vehicles when banners overlap. At most 80 non-overlapping banners are displayed; all vehicles remain available through search.
 
 After updating from an older checkout, run `npm run routes:prepare` to include HSL’s extended bus types in the route labels.
 
@@ -335,6 +357,7 @@ Original IDs remain strings, including leading zeroes. Ambiguous joins stay unre
 Use these references when changing adapters, coordinates or deployment behavior:
 
 - [Data access and source gates](docs/data-access.md), [data contracts](docs/data-contracts.md), and [city source evidence](docs/city-source-evidence.md).
+- [Rail source evidence and verification](docs/rail-evidence.md).
 - [Transit/environment evidence](docs/transit-environment-evidence.md), [geometry/energy evidence](docs/geometry-energy-evidence.md), and [coordinate controls](docs/coordinate-controls-evidence.md).
 - [Energy/solar sources](docs/energy-solar-evidence.md) and [solar method/export](docs/solar-method-evidence.md).
 - [Operations](docs/operations.md) and dated milestone results: [foundation](docs/milestone-results/A.md), [city/traffic](docs/milestone-results/B.md), [inspection](docs/milestone-results/C.md), [energy](docs/milestone-results/D.md), [release](docs/milestone-results/E.md).

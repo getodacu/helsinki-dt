@@ -61,3 +61,19 @@ Private SQLite generations are derived from the prepared municipal building meta
 Detail responses contain one building's applicable records and associations, plus the identities of its shared-property members. Summary responses omit catalog record arrays and association lists while keeping global source metadata, coverage and join counts. Existing energy/solar exact-match and ambiguity exclusions determine precomputed theme colours; ranges and category counts describe the full prepared release and never change with viewport size. Unknown values stay neutral.
 
 Every data query specifies the active generation. The server validates it against the private manifest; responses carry the same generation. The frontend declines a catalog from a different city generation. Source refresh failures retain dated, labelled data; a city mismatch prevents any catalog attachment. No source refresh runs inside an entity request.
+
+## Digitraffic rail contract
+
+`Vehicle.mode` includes `train`. Train source is exclusively `digitraffic`; identity is `digitraffic:<departureDate|undated>:<trainNumber>`. Rail-specific summary contains public label, category, operator, origin/destination, cancellation, the next timetable event and its retrieval time. Undated reports cannot match a journey. Source longitude/latitude order is retained, and speed converts km/h to m/s once at decode. Owner/operator identity may be null for rail. HSL IDs and deviation semantics remain unchanged.
+
+`/api/traffic` and SSE snapshots/updates merge the two fleets and include independent `sources.hsl` and `sources.rail` states. The existing top-level `status` remains HSL for compatibility. Timetable enrichment can change a vehicle's metadata and named-event delay but cannot change `reportedAt` or `receivedAt`. Reports are stale at 30 seconds and removed at 120 seconds. Successful bounded snapshots remove absent rail IDs; unavailable requests retain the last positions until expiry. Source failures never remove the other fleet.
+
+Read-only APIs return `RailResult<T>` (`ready|stale|unavailable`, data, retrievedAt, error):
+
+- `GET /api/rail/stations`: in-area passenger stations, shared 24-hour catalog.
+- `GET /api/rail/trains/YYYY-MM-DD/number`: shared 30-second journey metadata plus separate `route` context.
+- `GET /api/rail/stations/code/departures`: next 12 passenger departures from a bounded source response, cached 30 seconds; GPS is not required. Unknown/out-of-area codes are rejected.
+
+Rail times are ISO UTC instants displayed in `Europe/Helsinki`. Estimated and actual times remain distinct from scheduled time. Delay is `(actual or estimated) - scheduled` for the named event; absence stays null. Cancelled services and events are explicit. The next event comes from ordered timetable progress, labelled schedule-based, never from snapping a position.
+
+The rail index is independent of HSL. It groups exact numeric train IDs with their service calendars, ordered stops and clipped shapes. The date suffix of an upstream trip ID denotes its timetable period; it is not used as the live departure date. Only one active journey for the reported date yields a route. Unknown, conflicting, missing-shape or expired data yields no invented geometry. GTFS extended hours and Helsinki DST use the shared noon-minus-12-hour service-day rule.

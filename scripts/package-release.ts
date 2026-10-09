@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { loadCityManifest } from '../src/lib/city-assets.ts';
 import { EnergyCatalogStore } from '../src/lib/server/energy-catalog.ts';
 import { RyhtiCatalogStore, readRyhtiFile, validateRyhtiManifest } from '../src/lib/server/ryhti-catalog.ts';
+import { validateRailIndex, RAIL_INDEX_MAX_BYTES } from '../src/lib/server/rail-routes.ts';
 import { RouteContextStore } from '../src/lib/server/route-context.ts';
 import { loadPreparedSample } from '../src/routes/sample.ts';
 import { EntityStore } from '../src/lib/server/entities.ts';
@@ -87,6 +88,9 @@ export async function packageRelease(root = resolve('.'), output = resolve('.cac
   const city = await loadCityManifest(fetchAsset);
   const energy = await new EnergyCatalogStore(join(root, 'static/data/energy-manifest.json')).load();
   assert.ok(energy.catalog, energy.message ?? 'Energy is not prepared or mismatches city');
+  const railBytes = await readFile(join(root, 'static/data/rail-index.json'));
+  assert.ok(railBytes.length <= RAIL_INDEX_MAX_BYTES, 'Rail index exceeds limit');
+  const rail = validateRailIndex(JSON.parse(railBytes.toString()));
   const route = await new RouteContextStore(join(root, 'static/data/route-index.json')).catalog();
   assert.equal(route.status, 'ready', route.reason ?? 'Routes are not prepared');
   const entities = new EntityStore(join(root, 'server/data/entities'), join(root, 'static/data'));
@@ -103,7 +107,7 @@ export async function packageRelease(root = resolve('.'), output = resolve('.cac
   const expectedCity = [city.baseUrl, ...city.chunks.flatMap(chunk => [chunk.url, chunk.buildingsUrl])];
   assert.deepEqual(checksums.map(asset => '/data/' + asset.path.replace('/data/', '')).sort(), expectedCity.sort(), 'City checksums must cover every active asset');
   const assets = [...foundation.manifest.assets, ...checksums.map(asset => ({ ...asset, path: asset.path.replace('/data/', '') })), energyManifest.asset, ...await verifyRyhtiRelease(root)];
-  for (const path of ['manifest.json', 'city/manifest.json', checksumPath, 'energy-manifest.json', 'route-index.json']) {
+  for (const path of ['manifest.json', 'city/manifest.json', checksumPath, 'energy-manifest.json', 'route-index.json', 'rail-index.json']) {
     const bytes = await readFile(join(root, 'static/data', path)); assets.push({ path, bytes: bytes.length, sha256: hash(bytes) });
   }
   try {
@@ -133,7 +137,7 @@ export async function packageRelease(root = resolve('.'), output = resolve('.cac
     await symlink('../build/client/data', join(staging, 'static/data'), 'dir');
     const release = { version: 1, id, packagedAt: new Date().toISOString(), node: pkg.engines.node,
       foundationGeneratedAt: foundation.manifest.generatedAt, cityGeneratedAt: city.generatedAt,
-      energyGeneratedAt: energy.catalog.generatedAt, routeGeneratedAt: route.generatedAt,
+      energyGeneratedAt: energy.catalog.generatedAt, routeGeneratedAt: route.generatedAt, railGeneratedAt: rail.generatedAt,
       entityGeneration: entityCatalog.generation, energyStatus: energy.status, dataAssets: assets, files, fileBytes: files.reduce((sum, file) => sum + file.bytes, 0) };
     await writeFile(join(staging, 'release.json'), JSON.stringify(release, null, 2) + '\n');
     for (const asset of assets) await verifyAsset(staging, asset);

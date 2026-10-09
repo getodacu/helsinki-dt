@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { TrafficFeed, TRAFFIC_TOPICS, type TrafficConnection } from '../src/lib/server/traffic.ts';
 import { createTrafficResponse } from '../src/lib/server/traffic-stream.ts';
-import { TRAFFIC_IDLE_MS, TRAFFIC_MAX_VEHICLES, TRAFFIC_REMOVE_MS, TRAFFIC_STALE_MS,
+import { TRAFFIC_IDLE_MS, TRAFFIC_MAX_VEHICLES, TRAFFIC_MAX_QUEUE_BYTES, TRAFFIC_REMOVE_MS, TRAFFIC_STALE_MS,
   trafficAge, trafficIsStale, type TrafficEvent } from '../src/lib/traffic.ts';
 
 const source = JSON.parse(await readFile(new URL('./fixtures/hfp-samples.json', import.meta.url), 'utf8')) as {
@@ -245,10 +245,11 @@ test('bounded slow SSE buffering closes that subscriber while a reading subscrib
   const fast = createTrafficResponse(new Request('http://localhost/api/traffic/stream'), feed);
   const reader = fast.body!.getReader();
   await reader.read(); brokers[0].emit('connect'); await reader.read();
-  for (let turn = 0; turn < 4; turn++) {
+  for (let turn = 0; turn < 32 && feed.diagnostics().subscribers > 1; turn++) {
     for (let id = 0; id < TRAFFIC_MAX_VEHICLES; id++) brokers[0].report('tram', id);
     t.mock.timers.tick(1_000);
-    const chunk = await reader.read();
+    let chunk = await reader.read();
+    while (new TextDecoder().decode(chunk.value).startsWith(':')) chunk = await reader.read();
     assert.match(new TextDecoder().decode(chunk.value), /^event: update/);
   }
   assert.equal(feed.diagnostics().subscribers, 1);
@@ -332,4 +333,49 @@ test('HSL outage retains stale positions, expires at 120 seconds and recovery re
     await reader.cancel();
   }
   t.mock.timers.tick(TRAFFIC_IDLE_MS); assert.equal(feed.diagnostics().timers, 0);
+});
+
+test('two clients share rail polling, provider outages are independent and reconnect snapshots include trains', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout', 'setInterval'], now: NOW });
+  const { RailFeed } = await import('../src/lib/server/rail-feed.ts');
+  const { decodeRailJourney } = await import('../src/lib/data/rail.ts');
+  let railCalls = 0, railOffline = false;
+  const settle = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
+  const rail = new RailFeed(async () => {
+    railCalls++; if (railOffline) throw new Error('rail offline');
+    return [{ trainNumber: 23, departureDate: '2026-10-08', timestamp: new Date(Date.now()).toISOString(), speed: 72, location: { type: 'Point', coordinates: [24.94, 60.19] } }];
+  }, { train: async () => ({ state: 'ready', data: decodeRailJourney({ trainNumber: 23, departureDate: '2026-10-08', timeTableRows: [], trainType: 'IC', trainCategory: 'Long-distance' }, [], new Date().toISOString()), retrievedAt: new Date().toISOString(), error: null }) });
+  const brokers: Broker[] = [];
+  const feed = new TrafficFeed(() => { const broker = new Broker(); brokers.push(broker); return broker as unknown as TrafficConnection; }, rail);
+  t.after(() => feed.close());
+  const first: TrafficEvent[] = [], second: TrafficEvent[] = [];
+  const release1 = feed.subscribe(event => first.push(event)), release2 = feed.subscribe(event => second.push(event));
+  brokers[0].emit('connect'); brokers[0].report(); await settle(); t.mock.timers.tick(1000);
+  assert.equal(railCalls, 1); assert.equal(feed.snapshot().vehicles.length, 2); assert.equal(feed.snapshot().sources?.rail.state, 'live');
+  railOffline = true; t.mock.timers.tick(4000); await settle();
+  assert.equal(feed.snapshot().sources?.rail.state, 'reconnecting'); assert.equal(feed.snapshot().sources?.hsl.state, 'live'); assert.equal(feed.snapshot().vehicles.length, 2);
+  railOffline = false; brokers[0].emit('error', new Error('hsl offline')); t.mock.timers.tick(5000); await settle();
+  assert.equal(feed.snapshot().sources?.hsl.state, 'reconnecting'); assert.equal(feed.snapshot().sources?.rail.state, 'live'); assert.equal(feed.snapshot().vehicles.length, 2);
+  const snapshots: TrafficEvent[] = []; const release3 = feed.subscribe(event => snapshots.push(event));
+  assert.equal(snapshots[0].type, 'snapshot'); assert.equal(snapshots[0].vehicles.filter(vehicle => vehicle.mode === 'train').length, 1);
+  release1(); release2(); release3(); t.mock.timers.tick(TRAFFIC_IDLE_MS); await settle();
+  const before = railCalls; t.mock.timers.tick(120_000); await settle(); assert.equal(railCalls, before); assert.equal(feed.snapshot().vehicles.length, 0); assert.equal(feed.diagnostics().timers, 0);
+});
+
+test('a maximum combined provider snapshot fits the bounded SSE queue', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout', 'setInterval'], now: NOW });
+  const { decodeRailPosition } = await import('../src/lib/data/rail.ts');
+  const vehicles = Array.from({ length: 2000 }, (_, i) => {
+    const vehicle = decodeRailPosition({ trainNumber: i + 1, departureDate: '2026-10-08', timestamp: new Date(NOW).toISOString(), location: { type: 'Point', coordinates: [24.94, 60.19] } }, new Date(NOW).toISOString());
+    vehicle.rail = { ...vehicle.rail!, origin: 'a'.repeat(200), destination: 'b'.repeat(200), label: 'c'.repeat(36), operator: 'd'.repeat(60), trainType: 'e'.repeat(30),
+      nextEvent: { stationCode: 'HKI', stationName: 'f'.repeat(200), type: 'DEPARTURE', scheduledAt: new Date(NOW).toISOString(), estimatedAt: new Date(NOW).toISOString(), actualAt: null, platform: 'g'.repeat(30), cancelled: false, commercial: true, stopping: true } };
+    return vehicle;
+  });
+  const rail = { start(listener: (value: import('../src/lib/server/rail-feed.ts').RailFeedUpdate) => void) { listener({ vehicles, status: { state: 'live', connectedAt: null, lastPositionAt: null, retryAt: null } }); }, stop() {} };
+  const broker = new Broker(), feed = new TrafficFeed(() => broker as unknown as TrafficConnection, rail); t.after(() => feed.close());
+  const release = feed.acquire(); broker.emit('connect'); for (let i = 0; i < TRAFFIC_MAX_VEHICLES; i++) broker.report('tram', i);
+  const response = createTrafficResponse(new Request('http://localhost/api/traffic/stream'), feed), reader = response.body!.getReader();
+  const first = await reader.read(); assert.equal(first.done, false); assert.ok(first.value!.byteLength < TRAFFIC_MAX_QUEUE_BYTES);
+  const snapshot = JSON.parse(new TextDecoder().decode(first.value).split('\ndata: ')[1].trim()); assert.equal(snapshot.vehicles.length, 3000);
+  await reader.cancel(); release(); t.mock.timers.tick(TRAFFIC_IDLE_MS); assert.equal(feed.diagnostics().timers, 0);
 });

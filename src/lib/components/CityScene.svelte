@@ -19,7 +19,7 @@
   onMount(() => {
     try {
       controller = createCityScene(container, manifest, base, { onSelection: onselection, onBuildings: onbuildings,
-        onStats: onstats, onHover: onhover, onError: onerror, onCameraInteraction: oninteraction, onReady: onready, onAppearanceStatus: onappearance, onLoadState: onloadstate, onScale: value => scale = value }, cache, { bus: asset('models/bus.glb'), tram: asset('models/tram.glb'), ferry: asset('models/ferry.glb') });
+        onStats: onstats, onHover: onhover, onError: onerror, onCameraInteraction: oninteraction, onReady: onready, onAppearanceStatus: onappearance, onLoadState: onloadstate, onScale: value => scale = value }, cache, { bus: asset('models/bus.glb'), tram: asset('models/tram.glb'), ferry: asset('models/ferry.glb'), train: asset('models/train.glb') });
       oncontroller(controller);
     } catch (error) { onerror(error instanceof Error ? error.message : 'The 3D scene could not start.'); }
     return () => { controller?.dispose(); oncontroller(null); };

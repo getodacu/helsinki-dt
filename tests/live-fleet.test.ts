@@ -12,7 +12,7 @@ const vehicle = (changes: Partial<Vehicle> = {}): Vehicle => ({ id: '0040/00001'
   operatingOperatorId: '0040', routeId: '1002', directionId: '1', serviceDate: '2026-10-08', startTime: '14:00', journeyReference: null,
   reportedAt: new Date(at).toISOString(), receivedAt: new Date(at + 100).toISOString(), longitude: 24.952, latitude: 60.1695,
   speedMetresPerSecond: 4, headingDegrees: 350, rawDeviationSeconds: -20, delaySeconds: 20, quality: [], sourceId: 'test-fixture', ...changes });
-const modes = { tram: true, bus: true, ferry: true };
+const modes = { tram: true, bus: true, ferry: true, train: true };
 
 test('buffer interpolates received coordinates and shortest heading, never extrapolates', () => {
   const buffer = new ReceivedPositions(); const first = vehicle(), second = vehicle({ longitude: 24.9521, headingDegrees: 10, reportedAt: new Date(at + 1000).toISOString() });
@@ -90,7 +90,7 @@ test('route filtering hides unrelated instances without discarding live tracks a
 });
 
 
-for (const [mode, length] of [['bus', 12], ['tram', 27.7], ['ferry', 36]] as const) {
+for (const [mode, length] of [['bus', 12], ['tram', 27.7], ['ferry', 36], ['train', 44.466]] as const) {
   test(`${mode} Blender export has real dimensions, coloured detail and correct contact datum`, async () => {
     const bytes = await readFile(new URL(`../static/models/${mode}.glb`, import.meta.url));
     const model = await parseVehicleModel(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
@@ -128,8 +128,8 @@ test('missing model assets preserve selectable fallback markers and report failu
   const fetchMock = mock.method(globalThis, 'fetch', async () => new Response('', { status: 404 }));
   try {
     const fleet = new LiveFleet(() => 0), errors: string[] = [];
-    await fleet.loadModels({ tram: '/missing', bus: '/missing', ferry: '/missing' }, message => errors.push(message));
-    assert.equal(errors.length, 3);
+    await fleet.loadModels({ tram: '/missing', bus: '/missing', ferry: '/missing', train: '/missing' }, message => errors.push(message));
+    assert.equal(errors.length, 4);
     fleet.setVehicles([vehicle()]); fleet.update(at, modes, true);
     assert.equal(fleet.visibleCount, 1); assert.equal(fleet.placements.size, 1); fleet.dispose();
   } finally { fetchMock.mock.restore(); }
@@ -141,8 +141,8 @@ test('a decode completing after disposal releases its model instead of resurrect
   const parseMock = mock.method(GLTFLoader.prototype, 'parseAsync', () => new Promise<GLTF>(resolve => pending.push(resolve)));
   try {
     const fleet = new LiveFleet(() => 0), errors: string[] = [];
-    const loading = fleet.loadModels({ bus: '/', tram: '/', ferry: '/' }, error => errors.push(error));
-    while (pending.length < 3) await new Promise(resolve => setImmediate(resolve));
+    const loading = fleet.loadModels({ bus: '/', tram: '/', ferry: '/', train: '/' }, error => errors.push(error));
+    while (pending.length < 4) await new Promise(resolve => setImmediate(resolve));
     fleet.dispose(); let materialsDisposed = 0;
     for (const resolve of pending) {
       const scene = new THREE.Group(), geometry = new THREE.BoxGeometry(2.5, 3, 12).translate(0, 1.5, 0);
@@ -150,6 +150,6 @@ test('a decode completing after disposal releases its model instead of resurrect
       scene.add(new THREE.Mesh(geometry, material)); resolve({ scene } as unknown as GLTF);
     }
     await loading; assert.equal(fleet.root.children.length, 0); assert.equal(fleet.meshes.size, 0);
-    assert.equal(materialsDisposed, 3); assert.deepEqual(errors, []);
+    assert.equal(materialsDisposed, 4); assert.deepEqual(errors, []);
   } finally { fetchMock.mock.restore(); parseMock.mock.restore(); }
 });

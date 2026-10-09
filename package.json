@@ -15,6 +15,7 @@
     "city:cache": "node --env-file-if-exists=.env scripts/cache-city-map.ts",
     "city:prepare": "node scripts/prepare-city.ts",
     "routes:prepare": "node scripts/prepare-routes.ts",
+    "rail:prepare": "node scripts/prepare-rail.ts",
     "ryhti:prepare": "node scripts/prepare-ryhti.ts",
     "energy:prepare": "node scripts/prepare-energy.ts",
     "release:package": "node scripts/package-release.ts",

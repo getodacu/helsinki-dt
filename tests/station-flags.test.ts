@@ -8,6 +8,7 @@ import type { CityBase } from '../src/lib/city-assets.ts';
 const station: SceneStation = { id: '00100742', name: 'Fixture air station', longitude: 24.952, latitude: 60.1695,
   kind: 'air-quality', sourceIds: ['fmi-air-quality'] };
 const weather: SceneStation = { ...station, name: 'Fixture weather station', kind: 'weather', sourceIds: ['fmi-weather'] };
+const rail: SceneStation = { ...station, id: 'rail:HKI', name: 'Helsinki', kind: 'rail', sourceIds: ['digitraffic'] };
 const base: CityBase = { terrain: { width: 2, height: 2, origin: [-100, -100], step: [200, 200], elevations: [12, 12, 12, 12] },
   shorelines: [], roads: [], rails: [], waterLevel: 0, bounds: [-100, -100, 100, 100] };
 const camera = new THREE.PerspectiveCamera(42, 1, 1, 1000);
@@ -49,12 +50,15 @@ test('station signs distinguish kinds, select refreshed records, show names, and
   const container = new Element(), selections: SceneStation[] = [], hovers: string[] = [];
   const signs = new StationFlags(container as unknown as HTMLElement, base, value => selections.push(value), value => hovers.push(value));
   try {
-    signs.setStations([station, weather]); signs.update(camera, 800, 800, weather);
-    const [air, sun] = container.children[0].children;
+    signs.setStations([station, weather, rail]); signs.update(camera, 800, 800, weather);
+    const [air, sun, train] = container.children[0].children;
     assert.match(air.className, /air-quality/); assert.match(sun.className, /weather selected/);
     assert.notEqual(air.innerHTML, sun.innerHTML);
     assert.equal(air.attributes.get('aria-label'), 'Air quality station · Fixture air station');
     assert.equal(sun.attributes.get('aria-label'), 'Weather station · Fixture weather station');
+    assert.equal(train.attributes.get('aria-label'), 'Railway station · Helsinki');
+    assert.match(train.innerHTML, /<small>Rail<\/small>/);
+    train.onclick!(); assert.equal(selections.pop(), rail);
     air.onclick!(); assert.equal(selections[0], station);
     const fresh = { ...station, name: 'Updated air station' };
     signs.setStations([fresh, weather]); signs.update(camera, 800, 800, fresh);

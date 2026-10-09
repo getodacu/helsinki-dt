@@ -33,4 +33,4 @@ export function buildingAddress(building: Building): string | null {
 export const buildingName = (building: Building) => buildingAttribute(building, ['name', 'nimi', 'rakennuksen_nimi']) ?? buildingAddress(building) ?? 'Building';
 export const matchesBuilding = (building: Building, query: string) => searchText([buildingName(building), buildingAddress(building), building.id,
   building.gmlId, building.vtjPrt, building.ratu, building.uuid].filter(Boolean).join(' ')).includes(searchText(query));
-export const matchesVehicle = (vehicle: Vehicle, query: string, routeLabel?: string) => searchText(`${vehicle.mode} ${vehicle.routeId} ${routeLabel ?? ''} ${vehicle.id} ${vehicle.ownerOperatorId}/${vehicle.vehicleId}`).includes(searchText(query));
+export const matchesVehicle = (vehicle: Vehicle, query: string, routeLabel?: string) => searchText(`${vehicle.mode} ${vehicle.routeId} ${routeLabel ?? ''} ${vehicle.id} ${vehicle.ownerOperatorId ?? ''}/${vehicle.vehicleId} ${vehicle.rail?.label ?? ''} ${vehicle.rail?.destination ?? ''} ${vehicle.rail?.origin ?? ''} ${vehicle.rail?.nextEvent?.stationName ?? ''}`).includes(searchText(query));

@@ -5,6 +5,7 @@ Blender +Y is forward (glTF -Z); Z=0 is tyre contact / ferry waterline.
 from pathlib import Path
 import json
 import math
+import sys
 import bpy
 from mathutils import Vector
 
@@ -25,7 +26,7 @@ def linear(hex_colour):
 
 
 PALETTE = {key: linear(value) for key, value in {
-    "blue": "007bc4", "white": "e7eef0", "green": "17654e", "cream": "e8d5aa",
+    "purple": "9276b6", "blue": "007bc4", "white": "e7eef0", "green": "17654e", "cream": "e8d5aa",
     "dark": "14212a", "tyre": "171c20", "metal": "8896a0", "glass": "244a60",
     "light": "fff1c1", "red": "bd2628", "deck": "697777", "hull": "183e56",
 }.items()}
@@ -247,6 +248,32 @@ def ferry():
     cylinder("Funnel cap", (0, -5.8, 6.1), .61, .15, "dark")
 
 
+def train():
+    # Representative two-car set; live feeds do not establish the actual formation.
+    for centre, end in [(-11.25, -1), (11.25, 1)]:
+        coach_end("Rail passenger body", centre, 22, 2.9, .75, 3.45, "white", end, .8)
+        box("Purple lower livery", (0, centre, 1.15), (2.91, 20.7, .6), "purple", .12)
+        side_windows(18, centre, 2.92, 1.8, 3.1, 1.65)
+        box("Rail roof", (0, centre - end * .45, 3.58), (2.78, 20.2, .32), "white", .12)
+        box("Roof equipment", (0, centre, 3.87), (1.7, 5, .25), "metal", .06, "metal")
+        for y in (centre - 7, centre + 7):
+            box("Bogie", (0, y, .58), (2.3, 2.5, .5), "dark", .06)
+            wheel(y - .75, .4, 2.5)
+            wheel(y + .75, .4, 2.5)
+        for side in (-1, 1):
+            for y in (centre - 4, centre + 4):
+                box("Train door", (side * 1.48, y, 1.95), (.04, 1.5, 2.2), "purple", .025)
+                box("Door window", (side * 1.51, y, 2.4), (.025, 1.1, 1.05), "glass", .025, "glass")
+        windshield = box("Rail cab windshield", (0, centre + end * 10.5, 2.65), (2.25, .03, 1.1), "glass", .08, "glass")
+        windshield.rotation_euler.x = end * math.radians(16)
+        for side in (-1, 1):
+            box("Rail headlamp", (side * .88, centre + end * 10.87, 1.4), (.28, .04, .16), "light", .03)
+    box("Inter-car connection", (0, 0, 2.05), (2.55, .6, 2.5), "dark", .04)
+    for side in (-1, 1):
+        rod("Pantograph arm", (side * .45, 8, 3.8), (side * .45, 9.1, 4.3), .04)
+    rod("Pantograph strip", (-.9, 9.1, 4.3), (.9, 9.1, 4.3), .04)
+
+
 def batch_materials():
     # Vertex colours keep livery details while needing only three GPU material batches.
     for kind in ("body", "glass", "metal"):
@@ -280,8 +307,11 @@ def batch_materials():
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
 
+selected_modes = set(sys.argv[sys.argv.index("--") + 1:]) if "--" in sys.argv else set()
 inventory = {}
-for mode, build in [("bus", bus), ("tram", tram), ("ferry", ferry)]:
+for mode, build in [("bus", bus), ("tram", tram), ("ferry", ferry), ("train", train)]:
+    if selected_modes and mode not in selected_modes:
+        continue
     collection = bpy.data.collections.new(mode)
     bpy.context.scene.collection.children.link(collection)
     build()
@@ -305,8 +335,8 @@ for mode, build in [("bus", bus), ("tram", tram), ("ferry", ferry)]:
 
 # Keep the source immediately editable, with one mode visible at a time.
 for c in bpy.context.scene.collection.children:
-    c.hide_viewport = c.name != "bus"
-    c.hide_render = c.name != "bus"
+    c.hide_viewport = c.name != (next(iter(selected_modes)) if selected_modes else "bus")
+    c.hide_render = c.name != (next(iter(selected_modes)) if selected_modes else "bus")
 bpy.context.preferences.filepaths.save_version = 0
-bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / "helsinki-transit.blend"))
+bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / ("helsinki-train.blend" if selected_modes == {"train"} else "helsinki-transit.blend")))
 print(json.dumps(inventory, indent=2))

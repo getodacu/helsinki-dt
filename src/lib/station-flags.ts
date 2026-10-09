@@ -6,8 +6,9 @@ import type { SceneStation } from './scene.ts';
 
 const WIDTH = 44, HEIGHT = 48, POLE = 26;
 const key = (station: SceneStation) => `${station.kind}:${station.id}`;
-const stationLabel = (station: SceneStation) => `${station.kind === 'weather' ? 'Weather' : 'Air quality'} station · ${station.name}`;
+const stationLabel = (station: SceneStation) => `${station.kind === 'weather' ? 'Weather' : station.kind === 'rail' ? 'Railway' : 'Air quality'} station · ${station.name}`;
 const icons = {
+  rail: '<rect x="5" y="3" width="14" height="15" rx="3"/><path d="M5 10h14M8 18l-2 3M16 18l2 3M8 14h1M15 14h1"/>',
   weather: '<circle cx="8" cy="8" r="3"/><path d="M8 1v2M1 8h2M3 3l1.5 1.5M13 3l-1.5 1.5M3 13l1.5-1.5M8 19h10a4 4 0 0 0 .5-8 5 5 0 0 0-9.5 1A3.5 3.5 0 0 0 8 19Z"/>',
   'air-quality': '<path d="M2 8h13a3 3 0 1 0-3-3M2 12h17a3 3 0 1 1-3 3M2 16h6a3 3 0 1 1-3 3"/>'
 };
@@ -49,7 +50,7 @@ export class StationFlags {
       let button = this.buttons.get(id);
       if (!button) {
         button = document.createElement('button'); button.type = 'button'; button.tabIndex = -1;
-        button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icons[station.kind]}</svg><small>${station.kind === 'weather' ? 'Weather' : 'Air'}</small>`;
+        button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icons[station.kind]}</svg><small>${station.kind === 'weather' ? 'Weather' : station.kind === 'rail' ? 'Rail' : 'Air'}</small>`;
         button.onclick = () => { const current = this.stations.find(item => key(item) === id); if (current) this.onSelect(current); };
         button.onpointerenter = () => { const current = this.stations.find(item => key(item) === id); if (current) this.onHover(stationLabel(current)); };
         button.onpointerleave = () => this.onHover('');

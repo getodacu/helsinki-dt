@@ -12,7 +12,7 @@ export interface RouteContext {
   vehicleId: string; routeId: string; routeLabel: string | null; destination: string | null;
   tripId: string | null; departureAt: string | null; candidates: string[];
   shape: [number, number][][]; stops: RouteStop[]; reason: string | null;
-  sourceId: 'hsl-gtfs'; generatedAt: string | null; source: RouteSource | null;
+  sourceId: 'hsl-gtfs' | 'digitraffic-gtfs'; generatedAt: string | null; source: RouteSource | null;
 }
 export interface RouteCatalog {
   status: 'ready' | 'unavailable'; generatedAt: string | null; reason: string | null; source: RouteSource | null;

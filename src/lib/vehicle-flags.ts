@@ -1,3 +1,4 @@
+import { vehicleLabel } from './rail.ts';
 import * as THREE from 'three';
 import { MODE_COLOURS, type VehiclePlacement } from './live-fleet.ts';
 import type { RouteCatalog } from './route-context.ts';
@@ -48,7 +49,7 @@ export class VehicleFlags {
     const visible = new Set(flags.map(flag => flag.placement.vehicle.id));
     for (const [id, button] of this.buttons) if (!visible.has(id)) { button.remove(); this.buttons.delete(id); }
     for (const { placement, x, y } of flags) {
-      const { vehicle, stale } = placement, publicLabel = this.routeLabels.get(vehicle.routeId), line = publicLabel || vehicle.routeId;
+      const { vehicle, stale } = placement, publicLabel = this.routeLabels.get(vehicle.routeId), line = vehicleLabel(vehicle, publicLabel);
       let button = this.buttons.get(vehicle.id);
       if (!button) {
         button = document.createElement('button'); button.type = 'button'; button.tabIndex = -1;
@@ -56,7 +57,7 @@ export class VehicleFlags {
         button.onclick = () => { const current = placements.get(vehicle.id); if (current) this.onSelect(current.vehicle); };
         button.onpointerenter = () => {
           const current = placements.get(vehicle.id)?.vehicle;
-          if (current) this.onHover(current.id, `${current.mode} · ${this.routeLabels.get(current.routeId) || current.routeId}`);
+          if (current) this.onHover(current.id, `${current.mode} · ${vehicleLabel(current, this.routeLabels.get(current.routeId))}`);
         };
         button.onpointerleave = () => this.onHover(null, '');
         this.root.append(button); this.buttons.set(vehicle.id, button);
@@ -66,8 +67,8 @@ export class VehicleFlags {
       button.style.setProperty('--flag-colour', MODE_COLOURS[vehicle.mode]);
       button.firstElementChild!.textContent = line;
       (button.firstElementChild as HTMLElement).style.fontSize = line.length > 3 ? '13px' : '20px';
-      button.lastElementChild!.textContent = vehicle.mode;
-      button.title = `${vehicle.mode} · ${publicLabel ? 'Line' : 'Route ID'} ${line} · ${vehicle.id}${stale ? ' · stale position' : ''}`;
+      button.lastElementChild!.textContent = stale ? 'stale' : vehicle.rail?.cancelled ? 'cancelled' : vehicle.mode === 'train' && !vehicle.rail?.timetableStale && vehicle.rail?.timetableAt && Date.now() - Date.parse(vehicle.rail.timetableAt) < 60_000 && vehicle.delaySeconds != null && vehicle.delaySeconds > 60 ? `+${Math.round(vehicle.delaySeconds / 60)} min` : vehicle.mode;
+      button.title = `${vehicle.mode} · ${publicLabel ? 'Line' : 'Route ID'} ${line} · ${vehicle.id}${vehicle.rail?.destination ? ` · ${vehicle.rail.destination}` : ''}${stale ? ' · stale position' : ''}`;
       button.setAttribute('aria-label', button.title);
     }
   }

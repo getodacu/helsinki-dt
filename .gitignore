@@ -25,3 +25,4 @@ static/data/ryhti-manifest.json
 static/data/ryhti-refresh-status.json
 
 server/data/
+static/data/rail-index.json

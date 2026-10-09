@@ -1,3 +1,4 @@
+import type { RailCategory } from './rail.ts';
 import * as THREE from 'three';
 import { BuildingHighlight } from './building-highlight.ts';
 import { CityAppearance } from './city-appearance.ts';
@@ -17,15 +18,15 @@ import { TRAFFIC_REMOVE_MS, type TrafficSnapshot } from './traffic.ts';
 import type { Building, BuildingChunk, TransitMode, Vehicle } from './types.ts';
 import { NO_ENERGY_COLOUR } from './energy-display.ts';
 
-export type CameraPreset = 'city' | 'harbour' | 'suomenlinna' | 'energy';
+export type CameraPreset = 'city' | 'harbour' | 'suomenlinna' | 'energy' | 'central' | 'pasila';
 export interface SceneStation {
-  id: string; name: string; longitude: number; latitude: number; kind: 'weather' | 'air-quality'; sourceIds: string[];
+  id: string; name: string; longitude: number; latitude: number; kind: 'weather' | 'air-quality' | 'rail'; sourceIds: string[];
 }
 export type Selection = { kind: 'building'; building: Building; unloaded?: boolean }
   | { kind: 'vehicle'; vehicle: Vehicle; removed?: boolean }
   | { kind: 'station'; station: SceneStation };
-export type Layers = Record<TransitMode | 'buildings' | 'roads' | 'terrain' | 'weather' | 'airQuality' | 'imagery', boolean>;
-export const INITIAL_LAYERS: Layers = { imagery: true, buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, weather: true, airQuality: true };
+export type Layers = Record<TransitMode | 'buildings' | 'roads' | 'terrain' | 'weather' | 'airQuality' | 'imagery' | 'railStations' | RailCategory, boolean>;
+export const INITIAL_LAYERS: Layers = { imagery: true, buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, train: true, railStations: true, commuter: true, 'long-distance': true, freight: true, other: true, weather: true, airQuality: true };
 export type SceneStats = { fps: number; drawCalls: number; triangles: number; geometries: number;
   loadedChunks: number; vehicles: number; unplacedVehicles: number; lastReceiptLatencyMs: number | null };
 type Callbacks = { onSelection: (selection: Selection | null, message?: string) => void;
@@ -169,7 +170,7 @@ export function createCityRenderer() {
   return new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
 }
 
-export function createCityScene(container: HTMLElement, manifest: CityManifest, base: CityBase, callbacks: Callbacks, cache: CityAssetCache = new CityAssetCache(), modelUrls: Record<TransitMode, string> = { bus: '/models/bus.glb', tram: '/models/tram.glb', ferry: '/models/ferry.glb' }) {
+export function createCityScene(container: HTMLElement, manifest: CityManifest, base: CityBase, callbacks: Callbacks, cache: CityAssetCache = new CityAssetCache(), modelUrls: Record<TransitMode, string> = { bus: '/models/bus.glb', tram: '/models/tram.glb', ferry: '/models/ferry.glb', train: '/models/train.glb' }) {
   let disposed = false, frame = 0, layers = { ...INITIAL_LAYERS }, selected: Selection | null = null, hoverId: string | null = null;
   let followId: string | null = null, lastReceiptLatencyMs: number | null = null;
   let routeFilter: string | null = null, route: RouteContext | null = null;
@@ -352,7 +353,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   };
   const preset = (id: CameraPreset) => {
     followId = null;
-    const location = id === 'energy' ? [24.952913, 60.168037, 850] : id === 'city' ? [24.952, 60.1695, 1450] : id === 'harbour' ? [24.957, 60.1607, 2000] : [24.986, 60.1466, 1150];
+    const location = id === 'central' ? [24.941444, 60.174, 750] : id === 'pasila' ? [24.933521, 60.198689, 1000] : id === 'energy' ? [24.952913, 60.168037, 850] : id === 'city' ? [24.952, 60.1695, 1450] : id === 'harbour' ? [24.957, 60.1607, 2000] : [24.986, 60.1466, 1150];
     const [x, , z] = wgs84ToScene(location[0], location[1]);
     controls.enableDamping = false; controls.update();
     controls.target.set(x, 8, z); camera.position.set(x + location[2] * 0.48, location[2] * 0.72, z + location[2] * 0.85);
@@ -476,9 +477,9 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       if (!backgroundRunning && background.phase === 'partial') background = { ...background, phase: 'idle' };
       requestViewUpdate(); },
     openAvailableMap() { appearance.openAvailable(); viewLoading.openAvailable(); reportLoad(); },
-    setLayers(next: Layers) { layers = { ...next }; if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); requestViewUpdate(); },
+    setLayers(next: Layers) { layers = { ...next }; stationFlags.setStations(stations.filter(station => station.kind !== 'rail' || layers.railStations)); if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); requestViewUpdate(); },
     setStations(next: SceneStation[]) {
-      stations = next; stationFlags.setStations(next);
+      stations = next; stationFlags.setStations(next.filter(station => station.kind !== 'rail' || layers.railStations));
       if (selected?.kind === 'station') {
         const previous = selected.station;
         const station = next.find(station => station.id === previous.id && station.kind === previous.kind);
@@ -490,7 +491,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       route = next; disposeTree(routeHighlight);
       if (next?.status === 'exact') {
         const ferry = selected?.kind === 'vehicle' && selected.vehicle.mode === 'ferry';
-        routeHighlight.add(new THREE.LineSegments(routeGeometry(next, base, ferry), new THREE.LineBasicMaterial({ color: '#9cf4cf', transparent: true, opacity: 0.9 })));
+        routeHighlight.add(new THREE.LineSegments(routeGeometry(next, base, ferry), new THREE.LineBasicMaterial({ color: next.sourceId === 'digitraffic-gtfs' ? '#d2bdf4' : '#9cf4cf', transparent: true, opacity: 0.9 })));
         for (const stop of next.stops) {
           const [x, , z] = wgs84ToScene(stop.longitude, stop.latitude), height = sampleTerrainHeight(base.terrain, x, z);
           if (height === null && !ferry) continue;

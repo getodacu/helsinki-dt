@@ -2,7 +2,7 @@
 
 Build a browser-based digital twin of central Helsinki that combines semantic 3D buildings, live public transport, weather and air-quality observations, and building energy and solar records. The defining journey is to follow a tram, inspect its reported delay beside nearby observations, then select a building and explore its available records.
 
-This plan defines five implementation tasks. Completion is recorded in the milestone acceptance checklists and results. Complete their acceptance checklists and record evidence before marking a task complete. The implementation belongs in this repository; Ocean Lens at `/Users/radu/Projects/ocean-leans` is the reference for appearance and reusable patterns.
+The original release comprises tasks A–E. Follow-on task F adds the live ship layer. Completion is recorded in the milestone acceptance checklists and results. Complete their acceptance checklists and record evidence before marking a task complete. The implementation belongs in this repository; Ocean Lens at `/Users/radu/Projects/ocean-leans` is the reference for appearance and reusable patterns.
 
 ## Milestones and dependencies
 
@@ -13,8 +13,9 @@ This plan defines five implementation tasks. Completion is recorded in the miles
 | C | [Connect inspection and environmental context](milestones/C-inspection-and-context.md) | B; A environmental gate | Vehicle, building, and station inspectors; contextual comparison and search |
 | D | [Add building energy and solar potential](milestones/D-energy-and-solar.md) | C; A energy and solar gate | Correctly matched consumption and potential records, charts, thematic buildings |
 | E | [Prepare and verify the release](milestones/E-release-readiness.md) | B, C, D | Accessible, responsive, tested production package and operating instructions |
+| F | [Add the live ship layer](milestones/F-live-ships.md) | Existing B–E scene/feed; preserve current rail integration | REST-seeded, MQTT-updated AIS ships with inspection, source status and marine freshness |
 
-Default execution order: **A → B → C → D → E**. A defines independent source gates so unresolved energy access does not prevent city and transit development. An unresolved gate remains visibly open; neither a missing-data placeholder nor an alternative dataset silently completes the corresponding feature. Reopen an upstream task when its assumptions prove wrong.
+Original release order: **A → B → C → D → E**. Follow-on **F** starts from the completed release and current working tree. A defines independent source gates so unresolved energy access does not prevent city and transit development. An unresolved gate remains visibly open; neither a missing-data placeholder nor an alternative dataset silently completes the corresponding feature. Reopen an upstream task when its assumptions prove wrong.
 
 To use a milestone as a task, use its title and linked file as the task description, together with this master plan. Its scope is implementation plus verification and handoff. This planning request does not create separate Codex chats, assign people, or publish the application.
 

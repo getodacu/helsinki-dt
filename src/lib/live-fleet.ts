@@ -1,13 +1,14 @@
+import type { RailCategory } from './rail.ts';
 import * as THREE from 'three';
 import { wgs84ToScene } from './geo.ts';
 import type { TransitMode, Vehicle } from './types.ts';
 import { TRAFFIC_STALE_MS, TRAFFIC_REMOVE_MS } from './traffic.ts';
 import { parseVehicleModel, disposeVehicleModel, type VehicleModel } from './vehicle-models.ts';
 
-export const MODE_COLOURS = { tram: '#49b69d', bus: '#dfa96b', ferry: '#66a9d0' };
+export const MODE_COLOURS = { tram: '#49b69d', bus: '#dfa96b', ferry: '#66a9d0', train: '#b29bd8' };
 export const VEHICLE_DISPLAY_SCALE = 1;
-export function vehicleVisible(vehicle: Pick<Vehicle, 'mode' | 'routeId'>, modes: Record<TransitMode, boolean>, routeId: string | null = null): boolean {
-  return modes[vehicle.mode] && (routeId === null || vehicle.routeId === routeId);
+export function vehicleVisible(vehicle: Pick<Vehicle, 'mode' | 'routeId' | 'rail'>, modes: Record<TransitMode, boolean> & Partial<Record<RailCategory, boolean>>, routeId: string | null = null): boolean {
+  return modes[vehicle.mode] && (vehicle.mode !== 'train' || modes[vehicle.rail?.category ?? 'other'] !== false) && (routeId === null || vehicle.routeId === routeId);
 }
 const BUFFER_MS = 1_200;
 const GAP_MS = 10_000;
@@ -27,11 +28,19 @@ export class ReceivedPositions {
     if (last && at < last.at) return;
     if (last && at === last.at) { old!.vehicle = vehicle; return; }
     const [x, , z] = wgs84ToScene(vehicle.longitude, vehicle.latitude);
-    const next = { x, z, heading: vehicle.headingDegrees ?? last?.heading ?? 0, at };
+    const movement = last ? Math.hypot(x - last.x, z - last.z) : 0;
+    const bearing = vehicle.mode === 'train' && last && movement >= 3 ? (Math.atan2(x - last.x, last.z - z) * 180 / Math.PI + 360) % 360 : null;
+    const next = { x, z, heading: vehicle.headingDegrees ?? bearing ?? last?.heading ?? 0, at };
     const distance = last ? Math.hypot(next.x - last.x, next.z - last.z) : 0;
     const gap = last ? at - last.at : 0;
-    const snap = gap > GAP_MS || distance > 200 || (gap > 0 && distance / (gap / 1000) > 60);
-    this.tracks.set(vehicle.id, { vehicle, positions: snap ? [next] : [...(old?.positions ?? []), next].slice(-5) });
+    const train = vehicle.mode === 'train';
+    const snap = gap > (train ? 25_000 : GAP_MS) || distance > (train ? 1500 : 200) || (gap > 0 && distance / (gap / 1000) > (train ? 100 : 60));
+    if (train && bearing !== null && old?.positions.length === 1 && !snap) old.positions[0].heading = bearing;
+    if (train && snap) next.heading = last?.heading ?? 0;
+    const history = [...(old?.positions ?? []), next];
+    this.tracks.set(vehicle.id, { vehicle, positions: snap ? [next] : train
+      ? history.filter((point, index) => point.at >= at - 25_000 || (history[index + 1]?.at ?? 0) >= at - 25_000).slice(-64)
+      : history.slice(-5) });
   }
   setSnapshot(vehicles: Vehicle[]) {
     const ids = new Set(vehicles.map(vehicle => vehicle.id));
@@ -43,7 +52,7 @@ export class ReceivedPositions {
     const last = positions?.at(-1);
     if (!positions || !last || now - last.at >= TRAFFIC_REMOVE_MS) return null;
     if (reducedMotion || now - last.at >= TRAFFIC_STALE_MS || positions.length === 1) return last;
-    const time = now - BUFFER_MS;
+    const time = now - (this.tracks.get(id)?.vehicle.mode === 'train' ? 12_000 : BUFFER_MS);
     if (time >= last.at) return last;
     if (time <= positions[0].at) return positions[0];
     const index = positions.findIndex(position => position.at >= time);
@@ -73,15 +82,15 @@ export class LiveFleet {
   private waterHeight: number;
   constructor(groundHeight: (x: number, z: number) => number | null, waterHeight = 0) {
     this.groundHeight = groundHeight; this.waterHeight = waterHeight;
-    for (const mode of ['tram', 'bus', 'ferry'] as const) {
-      const [width, height, length] = mode === 'tram' ? [2.4, 3.8, 27.6] : mode === 'bus' ? [2.5, 3.3, 12] : [9, 7.8, 36];
+    for (const mode of ['tram', 'bus', 'ferry', 'train'] as const) {
+      const [width, height, length] = mode === 'tram' ? [2.4, 3.8, 27.6] : mode === 'bus' ? [2.5, 3.3, 12] : mode === 'train' ? [2.9, 4.1, 44] : [9, 7.8, 36];
       const roofHeight = mode === 'ferry' ? height - 1.7 : height;
       this.models.set(mode, { geometry: new THREE.BoxGeometry(width, height, length).translate(0, roofHeight - height / 2, 0),
         materials: [new THREE.MeshStandardMaterial({ color: MODE_COLOURS[mode], roughness: .65 })], roofHeight });
     }
   }
   async loadModels(urls: Record<TransitMode, string>, onError: (message: string) => void) {
-    await Promise.all((['tram', 'bus', 'ferry'] as const).map(async mode => {
+    await Promise.all((['tram', 'bus', 'ferry', 'train'] as const).map(async mode => {
       try {
         const response = await fetch(urls[mode], { signal: AbortSignal.any([this.loadAbort.signal, AbortSignal.timeout(15_000)]) });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -119,7 +128,7 @@ export class LiveFleet {
   update(now: number, modes: Record<TransitMode, boolean>, reducedMotion: boolean, routeId: string | null = null) {
     if (this.disposed) return;
     this.visibleCount = 0; this.unplacedCount = 0; this.placements.clear();
-    for (const mode of ['tram', 'bus', 'ferry'] as const) {
+    for (const mode of ['tram', 'bus', 'ferry', 'train'] as const) {
       const entries: { id: string; position: Position; height: number; stale: boolean }[] = [];
       for (const [id, track] of this.motion.tracks) {
         if (track.vehicle.mode !== mode || !vehicleVisible(track.vehicle, modes, routeId)) continue;

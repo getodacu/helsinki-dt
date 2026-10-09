@@ -39,11 +39,11 @@ export interface BuildingChunk {
   origin: { longitude: number; latitude: number; elevation: number };
 }
 
-export type TransitMode = 'tram' | 'bus' | 'ferry';
+export type TransitMode = 'tram' | 'bus' | 'ferry' | 'train';
 export interface Vehicle {
   id: string;
   mode: TransitMode;
-  ownerOperatorId: string;
+  ownerOperatorId: string | null;
   vehicleId: string;
   operatingOperatorId: string | null;
   routeId: string;
@@ -61,6 +61,7 @@ export interface Vehicle {
   delaySeconds: number | null;
   quality: string[];
   sourceId: string;
+  rail?: import('./rail.ts').RailSummary;
 }
 
 export interface Observation {
