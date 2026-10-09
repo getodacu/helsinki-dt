@@ -31,13 +31,13 @@ test('disposal releases shared resources once and clears the render tree', () =>
   assert.equal(geometryDisposed,1); assert.equal(materialDisposed,1); assert.equal(root.children.length,0);
 });
 
-test('view and distance bound chunk loading to twelve and reject offscreen far chunks', () => {
+test('every visible chunk is selected without a twelve-chunk cap; offscreen chunks stay excluded', () => {
   const camera = new THREE.PerspectiveCamera(50,1,1,20000); camera.position.set(0,2000,2000); camera.lookAt(0,0,0); camera.updateMatrixWorld();
   const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
   const entries: CityChunkEntry[] = Array.from({length:30},(_,i)=>({id:String(i),url:`/data/city/${i}.json`,buildingsUrl:`/data/city/${i}-buildings.json`,bounds:[i*50,0,i*50+50,50],buildingCount:1,triangleCount:1,bytes:20}));
   entries.push({...entries[0],id:'far',bounds:[10000,10000,10500,10500]});
   const result = visibleChunks(entries,new THREE.Vector3(0,0,0),2000,frustum);
-  assert.equal(result.length,12); assert.ok(result.includes('0')); assert.ok(!result.includes('far'));
+  assert.equal(result.length,27); assert.ok(result.includes('0')); assert.ok(!result.includes('far'));
 });
 
 

@@ -8,7 +8,8 @@
   import StationHistory from '#lib/components/StationHistory.svelte';
   import { loadPreparedSample } from './sample.ts';
   import { loadCityManifest, loadCityBase, loadBuildingSearchIndex, type CityManifest, type CityBase } from '#lib/city-assets.ts';
-  import { INITIAL_LAYERS, type Layers, type Selection, type SceneStation, type SceneStats, type CitySceneController, type CameraPreset } from '#lib/scene.ts';
+  import { CityAssetCache } from '#lib/city-cache.ts';
+  import { INITIAL_LAYERS, type SceneLoadState, type Layers, type Selection, type SceneStation, type SceneStats, type CitySceneController, type CameraPreset } from '#lib/scene.ts';
   import { MODE_COLOURS, VEHICLE_DISPLAY_SCALE } from '#lib/live-fleet.ts';
   import { trafficAge, trafficIsStale, TRAFFIC_REMOVE_MS, type TrafficSnapshot, type TrafficEvent } from '#lib/traffic.ts';
   import { groupObservationStations, observationHistory, OBSERVATION_PARAMETERS, type ObservationSnapshot } from '#lib/observations.ts';
@@ -19,7 +20,7 @@
   let energyLoading = $state(true);
   let themeKey = $state('');
   let sample = $state.raw<Awaited<ReturnType<typeof loadPreparedSample>>>({ manifest: null, buildings: [], sampleError: null });
-  let city = $state.raw<{ manifest: CityManifest; base: CityBase } | null>(null);
+  let city = $state.raw<{ manifest: CityManifest; base: CityBase; cache: CityAssetCache } | null>(null);
   let energy = $derived(energyForCity(energyResponse, city?.manifest ?? null));
   let themeOptions = $derived(energyThemeOptions(energy.catalog));
   let activeTheme = $derived(themeOptions.find(option => option.key === themeKey) ?? null);
@@ -34,8 +35,10 @@
   let selectionMessage = $state('');
   let hovered = $state('');
   let sceneError = $state('');
+  let appearanceStatus = $state('');
   let trafficError = $state('');
   let ready = $state(false);
+  let mapLoad = $state.raw<SceneLoadState>({ phase: 'discovering', completed: 0, total: 0, failed: 0, cacheIssue: '', background: { phase: 'idle', completed: 0, total: 0, failed: 0 } });
   let sourceOpen = $state(false);
   let preset = $state<CameraPreset>('city');
   let following = $state(false);
@@ -58,6 +61,7 @@
     status: { state: 'idle', connectedAt: null, lastPositionAt: null, retryAt: null } });
   let browserConnected = $state(false);
   let loading = $state(true);
+  let mapCovered = $derived(loading || !['ready', 'available'].includes(mapLoad.phase));
   const modes: TransitMode[] = ['tram', 'bus', 'ferry'];
   const modeNames: Record<TransitMode, string> = { tram: 'Trams', bus: 'Buses', ferry: 'HSL Ferries' };
   const age = (vehicle: { reportedAt: string }) => `${Math.max(0, Math.floor(trafficAge(vehicle, now) / 1000))} s ago`;
@@ -218,17 +222,18 @@
     void connect(); void refreshObservations();
     void loadRouteCatalog(fetch).then(value => { if (!disposed) routeCatalog = value; }).catch(error => { if (!disposed) routeCatalog = { status: 'unavailable', generatedAt: null, source: null, routes: [], reason: error instanceof Error ? error.message : 'Route labels unavailable' }; }).finally(() => { if (!disposed) routeCatalogLoading = false; });
     void loadPreparedSample(fetch).then(data => { if (!disposed) sample = data; });
+    const cache = new CityAssetCache();
     void loadCityManifest(fetch, lifetime.signal).then(async manifest => {
-      const base = await loadCityBase(manifest, fetch, lifetime.signal);
-      if (disposed) return; city = { manifest, base };
-      void loadBuildingSearchIndex(manifest, fetch, lifetime.signal).then(index => {
+      const base = await loadCityBase(manifest, fetch, lifetime.signal, cache);
+      if (disposed) return; city = { manifest, base, cache };
+      void loadBuildingSearchIndex(manifest, fetch, lifetime.signal, cache).then(index => {
         if (disposed) return; searchBuildings = index.buildings;
         indexState = index.unavailableChunks.length ? 'partial' : index.buildings.length ? 'current' : 'empty';
         indexMessage = index.unavailableChunks.length ? `${index.unavailableChunks.length} metadata batches unavailable; searchable coverage is partial.` : `${index.buildings.length.toLocaleString()} prepared building identities searchable.`;
       }).catch(error => { if (!disposed) { indexState = 'unavailable'; indexMessage = error instanceof Error ? error.message : 'Building index unavailable'; } });
     }).catch(error => { if (!disposed) { sceneError = error instanceof Error ? error.message : 'City assets unavailable'; indexState = 'unavailable'; indexMessage = 'City index unavailable.'; } })
       .finally(() => { if (!disposed) loading = false; });
-    return () => { disposed = true; lifetime.abort(); request?.abort(); observationRequest?.abort(); stream?.close(); clearInterval(clock); clearInterval(observationsCheck); document.removeEventListener('visibilitychange', visibility); document.removeEventListener('visibilitychange', resumeObservations); };
+    return () => { disposed = true; cache.dispose(); lifetime.abort(); request?.abort(); observationRequest?.abort(); stream?.close(); clearInterval(clock); clearInterval(observationsCheck); document.removeEventListener('visibilitychange', visibility); document.removeEventListener('visibilitychange', resumeObservations); };
   });
 </script>
 
@@ -241,20 +246,46 @@
     <div class="header-status"><span class:connected={currentFeed} class="status-dot"></span><span>{currentFeed ? 'HSL connected' : traffic.status.state === 'idle' ? 'Waiting for HSL' : 'HSL reconnecting'}</span><span class="header-location">60.1695° N · 24.9520° E</span></div>
     <button class="source-button" onclick={() => sourceOpen = !sourceOpen} aria-expanded={sourceOpen} aria-controls="sources">Sources & status ↗</button>
   </header>
-  <main class="city-workspace" data-scene-ready={ready}>
+  <main class="city-workspace" data-scene-ready={!mapCovered} aria-busy={mapCovered}>
     {#if city}
-      <CityScene manifest={city.manifest} base={city.base} {traffic} {layers} {stations} {route} routeFilter={routeFilter || null} buildingColours={theme.colours} onselection={setSelection}
+      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} {stations} {route} routeFilter={routeFilter || null} buildingColours={theme.colours} buildingTheme={!!activeTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
         onbuildings={(value) => buildings = value} onstats={(value) => stats = value} onhover={(value) => hovered = value}
         onerror={(value) => sceneError = value} oninteraction={() => following = false} onready={() => ready = true}
         oncontroller={(value) => scene = value} />
     {/if}
-    {#if loading || !ready}<div class="scene-status" role="status"><span class="eyebrow">Helsinki geographic model</span><strong>{sceneError ? 'City scene unavailable' : 'Preparing the city'}</strong><p>{sceneError || (loading ? 'Loading terrain and the first district.' : 'Loading semantic building geometry.')}</p>{#if sceneError}<p>Use Inspect &amp; search for available data and source records.</p>{/if}</div>{/if}
+    {#if mapCovered}
+      <div class="map-loading-cover">
+        <div class="scene-status" role="status" aria-live="polite">
+          <span class="eyebrow">Helsinki geographic model</span>
+          <strong>{sceneError && !scene ? 'City scene unavailable' : 'Loading the complete view'}</strong>
+          <p>{sceneError && !scene ? sceneError : loading ? 'Loading terrain…' : mapLoad.phase === 'discovering' ? 'Finding buildings and imagery…' : mapLoad.phase === 'rendering' ? 'Preparing the map…' : `${mapLoad.completed.toLocaleString()} of ${mapLoad.total.toLocaleString()} map parts loaded.`}</p>
+          {#if !sceneError || scene}
+            {#if loading || mapLoad.phase === 'discovering'}
+              <progress aria-label="Loading current map view"></progress>
+            {:else}
+              <progress aria-label="Loading current map view" value={mapLoad.completed} max={Math.max(1, mapLoad.total)}></progress>
+            {/if}
+          {/if}
+          {#if sceneError && !scene}<p>Use Inspect &amp; search for available data and source records.</p>{/if}
+        </div>
+      </div>
+    {/if}
+    {#if mapLoad.cacheIssue}<div class="map-cache-status" role="status">{mapLoad.cacheIssue}</div>
+    {:else if ready && ['discovering', 'loading', 'complete'].includes(mapLoad.background.phase)}
+      <div class="map-cache-status" role="status" aria-live="polite">
+        {mapLoad.background.phase === 'discovering' ? 'Preparing the shared map cache…'
+          : mapLoad.background.phase === 'complete' ? 'Prepared area cached on the server.'
+          : `Caching area on the server: ${mapLoad.background.completed.toLocaleString()} / ${mapLoad.background.total.toLocaleString()}`}
+      </div>
+    {/if}
     <div class="scene-title"><span class="eyebrow">FINLAND / LIVE GEOGRAPHIC VIEW</span><h1>{preset === 'city' ? 'City Centre' : preset === 'harbour' ? 'South Harbour' : preset === 'energy' ? 'Energy · Senate district' : 'Suomenlinna'}</h1><p>Buildings in metres. Movement from received HSL reports.</p></div>
     {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={openSources}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
     <aside class="left-stack" class:mobile-active={mobilePanel === 'controls'} id="scene-controls" aria-label="Scene controls and conditions">
       <div class="mobile-sheet-heading"><strong>Layers & conditions</strong><button class="icon-button" aria-label="Close controls sheet" onclick={() => setMobilePanel(null)}>×</button></div>
       <section class="panel layers-panel"><div class="panel-heading"><h2>Layers</h2><span>GEOGRAPHIC CONTEXT</span></div>
         <div class="layer-list">
+          <label class="layer-control"><input type="checkbox" bind:checked={layers.imagery} /><span class="layer-symbol" aria-hidden="true">▧</span><span>Aerial imagery & textures</span></label>
+          {#if layers.imagery}<p class="panel-note">Helsinki orthophoto 2025 · textured LoD2 buildings.<br /><a href="https://kartta.hel.fi/3d/" target="_blank" rel="noreferrer">© City of Helsinki · CC BY 4.0 ↗</a></p>{#if appearanceStatus}<p class="panel-note" role="status">{appearanceStatus}</p>{/if}{/if}
           {#each [['buildings', 'Semantic buildings'], ['terrain', 'Terrain & islands'], ['roads', 'Roads & rail']] as [key, name] (key)}
             <label class="layer-control"><input type="checkbox" bind:checked={layers[key as keyof Layers]} /><span class="layer-symbol" aria-hidden="true">{key === 'buildings' ? '▥' : key === 'terrain' ? '△' : '≋'}</span><span>{name}</span></label>
           {/each}
@@ -267,13 +298,13 @@
           <label class="layer-control"><input type="checkbox" bind:checked={layers.airQuality} /><span class="station-swatch air-quality" aria-hidden="true">◇</span><span>Air-quality stations</span></label>
           <div class="layer-divider"></div>
           <div class="building-theme" data-building-theme={activeTheme?.kind ?? 'neutral'}>
-            <label class="filter-label">Building colors<select value={activeTheme?.key ?? ''} onchange={event => themeKey = event.currentTarget.value}><option value="">Neutral buildings</option>{#each ['modeled-demand', 'solar'] as kind (kind)}<optgroup label={kind === 'modeled-demand' ? 'Modeled demand' : 'Modeled solar potential'}>{#each themeOptions.filter(option => option.kind === kind) as option (option.key)}<option value={option.key}>{label(option.metric)} · {option.unit} · {option.period}{option.scenario ? ` · ${option.scenario}` : ''}</option>{/each}</optgroup>{/each}</select></label>
+            <label class="filter-label">Building colors<select value={activeTheme?.key ?? ''} onchange={event => themeKey = event.currentTarget.value}><option value="">{layers.imagery ? 'Textured buildings' : 'Neutral buildings'}</option>{#each ['modeled-demand', 'solar'] as kind (kind)}<optgroup label={kind === 'modeled-demand' ? 'Modeled demand' : 'Modeled solar potential'}>{#each themeOptions.filter(option => option.kind === kind) as option (option.key)}<option value={option.key}>{label(option.metric)} · {option.unit} · {option.period}{option.scenario ? ` · ${option.scenario}` : ''}</option>{/each}</optgroup>{/each}</select></label>
             {#if activeTheme}
               <p class="panel-note">{label(activeTheme.metric)} · {activeTheme.unit}<br />{activeTheme.kind === 'solar' ? 'Modeled solar potential' : 'Modeled building demand'} · {activeTheme.period}{activeTheme.scenario ? ` · ${activeTheme.scenario}` : ''}<br />Source: {activeTheme.sourceId}</p>
               {#if theme.minimum !== null && theme.maximum !== null}<div class="theme-gradient" style:background={`linear-gradient(to right, ${ENERGY_COLOURS[0]} 0% 33.333%, ${ENERGY_COLOURS[1]} 33.333% 66.666%, ${ENERGY_COLOURS[2]} 66.666% 100%)`} aria-hidden="true"></div><div class="theme-limits"><span>{theme.minimum.toLocaleString('en-GB', { maximumFractionDigits: 2 })}</span><span>{theme.maximum.toLocaleString('en-GB', { maximumFractionDigits: 2 })} {activeTheme.unit}</span></div><p class="panel-note">{theme.minimum === theme.maximum ? 'One value; middle color.' : 'Three equal ranges from the displayed minimum to maximum.'}</p>{/if}
               <p class="panel-note" data-theme-covered={theme.count} data-theme-denominator={releaseBuildingCount ?? ''}>{theme.count.toLocaleString()} colored / {releaseBuildingCount?.toLocaleString() ?? 'unknown'} prepared release buildings. Shared property totals and ambiguous associations excluded.</p>
               <p class="panel-note"><span class="no-data-swatch" style:background={NO_ENERGY_COLOUR}></span> Neutral = no comparable record. {theme.count ? '' : 'No comparable values in this dataset selection.'}</p>
-            {:else}<p class="panel-note">Neutral palette. Select one supported modeled demand or solar metric to see its period, units, limits and coverage.</p>{/if}
+            {:else}<p class="panel-note">{layers.imagery ? 'City building textures. Energy colors replace textures while a metric is selected.' : 'Neutral palette.'} Select one supported modeled demand or solar metric to see its period, units, limits and coverage.</p>{/if}
             {#if energyLoading}<p class="notice" role="status">{ready ? 'Loading prepared energy and solar records…' : 'Energy records load after the scene is ready.'}</p>{:else if energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
           </div>
           <fieldset class="parameter-controls"><legend>Nearby parameters</legend>{#each OBSERVATION_PARAMETERS as parameter (parameter.id)}<label><input type="checkbox" value={parameter.id} bind:group={enabledParameters} />{parameter.label}</label>{/each}</fieldset>

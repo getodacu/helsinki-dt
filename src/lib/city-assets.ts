@@ -1,3 +1,4 @@
+import { CityAssetCache } from './city-cache.ts';
 import { SCENE_ORIGIN } from './area.ts';
 import type { Building, BuildingChunk, DatasetSource } from './types.ts';
 
@@ -22,7 +23,11 @@ const finite = (values: unknown): values is number[] => Array.isArray(values) &&
 const assetPath = (value: unknown): value is string => typeof value === 'string'
   && /^\/data\/city\/generations\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\.json$/.test(value);
 
-async function readAsset<T>(url: string, fetcher: typeof fetch, maxBytes: number, signal?: AbortSignal): Promise<T> {
+async function readAsset<T>(url: string, fetcher: typeof fetch, maxBytes: number, signal?: AbortSignal,
+  cache?: CityAssetCache, background = false, validate?: (value: T) => void): Promise<T> {
+  if (cache) return cache.read(url, maxBytes, bytes => {
+    const value = JSON.parse(new TextDecoder().decode(bytes)) as T; validate?.(value); return value;
+  }, signal, background ? 'background' : 'foreground');
   const boundedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000);
   const response = await fetcher(url, { signal: boundedSignal });
   if (!response.ok || !response.body) throw new Error(`City asset unavailable (${response.status})`);
@@ -43,7 +48,7 @@ async function readAsset<T>(url: string, fetcher: typeof fetch, maxBytes: number
   const contents = new Uint8Array(bytes);
   let offset = 0;
   for (const piece of pieces) { contents.set(piece, offset); offset += piece.byteLength; }
-  return JSON.parse(new TextDecoder().decode(contents)) as T;
+  const value = JSON.parse(new TextDecoder().decode(contents)) as T; validate?.(value); return value;
 }
 
 export async function loadCityManifest(fetcher: typeof fetch = fetch, signal?: AbortSignal): Promise<CityManifest> {
@@ -70,8 +75,11 @@ export async function loadCityManifest(fetcher: typeof fetch = fetch, signal?: A
   return manifest;
 }
 
-export async function loadCityBase(manifest: CityManifest, fetcher: typeof fetch = fetch, signal?: AbortSignal): Promise<CityBase> {
-  const base = await readAsset<CityBase>(manifest.baseUrl, fetcher, 12_000_000, signal);
+export async function loadCityBase(manifest: CityManifest, fetcher: typeof fetch = fetch, signal?: AbortSignal, cache?: CityAssetCache): Promise<CityBase> {
+  return readAsset<CityBase>(manifest.baseUrl, fetcher, 12_000_000, signal, cache, false, validateCityBase);
+}
+
+function validateCityBase(base: CityBase) {
   const grid = base.terrain;
   if (!grid || !Number.isInteger(grid.width) || !Number.isInteger(grid.height) || grid.width < 2 || grid.height < 2
     || grid.width * grid.height > 1_000_000 || !finite(grid.origin) || grid.origin.length !== 2
@@ -86,7 +94,6 @@ export async function loadCityBase(manifest: CityManifest, fetcher: typeof fetch
       throw new Error('Invalid city context lines');
     }
   }
-  return base;
 }
 
 /** Match the renderer diagonal [a,c,b] / [b,c,d]; unknown triangle vertices stay absent. */
@@ -114,14 +121,14 @@ function validBuilding(building: Building, chunkId: string, manifest: CityManife
 }
 
 /** Metadata only: searching the prepared area must not load every geometry batch. */
-export async function loadBuildingSearchIndex(manifest: CityManifest, fetcher: typeof fetch = fetch, signal?: AbortSignal) {
+export async function loadBuildingSearchIndex(manifest: CityManifest, fetcher: typeof fetch = fetch, signal?: AbortSignal, cache?: CityAssetCache) {
   if (manifest.chunks.reduce((sum, entry) => sum + entry.buildingCount, 0) > 50_000) throw new Error('Building search index exceeds record limit');
   const buildings = new Map<string, Building>(), unavailableChunks: string[] = [];
   let bytes = 0;
   for (let offset = 0; offset < manifest.chunks.length; offset += 4) {
     signal?.throwIfAborted();
     const results = await Promise.allSettled(manifest.chunks.slice(offset, offset + 4).map(async entry => {
-      const rows = await readAsset<Building[]>(entry.buildingsUrl, fetcher, 2_000_000, signal);
+      const rows = await readAsset<Building[]>(entry.buildingsUrl, fetcher, 2_000_000, signal, cache, !cache?.storageIssue);
       if (!Array.isArray(rows) || rows.length !== entry.buildingCount || rows.some(row => !validBuilding(row, entry.id, manifest))
         || new Set(rows.map(row => row.id)).size !== rows.length) throw new Error('Invalid building search identities');
       return rows;
@@ -143,33 +150,43 @@ export class CityChunkLoader {
   private loaded = new Map<string, { chunk: BuildingChunk; buildings: Building[] }>();
   private manifest: CityManifest;
   private fetcher: typeof fetch;
-  constructor(manifest: CityManifest, fetcher: typeof fetch = fetch) { this.manifest = manifest; this.fetcher = fetcher; }
-  async load(id: string, signal?: AbortSignal) {
+  private cache?: CityAssetCache;
+  private background: boolean;
+  constructor(manifest: CityManifest, fetcher: typeof fetch = fetch, cache?: CityAssetCache, background = false) { this.manifest = manifest; this.fetcher = fetcher; this.cache = cache; this.background = background; }
+  async load(id: string, signal?: AbortSignal, retry = true): Promise<{ chunk: BuildingChunk; buildings: Building[] }> {
     if (this.loaded.has(id)) return this.loaded.get(id)!;
     const entry = this.manifest.chunks.find(chunk => chunk.id === id);
     if (!entry) throw new Error('Unknown city chunk');
-    const [chunk, buildings] = await Promise.all([
-      readAsset<BuildingChunk>(entry.url, this.fetcher, 12_000_000, signal),
-      readAsset<Building[]>(entry.buildingsUrl, this.fetcher, 2_000_000, signal)
-    ]);
-    if (chunk.id !== id || !finite(chunk.positions) || chunk.positions.length !== entry.triangleCount * 9
-      || !Array.isArray(chunk.ranges) || !Array.isArray(buildings) || buildings.length !== entry.buildingCount
-      || !chunk.origin || Object.entries(SCENE_ORIGIN).some(([key, value]) => chunk.origin[key as keyof typeof SCENE_ORIGIN] !== value)) {
-      throw new Error('Invalid city building chunk');
+    try {
+      const [chunk, buildings] = await Promise.all([
+        readAsset<BuildingChunk>(entry.url, this.fetcher, 12_000_000, signal, this.cache, this.background),
+        readAsset<Building[]>(entry.buildingsUrl, this.fetcher, 2_000_000, signal, this.cache, this.background)
+      ]);
+      if (chunk.id !== id || !finite(chunk.positions) || chunk.positions.length !== entry.triangleCount * 9
+        || !Array.isArray(chunk.ranges) || !Array.isArray(buildings) || buildings.length !== entry.buildingCount
+        || !chunk.origin || Object.entries(SCENE_ORIGIN).some(([key, value]) => chunk.origin[key as keyof typeof SCENE_ORIGIN] !== value)) {
+        throw new Error('Invalid city building chunk');
+      }
+      const ids = new Set(buildings.map(building => building.id));
+      let nextTriangle = 0;
+      if (ids.size !== buildings.length || buildings.some(building => !validBuilding(building, id, this.manifest))) throw new Error('Invalid city building identities');
+      for (const range of chunk.ranges) {
+        if (!ids.has(range.buildingId) || range.firstTriangle !== nextTriangle || !Number.isInteger(range.triangleCount)
+          || range.triangleCount <= 0) throw new Error('Invalid city triangle lookup');
+        nextTriangle += range.triangleCount;
+      }
+      if (nextTriangle !== entry.triangleCount) throw new Error('Incomplete city triangle lookup');
+      signal?.throwIfAborted();
+      const result = { chunk, buildings };
+      this.loaded.set(id, result);
+      return result;
+    } catch (error) {
+      if (this.cache && !signal?.aborted && retry && !(error instanceof DOMException && error.name === 'AbortError')) {
+        const removed = await Promise.all([this.cache.invalidate(entry.url), this.cache.invalidate(entry.buildingsUrl)]);
+        if (removed.some(Boolean)) return this.load(id, signal, false);
+      }
+      throw error;
     }
-    const ids = new Set(buildings.map(building => building.id));
-    let nextTriangle = 0;
-    if (ids.size !== buildings.length || buildings.some(building => !validBuilding(building, id, this.manifest))) throw new Error('Invalid city building identities');
-    for (const range of chunk.ranges) {
-      if (!ids.has(range.buildingId) || range.firstTriangle !== nextTriangle || !Number.isInteger(range.triangleCount)
-        || range.triangleCount <= 0) throw new Error('Invalid city triangle lookup');
-      nextTriangle += range.triangleCount;
-    }
-    if (nextTriangle !== entry.triangleCount) throw new Error('Incomplete city triangle lookup');
-    signal?.throwIfAborted();
-    const result = { chunk, buildings };
-    this.loaded.set(id, result);
-    return result;
   }
   unload(id: string) { this.loaded.delete(id); }
   dispose() { this.loaded.clear(); }

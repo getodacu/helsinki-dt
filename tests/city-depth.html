@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>City depth regression</title>
+<h1>City surface depth regression</h1>
+<p>Run with the dedicated Vite config at /tests/city-depth.html. No upstream services are used.</p>
+<pre id="result">Running…</pre>
+<script type="module">
+import * as THREE from 'three';
+import { aerialGeometry } from '/src/lib/city-appearance.ts';
+import { createCityRenderer, waterGeometry } from '/src/lib/scene.ts';
+
+try {
+  const base = {
+    terrain: { width: 101, height: 101, origin: [-1000, -1000], step: [20, 20], elevations: Array(10201).fill(null) },
+    landMask: Array(10201).fill(false), waterLevel: 0, bounds: [-1000, -1000, 1000, 1000], roads: [], rails: [], shorelines: []
+  };
+  const renderer = createCityRenderer();
+  renderer.setSize(512, 512);
+  document.body.append(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+  const ground = new THREE.Mesh(waterGeometry(base), new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide }));
+  const overlay = new THREE.Mesh(aerialGeometry(base, base.bounds), new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide }));
+  scene.add(ground, overlay);
+  const camera = new THREE.PerspectiveCamera(42, 1, 1, 24000);
+  const target = new THREE.WebGLRenderTarget(512, 512);
+  const pixels = new Uint8Array(512 * 512 * 4), coverage = new Uint8Array(pixels.length);
+  let failures = 0, samples = 0, frames = 0;
+  const rows = [];
+  for (const height of [0.6, 0.2, 0.08]) for (const distance of [1450, 4000, 10000]) {
+    let maxRed = 0, covered = 0;
+    for (let frame = 0; frame < 16; frame++) {
+      const angle = 0.5 + frame * 0.0005, horizontal = distance * Math.sqrt(1 - height * height);
+      camera.position.set(horizontal * Math.sin(angle), distance * height, horizontal * Math.cos(angle));
+      camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+      renderer.setRenderTarget(target);
+      ground.visible = false;
+      renderer.render(scene, camera); renderer.readRenderTargetPixels(target, 0, 0, 512, 512, coverage);
+      ground.visible = true;
+      renderer.render(scene, camera); renderer.readRenderTargetPixels(target, 0, 0, 512, 512, pixels);
+      let red = 0;
+      for (let y = 1; y < 511; y++) for (let x = 1; x < 511; x++) {
+        const i = (y * 512 + x) * 4;
+        // Exclude silhouette edges, where the real 8 cm height offset exposes the lower surface.
+        if (![-513, -512, -511, -1, 0, 1, 511, 512, 513].every(offset => coverage[i + offset * 4 + 1] > 200)) continue;
+        covered++; samples++;
+        if (pixels[i] > 200 && pixels[i + 1] < 40) red++;
+      }
+      maxRed = Math.max(maxRed, red); frames++;
+      if (red > 0) failures++;
+    }
+    if (covered === 0) throw new Error('No surface pixels measured');
+    rows.push({ height, distance, maxRed });
+  }
+  renderer.setRenderTarget(null); renderer.render(scene, camera); target.dispose();
+  document.querySelector('#result').textContent = JSON.stringify({ verdict: failures ? 'FAIL' : 'PASS', frames, framesWithBaseShowing: failures, samples, rows }, null, 2);
+  if (failures) throw new Error('Base surface leaks through aerial imagery during camera movement');
+} catch (error) {
+  document.querySelector('#result').textContent += '\n' + error;
+  console.error(error);
+}
+</script>
+</html>

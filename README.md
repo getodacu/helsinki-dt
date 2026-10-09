@@ -13,6 +13,12 @@ npm run dev
 
 Open the local address printed by the development server. No upstream credentials are required. Static city geometry is prepared on the server; a shared server MQTT connection supplies live traffic through server-sent events (SSE). Each browser reads prepared `/data/` assets and `/api/traffic` endpoints.
 
+## Map appearance
+
+The default **Aerial imagery & textures** layer uses the same municipal sources as [Helsinki 3D](https://kartta.hel.fi/3d/): the 2025 orthophoto and textured LoD2 buildings. Images follow the prepared terrain and sea datum; building transforms preserve the calibrated local coordinates. Turn this layer off for the plain geographic model. Energy metrics replace facade textures with the existing semantic colors; search, building identities and live traffic continue to use the prepared datasets.
+
+The browser requests these public city services directly, so imagery requires internet access. Missing tiles retain the prepared model and display a warning. Requests have deadlines and byte limits; the view keeps at most 24 aerial tiles and 48 building tiles, with four asset requests plus one hierarchy request in flight. Detail is bounded, and the 20m prepared terrain still limits coastline precision. KTX2 textures use the Basis transcoder bundled with the pinned Three.js version, emitted and served locally by Vite. No credentials or additional dependency are needed.
+
 ## Source preparation
 
 ```sh
@@ -27,6 +33,21 @@ Probing checks live source access independently of preparation. Preparation publ
 
 Downloaded archives and processing intermediates belong in the ignored `.cache/` directory. Fixtures used by ordinary regression tests are tiny, attributable source samples; regression tests do not require third-party services to be online. See [access findings](docs/data-access.md), [contracts](docs/data-contracts.md) and [Task A results](docs/milestone-results/A.md) for source evidence and unresolved gates.
 
+## Shared map cache
+
+Municipal aerial imagery and textured models are served through `/api/city-asset` and saved on the server under `.cache/city-map`. Files survive app restarts and are reused by every visitor. Keep this directory across deployments, or set `CITY_MAP_CACHE_DIR` to a persistent writable directory in `.env`.
+
+```sh
+npm run city:cache
+npm run city:cache -- --refresh
+```
+
+The first command downloads missing assets for the complete prepared area: all aerial cells and textured coverage at overview detail (10 metres geometric error or finer). Prepared geometry and metadata already live on disk and are validated by the command. Repeating it resumes interrupted downloads and reuses saved files. `--refresh` deliberately retrieves the municipal assets again. Source preparation commands require this checkout; copy the cache directory to the deployment or use its runtime area warming.
+
+Saved municipal bytes revalidate after 30 days; older validated files remain usable during upstream outages. The server warms the same area after the first usable map view, without transferring offscreen models to each browser or allocating offscreen GPU objects. Four upstream requests are allowed, at most two for area warming; new foreground requests take priority. Disk failures stop warming and leave foreground loading operational. The CLI exits nonzero if any prepared part is still missing.
+
+The loader waits for discovery, every enabled visible asset, texture decoding and a rendered frame. Missing source parts retry quietly with bounded backoff; settled available data stays usable without repeated error banners. Browser Cache Storage remains a smaller cache of requested assets and is optional; server caching continues if browser storage is unavailable. Energy and live feeds do not enter the map cache.
+
 ## Verify and build
 
 ```sh
@@ -35,6 +56,8 @@ npm test
 npm run build
 npm start
 ```
+
+For the GPU depth regression, run `npx vite --config tests/city-depth.config.ts` and open `http://127.0.0.1:5175/tests/city-depth.html`. It must show `PASS`: 144 camera positions at overview and shallow angles keep aerial imagery above the base surface. It uses the actual city renderer and overlay without upstream data.
 
 Prepare the foundation sample, city assets, matching energy catalog and route index before the production build. Run `energy:prepare` after **every** `city:prepare`. After refreshing prepared assets, rebuild the production server so it includes the current sample; the development server reads updated assets directly.
 

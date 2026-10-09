@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-export interface RequestOptions { maxBytes?: number; timeoutMs?: number }
+export interface RequestOptions { maxBytes?: number; timeoutMs?: number; redirect?: RequestRedirect }
 interface ResponseMetadata {
   status: number; url: string; durationMs: number; retrievedAt: string; headers: Headers;
 }
@@ -14,7 +14,7 @@ async function startRequest(url: string, options: RequestOptions) {
   }
   const started = performance.now();
   const retrievedAt = new Date().toISOString();
-  const response = await fetch(parsed, { signal: AbortSignal.timeout(options.timeoutMs ?? 30_000) });
+  const response = await fetch(parsed, { signal: AbortSignal.timeout(options.timeoutMs ?? 30_000), redirect: options.redirect ?? 'follow' });
   if (!response.ok || !response.body) {
     await response.body?.cancel();
     throw new Error(`Upstream HTTP ${response.status}: ${parsed.origin}${parsed.pathname}`);

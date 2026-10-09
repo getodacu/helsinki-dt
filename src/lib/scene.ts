@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { CityAppearance } from './city-appearance.ts';
+import { CityAssetCache } from './city-cache.ts';
+import { AssetRetries, ViewLoading, type BackgroundProgress, type SceneLoadState } from './city-loading.ts';
+export type { SceneLoadState } from './city-loading.ts';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CityChunkLoader, sampleTerrainHeight, type CityBase, type CityChunkEntry, type CityManifest } from './city-assets.ts';
 import { buildingIdForTriangle } from './data/geometry.ts';
@@ -17,14 +21,14 @@ export interface SceneStation {
 export type Selection = { kind: 'building'; building: Building; unloaded?: boolean }
   | { kind: 'vehicle'; vehicle: Vehicle; removed?: boolean }
   | { kind: 'station'; station: SceneStation };
-export type Layers = Record<TransitMode | 'buildings' | 'roads' | 'terrain' | 'weather' | 'airQuality', boolean>;
-export const INITIAL_LAYERS: Layers = { buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, weather: true, airQuality: true };
+export type Layers = Record<TransitMode | 'buildings' | 'roads' | 'terrain' | 'weather' | 'airQuality' | 'imagery', boolean>;
+export const INITIAL_LAYERS: Layers = { imagery: true, buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, weather: true, airQuality: true };
 export type SceneStats = { fps: number; drawCalls: number; triangles: number; geometries: number;
   loadedChunks: number; vehicles: number; unplacedVehicles: number; lastReceiptLatencyMs: number | null };
 type Callbacks = { onSelection: (selection: Selection | null, message?: string) => void;
   onBuildings: (buildings: Building[]) => void; onStats: (stats: SceneStats) => void;
   onHover: (label: string) => void; onError: (message: string) => void;
-  onCameraInteraction: () => void; onReady: () => void };
+  onCameraInteraction: () => void; onReady: () => void; onAppearanceStatus: (message: string) => void; onLoadState: (state: SceneLoadState) => void };
 export type CitySceneController = ReturnType<typeof createCityScene>;
 
 export function makeChunkGeometry(chunk: BuildingChunk) {
@@ -55,6 +59,17 @@ export function buildingHighlight(chunk: BuildingChunk, id: string) {
   return positions;
 }
 
+/** Hidden texture-covered ranges still participate in semantic raycasts. */
+export function applyTextureCoverage(geometry: THREE.BufferGeometry, chunk: BuildingChunk, ids: ReadonlySet<string>) {
+  geometry.clearGroups();
+  for (const range of chunk.ranges) {
+    const materialIndex = ids.has(range.buildingId) ? 1 : 0, count = range.triangleCount * 3;
+    const previous = geometry.groups.at(-1);
+    if (previous?.materialIndex === materialIndex) previous.count += count;
+    else geometry.addGroup(range.firstTriangle * 3, count, materialIndex);
+  }
+}
+
 export function disposeTree(root: THREE.Object3D) {
   const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
   root.traverse(object => {
@@ -67,14 +82,12 @@ export function disposeTree(root: THREE.Object3D) {
 }
 
 export function visibleChunks(entries: CityChunkEntry[], target: THREE.Vector3, distance: number, frustum: THREE.Frustum) {
-  const radius = Math.min(3_200, Math.max(650, distance * 1.15));
   return entries.map(entry => {
     const [minX, minZ, maxX, maxZ] = entry.bounds;
     const separation = Math.hypot(Math.max(minX - target.x, 0, target.x - maxX), Math.max(minZ - target.z, 0, target.z - maxZ));
-    const box = new THREE.Box3(new THREE.Vector3(minX, -5, minZ), new THREE.Vector3(maxX, 120, maxZ));
-    return { entry, separation, visible: separation < 400 || frustum.intersectsBox(box) };
-  }).filter(item => item.separation < radius && item.visible).sort((a, b) => a.separation - b.separation)
-    .slice(0, 12).map(item => item.entry.id);
+    const box = new THREE.Box3(new THREE.Vector3(minX, -30, minZ), new THREE.Vector3(maxX, 300, maxZ));
+    return { entry, separation, visible: frustum.intersectsBox(box) };
+  }).filter(item => item.visible).sort((a, b) => a.separation - b.separation).map(item => item.entry.id);
 }
 
 function terrainGeometry(terrain: CityBase['terrain']) {
@@ -131,18 +144,23 @@ export function waterGeometry(base: CityBase) {
   geometry.computeVertexNormals(); return geometry;
 }
 
-export function createCityScene(container: HTMLElement, manifest: CityManifest, base: CityBase, callbacks: Callbacks) {
+export function createCityRenderer() {
+  // Preserve centimetre-scale separation between imagery and terrain across the city view.
+  return new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
+}
+
+export function createCityScene(container: HTMLElement, manifest: CityManifest, base: CityBase, callbacks: Callbacks, cache: CityAssetCache = new CityAssetCache()) {
   let disposed = false, frame = 0, layers = { ...INITIAL_LAYERS }, selected: Selection | null = null, hoverId: string | null = null;
   let followId: string | null = null, lastReceiptLatencyMs: number | null = null;
   let routeFilter: string | null = null, route: RouteContext | null = null;
-  let buildingColours: ReadonlyMap<string, string> = new Map();
+  let buildingColours: ReadonlyMap<string, string> = new Map(), buildingThemed = false;
   const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   let reducedMotion = reducedQuery.matches;
   const motionChange = () => { reducedMotion = reducedQuery.matches; controls.enableDamping = !reducedMotion; };
   reducedQuery.addEventListener('change', motionChange);
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#0c202b');
   scene.fog = new THREE.Fog('#0c202b', 7_000, 16_000);
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+  const renderer = createCityRenderer();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75)); renderer.setClearColor('#0c202b');
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
@@ -165,16 +183,33 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     for (const path of paths) for (let i = 0; i + 5 < path.length; i += 3) positions.push(...path.slice(i, i + 6));
     const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity }));
-    lines.position.y = 0.5; context.add(lines);
+    lines.position.y = 0.5; lines.userData.opacity = opacity; context.add(lines);
   }
   const fleet = new LiveFleet((x, z) => sampleTerrainHeight(base.terrain, x, z), base.waterLevel); scene.add(fleet.root);
   const selectedHighlight = new THREE.Group(), hoverHighlight = new THREE.Group(); scene.add(selectedHighlight, hoverHighlight);
   const vehicleRing = new THREE.Mesh(new THREE.RingGeometry(12, 16, 40), new THREE.MeshBasicMaterial({ color: '#d5f6e6', side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.95 }));
   vehicleRing.rotation.x = -Math.PI / 2; vehicleRing.renderOrder = 4; vehicleRing.visible = false; scene.add(vehicleRing);
-  const loader = new CityChunkLoader(manifest), chunks = new Map<string, { chunk: BuildingChunk; mesh: THREE.Mesh; buildings: Building[] }>();
+  const viewLoading = new ViewLoading();
+  let viewKey = '', semanticRevision = 0, initiallyReady = false, loadSignature = '';
+  let loadState: SceneLoadState = { phase: 'discovering', completed: 0, total: 0, failed: 0, cacheIssue: '', background: { phase: 'idle', completed: 0, total: 0, failed: 0 } };
+  let background: BackgroundProgress = loadState.background;
+  let backgroundRunning = false, serverCacheIssue = '';
+  let cachePoll: ReturnType<typeof setTimeout> | undefined;
+  const backgroundAbort = new AbortController();
+  let reportLoad = () => {};
+  const loader = new CityChunkLoader(manifest, fetch, cache), chunks = new Map<string, { chunk: BuildingChunk; mesh: THREE.Mesh; buildings: Building[] }>();
   const identities = new Map<string, Building>();
-  const pending = new Map<string, AbortController>(), failedUntil = new Map<string, number>();
-  let wanted = new Set<string>(), initialLoad = true;
+  const refreshAppearance = () => {
+    const textured = layers.imagery && !buildingThemed;
+    appearance.setVisible(layers.imagery, layers.terrain, layers.buildings && !buildingThemed);
+    for (const { chunk, mesh } of chunks.values()) applyTextureCoverage(mesh.geometry, chunk, textured ? appearance.buildingIds : new Set());
+    context.visible = layers.roads;
+    for (const object of context.children) { const lines = object as THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>; lines.material.opacity = lines.userData.opacity * (layers.imagery ? 0.25 : 1); }
+  };
+  const appearance = new CityAppearance(renderer, base, () => { refreshAppearance(); reportLoad(); }, callbacks.onAppearanceStatus, cache);
+  scene.add(appearance.aerial, appearance.buildings);
+  const pending = new Map<string, AbortController>(), failedUntil = new AssetRetries();
+  let wanted = new Set<string>();
   const refreshContext = () => {
     for (const marker of stations.children) {
       const station = marker.userData.station as SceneStation;
@@ -210,30 +245,74 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     refreshHighlights();
   };
   const frustum = new THREE.Frustum(), projection = new THREE.Matrix4();
+  const trimChunks = () => {
+    let changed = false;
+    for (const [id, item] of chunks) if (!wanted.has(id)) {
+      item.mesh.removeFromParent(); item.mesh.geometry.dispose();
+      (item.mesh.material as THREE.Material[]).forEach(material => material.dispose());
+      chunks.delete(id); loader.unload(id); changed = true; semanticRevision++;
+    }
+    if (changed) reportBuildings();
+  };
+  const prefetch = async (start = false) => {
+    if (disposed || document.hidden || backgroundAbort.signal.aborted) return;
+    backgroundRunning = true;
+    try {
+      const response = await fetch('/api/city-cache', { method: start ? 'POST' : 'GET', signal: AbortSignal.any([backgroundAbort.signal, AbortSignal.timeout(30_000)]) });
+      if (!response.ok) throw new Error('Map cache status unavailable');
+      const status = await response.json();
+      if (!['idle', 'discovering', 'loading', 'complete', 'partial', 'stopped'].includes(status.phase)
+        || ![status.completed, status.total, status.failed].every(value => Number.isSafeInteger(value) && value >= 0)) throw new Error('Invalid map cache status');
+      background = { phase: status.phase, completed: status.completed, total: status.total, failed: status.failed };
+      serverCacheIssue = typeof status.cacheIssue === 'string' ? status.cacheIssue : '';
+    } catch { if (!disposed) background = { ...background, phase: 'partial' }; }
+    finally {
+      backgroundRunning = false;
+      if (!disposed) {
+        reportLoad();
+        if (!['complete', 'stopped'].includes(background.phase)) cachePoll = setTimeout(() => { void prefetch(background.phase === 'idle'); }, 10_000);
+      }
+    }
+  };
+  reportLoad = () => {
+    if (disposed) return;
+    const imagery = appearance.progress();
+    const progress = { discovering: imagery.discovering, completed: [...wanted].filter(id => chunks.has(id)).length + imagery.completed,
+      total: wanted.size + imagery.total, failed: [...wanted].filter(id => failedUntil.has(id)).length + imagery.failed };
+    loadState = viewLoading.update(viewKey, semanticRevision + appearance.revision, progress, background, serverCacheIssue || cache.storageIssue);
+    const usable = loadState.phase === 'ready' || loadState.phase === 'available';
+    cache.setBackgroundAllowed(usable && !document.hidden);
+    const signature = JSON.stringify(loadState);
+    if (signature !== loadSignature) { loadSignature = signature; callbacks.onLoadState(loadState); }
+    if (usable && !initiallyReady) { initiallyReady = true; callbacks.onReady(); }
+    if (usable && !backgroundRunning && background.phase === 'idle') void prefetch(true);
+  };
   const updateChunks = () => {
     if (disposed || document.hidden) return;
     camera.updateMatrixWorld(); projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(projection);
-    wanted = new Set(initialLoad ? manifest.initialChunkIds : visibleChunks(manifest.chunks, controls.target, camera.position.distanceTo(controls.target), frustum));
-    initialLoad = false;
-    callbacks.onError([...wanted].some(id => failedUntil.has(id)) ? 'Some city geometry could not load. Retrying.' : '');
+    viewKey = [layers.buildings, layers.terrain, layers.imagery, buildingThemed,
+      ...projection.elements.map(value => value.toFixed(4))].join('/');
+    wanted = new Set(layers.buildings ? visibleChunks(manifest.chunks, controls.target, camera.position.distanceTo(controls.target), frustum) : []);
+    appearance.update(controls.target, camera.position.distanceTo(controls.target), frustum);
     for (const [id, controller] of pending) if (!wanted.has(id)) { controller.abort(); pending.delete(id); }
-    let changed = false;
-    for (const [id, item] of chunks) if (!wanted.has(id)) { item.mesh.removeFromParent(); item.mesh.geometry.dispose(); (item.mesh.material as THREE.Material).dispose(); chunks.delete(id); loader.unload(id); changed = true; }
-    if (changed) reportBuildings();
-    for (const id of wanted) if (!chunks.has(id) && !pending.has(id) && (failedUntil.get(id) ?? 0) < Date.now()) {
+    trimChunks();
+    for (const id of wanted) if (!chunks.has(id) && !pending.has(id) && failedUntil.ready(id)) {
       const abort = new AbortController(); pending.set(id, abort);
       void loader.load(id, abort.signal).then(result => {
         if (disposed || abort.signal.aborted || !wanted.has(id)) { loader.unload(id); return; }
         const geometry = makeChunkGeometry(result.chunk); applyBuildingColours(geometry, result.chunk, buildingColours);
-        const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.92, side: THREE.DoubleSide }));
+        const material = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.92, side: THREE.DoubleSide });
+        const hidden = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+        applyTextureCoverage(geometry, result.chunk, layers.imagery && !buildingThemed ? appearance.buildingIds : new Set());
+        const mesh = new THREE.Mesh(geometry, [material, hidden]);
         mesh.userData.chunkId = id; buildings.add(mesh);
-        chunks.set(id, { ...result, mesh }); result.buildings.forEach(building => identities.set(building.id, building)); reportBuildings();
-        failedUntil.delete(id);
-        if (![...wanted].some(id => failedUntil.has(id))) callbacks.onError('');
-        callbacks.onReady();
-      }).catch(error => { if (!abort.signal.aborted && !disposed) { failedUntil.set(id, Date.now() + 30_000); callbacks.onError(error instanceof Error ? error.message : 'City chunk could not be loaded'); } })
-        .finally(() => { if (pending.get(id) === abort) pending.delete(id); });
+        chunks.set(id, { ...result, mesh }); semanticRevision++;
+        result.buildings.forEach(building => identities.set(building.id, building)); reportBuildings();
+        failedUntil.delete(id); trimChunks();
+      }).catch(() => { if (!abort.signal.aborted && !disposed) failedUntil.fail(id); })
+        .finally(() => { if (pending.get(id) === abort) pending.delete(id); reportLoad(); });
     }
+    reportLoad();
   };
   const preset = (id: CameraPreset) => {
     followId = null;
@@ -244,12 +323,15 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     controls.update(); controls.enableDamping = !reducedMotion; updateChunks();
   };
   const interaction = () => { followId = null; callbacks.onCameraInteraction(); };
+  const cameraChanged = () => updateChunks();
+  controls.addEventListener('change', cameraChanged);
   controls.addEventListener('start', interaction);
   const resize = () => { if (disposed) return; const width = Math.max(1, container.clientWidth), height = Math.max(1, container.clientHeight);
     camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height); };
   const observer = new ResizeObserver(resize); observer.observe(container); resize(); preset('city');
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
   function pick(event: PointerEvent): Selection | null {
+    if (loadState.phase !== 'ready' && loadState.phase !== 'available') return null;
     const rect = renderer.domElement.getBoundingClientRect(); pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const objects: THREE.Object3D[] = [...(layers.buildings ? buildings.children : []), ...[...fleet.meshes.values()].filter(mesh => mesh.visible), ...stations.children.filter(marker => marker.visible)];
@@ -266,7 +348,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const select = (selection: Selection | null, message?: string) => { selected = selection; followId = null; refreshHighlights(); callbacks.onSelection(selection, message); };
   let down: { x: number; y: number } | null = null, hoverAt = 0;
   const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; };
-  const pointerUp = (event: PointerEvent) => { if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) select(pick(event)); down = null; };
+  const pointerUp = (event: PointerEvent) => { if (down && (loadState.phase === 'ready' || loadState.phase === 'available') && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) select(pick(event)); down = null; };
   const pointerMove = (event: PointerEvent) => { if (event.buttons || performance.now() - hoverAt < 100) return; hoverAt = performance.now();
     const feature = pick(event), id = feature?.kind === 'building' ? feature.building.id : null;
     renderer.domElement.style.cursor = feature ? 'pointer' : 'grab';
@@ -292,7 +374,9 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
         if (followId) { const shift = new THREE.Vector3(position.x, controls.target.y, position.z).sub(controls.target); camera.position.add(shift); controls.target.add(shift); }
       }
     } else vehicleRing.visible = false;
-    refreshContext(); controls.update(); renderer.render(scene, camera); frames++;
+    refreshContext(); controls.update();
+    const renderedRevision = semanticRevision + appearance.revision; renderer.render(scene, camera); frames++;
+    viewLoading.rendered(renderedRevision); reportLoad();
     if (now - chunksAt > 700) { updateChunks(); chunksAt = now; }
     if (now - statsAt >= 1500) { callbacks.onStats({ fps: Math.round(frames * 1000 / (now - statsAt)), drawCalls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, loadedChunks: chunks.size, vehicles: fleet.visibleCount,
@@ -300,13 +384,20 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   };
   const visibility = () => {
     cancelAnimationFrame(frame);
-    if (document.hidden) { for (const controller of pending.values()) controller.abort(); pending.clear(); }
-    else { statsAt = performance.now(); frames = 0; updateChunks(); frame = requestAnimationFrame(animate); }
+    cache.setPaused(document.hidden);
+    clearTimeout(cachePoll);
+    if (document.hidden) { appearance.pause(); for (const controller of pending.values()) controller.abort(); pending.clear(); }
+    else { statsAt = performance.now(); frames = 0; updateChunks(); frame = requestAnimationFrame(animate);
+      if (initiallyReady && !backgroundRunning && !['complete', 'stopped'].includes(background.phase)) void prefetch(background.phase === 'idle'); }
   };
   document.addEventListener('visibilitychange', visibility); frame = requestAnimationFrame(animate);
   return {
     preset,
-    setLayers(next: Layers) { layers = { ...next }; if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; refreshHighlights(); },
+    retryLoad() { failedUntil.clear(); appearance.retry(); viewLoading.retry();
+      if (!backgroundRunning && background.phase === 'partial') background = { ...background, phase: 'idle' };
+      updateChunks(); },
+    openAvailableMap() { appearance.openAvailable(); viewLoading.openAvailable(); reportLoad(); },
+    setLayers(next: Layers) { layers = { ...next }; if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); updateChunks(); },
     setStations(next: SceneStation[]) {
       disposeTree(stations);
       for (const station of next) { const marker = makeStationMarker(station, base); if (marker) stations.add(marker); }
@@ -331,7 +422,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       }
       refreshContext();
     },
-    setBuildingColours(next: ReadonlyMap<string, string>) { buildingColours = next; for (const { chunk, mesh } of chunks.values()) applyBuildingColours(mesh.geometry, chunk, next); },
+    setBuildingColours(next: ReadonlyMap<string, string>, themed = false) { buildingColours = next; buildingThemed = themed; for (const { chunk, mesh } of chunks.values()) applyBuildingColours(mesh.geometry, chunk, next); semanticRevision++; refreshAppearance(); updateChunks(); },
     setRouteFilter(next: string | null) { routeFilter = next; refreshContext(); },
     setTraffic(snapshot: TrafficSnapshot) {
       const now = Date.now(); fleet.setVehicles(snapshot.vehicles);
@@ -342,6 +433,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
         if (selected.removed) followId = null; callbacks.onSelection(selected); }
     },
     select(selection: Selection | null) {
+      if (selection && loadState.phase !== 'ready' && loadState.phase !== 'available') return;
       if (selection?.kind === 'building') {
         const building = selection.building;
         if (!manifest.chunks.some(chunk => chunk.id === building.chunkRef)) { select(null, 'This building is outside the available city coverage.'); return; }
@@ -355,10 +447,12 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       } else select(selection);
     },
     selectStation(id: string) {
+      if (loadState.phase !== 'ready' && loadState.phase !== 'available') return;
       const station = stations.children.map(marker => marker.userData.station as SceneStation).find(station => station.id === id);
       if (station) select({ kind: 'station', station });
     },
     selectBuilding(id: string) {
+      if (loadState.phase !== 'ready' && loadState.phase !== 'available') return;
       const building = identities.get(id);
       if (!building || !manifest.chunks.some(chunk => chunk.id === building.chunkRef)) { select(null, 'This building is outside the available city coverage.'); return; }
       select({ kind: 'building', building });
@@ -366,7 +460,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       const offset = camera.position.clone().sub(controls.target); controls.target.set(x, sampleTerrainHeight(base.terrain, x, z) ?? 0, z);
       camera.position.copy(controls.target).add(offset); controls.update(); updateChunks();
     },
-    selectVehicle(id: string) { const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) select({ kind: 'vehicle', vehicle }); },
+    selectVehicle(id: string) { if (loadState.phase !== 'ready' && loadState.phase !== 'available') return; const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) select({ kind: 'vehicle', vehicle }); },
     followVehicle(id: string | null) { followId = id; },
     clearSelection() { select(null); },
     dispose() {
@@ -374,8 +468,10 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       document.removeEventListener('visibilitychange', visibility); reducedQuery.removeEventListener('change', motionChange);
       renderer.domElement.removeEventListener('pointerdown', pointerDown); renderer.domElement.removeEventListener('pointerup', pointerUp);
       renderer.domElement.removeEventListener('pointermove', pointerMove); renderer.domElement.removeEventListener('pointerleave', pointerLeave);
-      controls.removeEventListener('start', interaction); controls.dispose();
+      controls.removeEventListener('start', interaction); controls.removeEventListener('change', cameraChanged); controls.dispose();
+      clearTimeout(cachePoll); backgroundAbort.abort(); cache.dispose();
       for (const controller of pending.values()) controller.abort(); pending.clear(); loader.dispose();
+      appearance.aerial.removeFromParent(); appearance.buildings.removeFromParent(); appearance.dispose();
       fleet.root.removeFromParent(); fleet.dispose(); disposeTree(scene); chunks.clear(); identities.clear(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
     }
   };
