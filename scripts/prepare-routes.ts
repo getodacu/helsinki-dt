@@ -28,7 +28,8 @@ export async function prepareRouteIndex(archive: string): Promise<RouteIndex> {
     routes: {}, calendar: [], calendarDates: [], feedInfo: [], trips: [], shapes: {}, stops: {}, patterns: {} };
   await withGtfsRows(archive, async readRows => {
     await readRows('routes.txt', row => {
-      const mode = row.route_type === '0' ? 'tram' : row.route_type === '3' ? 'bus' : row.route_type === '4' ? 'ferry' : null;
+      // HSL buses use extended GTFS types 701/702/704; 900 also identifies tram service.
+      const mode = ['0', '900'].includes(row.route_type) ? 'tram' : /^(3|70\d|71[0-6])$/.test(row.route_type) ? 'bus' : row.route_type === '4' ? 'ferry' : null;
       if (!mode) return;
       if (index.routes[row.route_id]) throw new Error('Duplicate GTFS route');
       index.routes[row.route_id] = { label: row.route_short_name || row.route_id, name: row.route_long_name || '', mode };

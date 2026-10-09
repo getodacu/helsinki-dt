@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Blender transit models · Helsinki Lens</title>
+<link rel="stylesheet" href="/src/app.css">
+<style>
+body { font-family: system-ui; background: #10222d; color: #fff; }
+header { position: absolute; z-index: 2; top: 24px; left: 24px; padding: 18px; background: #10222de8; border: 1px solid #536a75; border-radius: 8px; }
+h1 { font-size: 20px; margin-bottom: 8px; } p { font-size: 12px; color: #c8d7dd; max-width: 480px; margin-bottom: 8px; }
+nav button { padding: 8px 14px; background: #244657; margin: 4px; }
+#stage { position: absolute; inset: 0; } #result { font-size: 11px; margin-top: 10px; }
+</style>
+<div id="stage"></div>
+<header><h1>Helsinki transit · Blender → Three.js</h1>
+<p>Representative exteriors in metres. The adjacent building is 20 m tall. Drag to orbit; scroll to zoom.</p>
+<nav><button data-mode="bus">Bus</button><button data-mode="tram">Tram</button><button data-mode="ferry">Ferry</button><button data-mode="all">All three</button><button id="dense">450 vehicles</button><button id="stale">Stale / current</button></nav>
+<p id="selected">Click a route banner or vehicle to select it.</p><pre id="result">Loading GLBs…</pre></header>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { LiveFleet } from '/src/lib/live-fleet.ts';
+import { VehicleFlags } from '/src/lib/vehicle-flags.ts';
+import { wgs84ToScene } from '/src/lib/geo.ts';
+import { createCityRenderer } from '/src/lib/scene.ts';
+const stage = document.querySelector('#stage'), result = document.querySelector('#result');
+const renderer = createCityRenderer(); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); stage.append(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#bccdd7');
+scene.add(new THREE.HemisphereLight('#ffffff', '#5a6b70', 2.4));
+const sun = new THREE.DirectionalLight('#fff5de', 3); sun.position.set(-70, 130, 90); scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.MeshStandardMaterial({ color: '#819295', roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -.02; scene.add(ground);
+const grid = new THREE.GridHelper(800, 160, '#61787e', '#91a3a8'); scene.add(grid);
+const building = new THREE.Mesh(new THREE.BoxGeometry(12, 20, 20), new THREE.MeshStandardMaterial({ color: '#d3c4af', roughness: .8 }));
+building.position.set(-45, 10, -32); scene.add(building);
+for (let floor = 0; floor < 5; floor++) for (let column = 0; column < 4; column++) {
+  const window = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.8), new THREE.MeshStandardMaterial({ color: '#364e5c', roughness: .2 }));
+  window.position.set(-49.5 + column * 3, 2.5 + floor * 3.5, -21.99); scene.add(window);
+}
+const camera = new THREE.PerspectiveCamera(42, 1, .1, 3000), controls = new OrbitControls(camera, renderer.domElement);
+controls.minDistance = 10; controls.maxDistance = 1400; controls.maxPolarAngle = Math.PI / 2 - .025;
+const fleet = new LiveFleet(() => 0, 0); scene.add(fleet.root);
+const records = ['bus', 'tram', 'ferry'].map((mode, i) => ({ id: `fixture/${mode}`, mode, routeId: ['10024', '1002', '1019'][i],
+  reportedAt: new Date().toISOString(), longitude: 24.952 + (i - 1) * .00055, latitude: 60.1695, headingDegrees: 0 }));
+let selected = null, hovered = null, stale = false, currentMode = 'all', dense = false;
+const flags = new VehicleFlags(stage, vehicle => select(vehicle.id), (id) => hovered = id);
+flags.setRoutes([{ routeId: '10024', label: '24' }, { routeId: '1002', label: '2' }, { routeId: '1019', label: '19' }]);
+function select(id) { selected = id; document.querySelector('#selected').textContent = `Selected ${id}`; }
+function view(mode) {
+  currentMode = mode;
+  const record = records.find(record => record.mode === mode);
+  const [x, , z] = record ? wgs84ToScene(record.longitude, record.latitude) : [0, 0, 0];
+  controls.target.set(x, mode === 'ferry' ? 3 : 1.7, z);
+  const distance = mode === 'bus' ? 25 : mode === 'tram' ? 42 : mode === 'ferry' ? 55 : 125;
+  camera.position.set(x + distance * .95, distance * .58, z - distance * .85); controls.update();
+  ground.material.color.set(mode === 'ferry' ? '#476f84' : '#819295'); building.visible = mode === 'all';
+}
+for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => { dense = false; view(button.dataset.mode); };
+document.querySelector('#stale').onclick = () => stale = !stale;
+document.querySelector('#dense').onclick = () => { dense = true; view('all'); controls.target.set(0, 0, -100); camera.position.set(230, 300, 280); controls.update(); };
+const raycaster = new THREE.Raycaster(); let down = null;
+renderer.domElement.onpointerdown = event => down = [event.clientX, event.clientY];
+renderer.domElement.onpointerup = event => {
+  if (!down || Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5) return;
+  raycaster.setFromCamera(new THREE.Vector2(event.clientX / innerWidth * 2 - 1, 1 - event.clientY / innerHeight * 2), camera);
+  const hits = raycaster.intersectObjects([...fleet.meshes.values()]); if (hits.length) select(fleet.idForHit(hits[0]));
+};
+const errors = [];
+await fleet.loadModels({ bus: '/models/bus.glb', tram: '/models/tram.glb', ferry: '/models/ferry.glb' }, error => errors.push(error));
+if (errors.length) throw new Error(errors.join('; '));
+view('all');
+function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+let frames = 0, statsAt = performance.now();
+function render(now) {
+  const vehicles = dense ? Array.from({ length: 450 }, (_, i) => ({ ...records[i % 3], id: `fixture/${i}`, longitude: 24.951 + i % 30 * .00008,
+    latitude: 60.169 + Math.floor(i / 30) * .00018 })) : records;
+  const time = new Date().toISOString();
+  fleet.setVehicles(vehicles.map(vehicle => ({ ...vehicle, reportedAt: time })));
+  fleet.update(Date.now() + (stale ? 31_000 : 0), Object.fromEntries(['bus', 'tram', 'ferry'].map(mode => [mode, dense || currentMode === 'all' || currentMode === mode])), true);
+  controls.update(); camera.updateMatrixWorld();
+  flags.update(fleet.placements, camera, innerWidth, innerHeight, selected, hovered);
+  renderer.render(scene, camera); frames++;
+  if (now - statsAt > 1000) {
+    const fps = Math.round(frames * 1000 / (now - statsAt)); frames = 0; statsAt = now;
+    result.textContent = `PASS · ${fleet.visibleCount} vehicles · ${document.querySelectorAll('.vehicle-flag').length} flags · ${renderer.info.render.calls} draw calls · ${fps} fps`;
+    window.vehicleDiagnostics = { vehicles: fleet.visibleCount, flags: document.querySelectorAll('.vehicle-flag').length, drawCalls: renderer.info.render.calls, fps };
+  }
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+window.vehicleFixture = { fleet, flags, scene, camera };
+</script>
+</html>

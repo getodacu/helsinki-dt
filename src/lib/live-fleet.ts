@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { wgs84ToScene } from './geo.ts';
 import type { TransitMode, Vehicle } from './types.ts';
 import { TRAFFIC_STALE_MS, TRAFFIC_REMOVE_MS } from './traffic.ts';
+import { parseVehicleModel, disposeVehicleModel, type VehicleModel } from './vehicle-models.ts';
 
 export const MODE_COLOURS = { tram: '#49b69d', bus: '#dfa96b', ferry: '#66a9d0' };
-export const VEHICLE_DISPLAY_SCALE = 2;
+export const VEHICLE_DISPLAY_SCALE = 1;
 export function vehicleVisible(vehicle: Pick<Vehicle, 'mode' | 'routeId'>, modes: Record<TransitMode, boolean>, routeId: string | null = null): boolean {
   return modes[vehicle.mode] && (routeId === null || vehicle.routeId === routeId);
 }
@@ -54,11 +55,17 @@ export class ReceivedPositions {
   }
 }
 
+export type VehiclePlacement = { vehicle: Vehicle; x: number; y: number; z: number; roofHeight: number; stale: boolean };
+
 export class LiveFleet {
   root = new THREE.Group();
   motion = new ReceivedPositions();
   meshes = new Map<TransitMode, THREE.InstancedMesh>();
   instanceIds = new Map<TransitMode, string[]>();
+  placements = new Map<string, VehiclePlacement>();
+  private models = new Map<TransitMode, VehicleModel>();
+  private loadAbort = new AbortController();
+  private disposed = false;
   visibleCount = 0;
   unplacedCount = 0;
   private dummy = new THREE.Object3D();
@@ -66,17 +73,43 @@ export class LiveFleet {
   private waterHeight: number;
   constructor(groundHeight: (x: number, z: number) => number | null, waterHeight = 0) {
     this.groundHeight = groundHeight; this.waterHeight = waterHeight;
+    for (const mode of ['tram', 'bus', 'ferry'] as const) {
+      const [width, height, length] = mode === 'tram' ? [2.4, 3.8, 27.6] : mode === 'bus' ? [2.5, 3.3, 12] : [9, 7.8, 36];
+      const roofHeight = mode === 'ferry' ? height - 1.7 : height;
+      this.models.set(mode, { geometry: new THREE.BoxGeometry(width, height, length).translate(0, roofHeight - height / 2, 0),
+        materials: [new THREE.MeshStandardMaterial({ color: MODE_COLOURS[mode], roughness: .65 })], roofHeight });
+    }
+  }
+  async loadModels(urls: Record<TransitMode, string>, onError: (message: string) => void) {
+    await Promise.all((['tram', 'bus', 'ferry'] as const).map(async mode => {
+      try {
+        const response = await fetch(urls[mode], { signal: AbortSignal.any([this.loadAbort.signal, AbortSignal.timeout(15_000)]) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const bytes = await response.arrayBuffer();
+        if (bytes.byteLength > 2 * 1024 ** 2) throw new Error('Model exceeds byte budget');
+        const model = await parseVehicleModel(bytes);
+        this.setModel(mode, model);
+      } catch (error) {
+        if (!this.disposed) onError(`${mode[0].toUpperCase() + mode.slice(1)} model unavailable; showing a simple marker. ${error instanceof Error ? error.message : ''}`);
+      }
+    }));
+  }
+  setModel(mode: TransitMode, model: VehicleModel) {
+    if (this.disposed) { disposeVehicleModel(model); return; }
+    const mesh = this.meshes.get(mode);
+    if (mesh) { mesh.removeFromParent(); mesh.dispose(); this.meshes.delete(mode); }
+    disposeVehicleModel(this.models.get(mode)!);
+    this.models.set(mode, model);
   }
   setVehicles(vehicles: Vehicle[]) { this.motion.setSnapshot(vehicles); }
   private mesh(mode: TransitMode, size: number) {
     let mesh = this.meshes.get(mode);
     if (!mesh || mesh.instanceMatrix.count < size) {
-      if (mesh) { mesh.removeFromParent(); mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose(); mesh.dispose(); }
-      const dimensions = mode === 'tram' ? [2.5, 3.4, 26] : mode === 'bus' ? [2.5, 3.2, 12] : [8, 5, 30];
-      mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(...dimensions as [number, number, number]),
-        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.65 }), Math.max(8, 2 ** Math.ceil(Math.log2(Math.max(size, 1)))));
+      if (mesh) { mesh.removeFromParent(); mesh.dispose(); }
+      const model = this.models.get(mode)!;
+      mesh = new THREE.InstancedMesh(model.geometry, model.materials.length === 1 ? model.materials[0] : model.materials, Math.max(8, 2 ** Math.ceil(Math.log2(Math.max(size, 1)))));
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      // ponytail: moving instances span the release; add spatial fleet batches if fleet draw becomes a measured bottleneck.
+      // shortcut: moving instances span the release, add spatial batches if fleet drawing becomes a measured bottleneck.
       mesh.frustumCulled = false;
       mesh.userData.mode = mode;
       this.meshes.set(mode, mesh); this.root.add(mesh);
@@ -84,7 +117,8 @@ export class LiveFleet {
     return mesh;
   }
   update(now: number, modes: Record<TransitMode, boolean>, reducedMotion: boolean, routeId: string | null = null) {
-    this.visibleCount = 0; this.unplacedCount = 0;
+    if (this.disposed) return;
+    this.visibleCount = 0; this.unplacedCount = 0; this.placements.clear();
     for (const mode of ['tram', 'bus', 'ferry'] as const) {
       const entries: { id: string; position: Position; height: number; stale: boolean }[] = [];
       for (const [id, track] of this.motion.tracks) {
@@ -99,12 +133,14 @@ export class LiveFleet {
       mesh.count = entries.length; mesh.visible = modes[mode];
       this.instanceIds.set(mode, entries.map(entry => entry.id));
       entries.forEach((entry, index) => {
-        const height = mode === 'ferry' ? 5 : mode === 'tram' ? 3.4 : 3.2;
-        this.dummy.position.set(entry.position.x, entry.height + height * VEHICLE_DISPLAY_SCALE / 2 + 0.3, entry.position.z);
+        const y = entry.height + (mode === 'ferry' ? 0 : .08);
+        this.dummy.position.set(entry.position.x, y, entry.position.z);
         this.dummy.rotation.set(0, -entry.position.heading * Math.PI / 180, 0);
         this.dummy.scale.setScalar(VEHICLE_DISPLAY_SCALE); this.dummy.updateMatrix();
         mesh.setMatrixAt(index, this.dummy.matrix);
-        mesh.setColorAt(index, new THREE.Color(MODE_COLOURS[mode]).multiplyScalar(entry.stale ? 0.4 : 1));
+        mesh.setColorAt(index, new THREE.Color().setScalar(entry.stale ? .4 : 1));
+        this.placements.set(entry.id, { vehicle: this.motion.tracks.get(entry.id)!.vehicle, x: entry.position.x, y,
+          z: entry.position.z, roofHeight: this.models.get(mode)!.roofHeight, stale: entry.stale });
       });
       mesh.instanceMatrix.needsUpdate = true;
       mesh.computeBoundingSphere();
@@ -116,7 +152,11 @@ export class LiveFleet {
     return hit.instanceId == null ? null : this.instanceIds.get(hit.object.userData.mode)?.[hit.instanceId] ?? null;
   }
   dispose() {
-    for (const mesh of this.meshes.values()) { mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose(); mesh.dispose(); }
+    if (this.disposed) return;
+    this.disposed = true; this.loadAbort.abort();
+    for (const mesh of this.meshes.values()) mesh.dispose();
+    for (const model of this.models.values()) disposeVehicleModel(model);
+    this.models.clear(); this.placements.clear();
     this.meshes.clear(); this.instanceIds.clear(); this.motion.tracks.clear(); this.root.clear();
   }
 }

@@ -114,6 +114,13 @@ test('route preparation streams a tiny shuffled fixture into sorted real stop se
     const ambiguous=routeForJourney(vehicle,competing); assert.equal(ambiguous.status,'ambiguous'); assert.deepEqual(ambiguous.shape,[]);
     assert.ok(ambiguous.candidates.includes('outside-trip'));
     await publishRouteIndex(competing,output); assert.equal((await new RouteContextStore(output).journey(vehicle)).status,'ambiguous');
+    for (const [type, mode] of [['701', 'bus'], ['702', 'bus'], ['704', 'bus'], ['3', 'bus'], ['900', 'tram'], ['4', 'ferry']]) {
+      source['routes.txt'] = `route_id,route_type,route_short_name,route_long_name\n1009,${type},9,Fixture route\n`;
+      execFileSync('python3',['-c','import sys,json,zipfile; z=zipfile.ZipFile(sys.argv[1],"w"); [z.writestr(k,v) for k,v in json.load(sys.stdin).items()]; z.close()',archive],{input:JSON.stringify(source)});
+      const modes = await prepareRouteIndex(archive);
+      assert.equal(modes.routes['1009'].mode, mode); assert.equal(modes.routes['1009'].label, '9');
+      assert.equal(modes.trips.length, 2);
+    }
   } finally {await rm(directory,{recursive:true,force:true});}
 });
 

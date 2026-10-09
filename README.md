@@ -19,6 +19,22 @@ The default **Aerial imagery & textures** layer uses the same municipal sources 
 
 The browser requests these public city services directly, so imagery requires internet access. Missing tiles retain the prepared model and display a warning. Requests have deadlines and byte limits; the view keeps at most 24 aerial tiles and 48 building tiles, with four asset requests plus one hierarchy request in flight. Detail is bounded, and the 20m prepared terrain still limits coastline precision. KTX2 textures use the Basis transcoder bundled with the pinned Three.js version, emitted and served locally by Vite. No credentials or additional dependency are needed.
 
+## Vehicle models
+
+Bus, articulated tram and double-ended ferry exteriors are original Helsinki-inspired Blender models. The editable source is `assets/blender/helsinki-transit.blend`; enable one collection at a time. Self-contained GLB exports in `static/models/` are checked in and ship with the normal SvelteKit build. No external textures, model downloads or new runtime dependencies are needed.
+
+Models use metres, with glTF -Z forward and +Y up. Tyres contact Y=0; the ferry hull extends below its Y=0 waterline. Approximate lengths are 12 m, 27.6 m and 36 m. These are representative exteriors; HSL position reports do not identify the exact physical fleet variant. Opaque tinted windows avoid transparency sorting across instanced vehicles. Each model shares three material batches across the entire fleet. Route banners use prepared GTFS labels, retain route IDs when a label is unavailable, and prioritize selected/hovered vehicles when banners overlap. At most 80 non-overlapping banners are displayed; all vehicles remain available through search.
+
+After updating from an older checkout, run `npm run routes:prepare` to include HSL’s extended bus types in the route labels.
+
+Regenerate both source and exports with Blender 5.2:
+
+```sh
+blender --background --python scripts/build-vehicle-models.py
+```
+
+The generator checks geometry and byte budgets and contact/waterline bounds. To inspect the exported assets without live services, run `npx vite --config tests/vehicles.config.ts` and open `http://127.0.0.1:5176/tests/vehicles.html`. It includes a 20 m reference building, individual model views, clickable route banners, stale indicators and an explicit 450-vehicle fixture workload.
+
 ## Source preparation
 
 ```sh

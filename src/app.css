@@ -29,3 +29,11 @@ select{font:inherit;color:inherit;background:#09202b;border:1px solid var(--bord
 .left-stack,.right-stack,.scene-title,.camera-presets{z-index:3}
 .map-cache-status{position:absolute;bottom:67px;left:50%;transform:translateX(-50%);z-index:3;max-width:calc(100% - 32px);background:#102a35ee;padding:8px 12px;border-radius:5px;font-size:10px;color:#bdcfcf;text-align:center}
 @media(max-width:760px){.map-cache-status{bottom:105px;width:max-content;max-width:calc(100% - 28px)}}
+
+.vehicle-flags { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.vehicle-flag { position: absolute; top: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 58px; height: 72px; margin: 0 0 26px; padding: 6px 4px; border: 1px solid #c7d9df; border-left: 4px solid var(--flag-colour); border-radius: 4px 4px 4px 0; background: #112936f2; color: #fff; box-shadow: 0 2px 9px #0006; cursor: pointer; pointer-events: auto; }
+.vehicle-flag::after { content: ''; position: absolute; top: 100%; left: 50%; height: 26px; border-left: 2px solid #d8e4e9; }
+.vehicle-flag strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 20px; line-height: 1.2; letter-spacing: -.02em; }
+.vehicle-flag small { font-size: 9px; line-height: 1.6; text-transform: uppercase; letter-spacing: .07em; color: #c9dce5; }
+.vehicle-flag.stale { opacity: .55; }
+.vehicle-flag.selected, .vehicle-flag:hover, .vehicle-flag:focus-visible { border-color: #fff; background: #244657; outline: 2px solid var(--flag-colour); outline-offset: 2px; z-index: 1; }

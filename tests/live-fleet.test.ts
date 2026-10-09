@@ -1,4 +1,7 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { parseVehicleModel, disposeVehicleModel } from '../src/lib/vehicle-models.ts';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { LiveFleet, ReceivedPositions, VEHICLE_DISPLAY_SCALE, vehicleVisible } from '../src/lib/live-fleet.ts';
@@ -50,8 +53,10 @@ test('full snapshots remove absent identities and the buffer remains bounded', (
 test('instanced mode filters, source identity, terrain height and explicit display scale survive reallocation', () => {
   const fleet = new LiveFleet(() => 12, 0); fleet.setVehicles([vehicle(), vehicle({ id: 'ferry/1', mode: 'ferry' })]); fleet.update(at, modes, true);
   const tram = fleet.meshes.get('tram')!, ferry = fleet.meshes.get('ferry')!, matrix = new THREE.Matrix4();
-  tram.getMatrixAt(0, matrix); assert.ok(Math.abs(matrix.elements[13] - (12 + 3.4 * VEHICLE_DISPLAY_SCALE / 2 + 0.3)) < 0.001);
-  ferry.getMatrixAt(0, matrix); assert.ok(Math.abs(matrix.elements[13] - (5 * VEHICLE_DISPLAY_SCALE / 2 + 0.3)) < 0.001);
+  tram.getMatrixAt(0, matrix); assert.ok(Math.abs(matrix.elements[13] - (12.08)) < 0.001);
+  ferry.getMatrixAt(0, matrix); assert.ok(Math.abs(matrix.elements[13] - (0)) < 0.001);
+  assert.equal(VEHICLE_DISPLAY_SCALE, 1);
+  assert.equal(matrix.getMaxScaleOnAxis(), 1);
   assert.equal(fleet.idForHit({ object: ferry, instanceId: 0 }), 'ferry/1');
   fleet.update(at, { ...modes, tram: false }, true); assert.equal(tram.count, 0); assert.equal(fleet.visibleCount, 1);
   const many = Array.from({ length: 450 }, (_, index) => vehicle({ id: `test/${index}` })); fleet.setVehicles(many); fleet.update(at, modes, false);
@@ -82,4 +87,69 @@ test('route filtering hides unrelated instances without discarding live tracks a
   assert.equal(fleet.motion.tracks.size,2); assert.equal(vehicleVisible(first,modes,'1009'),false);
   assert.equal(vehicleVisible(other,{...modes,tram:false},'1009'),false);
   fleet.update(at,modes,true,null); assert.equal(fleet.visibleCount,2); fleet.dispose();
+});
+
+
+for (const [mode, length] of [['bus', 12], ['tram', 27.7], ['ferry', 36]] as const) {
+  test(`${mode} Blender export has real dimensions, coloured detail and correct contact datum`, async () => {
+    const bytes = await readFile(new URL(`../static/models/${mode}.glb`, import.meta.url));
+    const model = await parseVehicleModel(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    const box = model.geometry.boundingBox!, size = box.getSize(new THREE.Vector3());
+    assert.ok(Math.abs(size.z - length) < .15);
+    assert.ok(size.x > 2 && size.x < 10); assert.ok(model.roofHeight > 3);
+    assert.equal(model.materials.length, 3); assert.equal(model.geometry.groups.length, 3);
+    assert.ok(model.geometry.getAttribute('color')); assert.ok(model.geometry.getAttribute('normal'));
+    assert.ok(model.geometry.index!.count / 3 < 18_000);
+    assert.ok(mode === 'ferry' ? box.min.y < -1 : Math.abs(box.min.y) < .001);
+    const fleet = new LiveFleet(() => 12, 2); fleet.setModel(mode, model);
+    fleet.setVehicles([vehicle({ mode, headingDegrees: 90 })]); fleet.update(at, modes, true);
+    const mesh = fleet.meshes.get(mode)!, matrix = new THREE.Matrix4(); mesh.getMatrixAt(0, matrix);
+    const forward = new THREE.Vector3(0, 0, -1).transformDirection(matrix);
+    assert.ok(Math.abs(forward.x - 1) < .001); assert.ok(Math.abs(forward.z) < .001);
+    assert.equal(matrix.getMaxScaleOnAxis(), 1);
+    assert.ok(Math.abs(matrix.elements[13] - (mode === 'ferry' ? 2 : 12.08)) < .001);
+    let disposed = 0; model.geometry.addEventListener('dispose', () => disposed++);
+    fleet.setVehicles(Array.from({ length: 450 }, (_, i) => vehicle({ mode, id: `fixture/${i}` })));
+    fleet.update(at, modes, true);
+    assert.equal(disposed, 0); assert.equal(fleet.meshes.get(mode)!.geometry, model.geometry);
+    fleet.root.updateMatrixWorld(true);
+    const [x, , z] = wgs84ToScene(24.952, 60.1695);
+    const hit = new THREE.Raycaster(new THREE.Vector3(x, 50, z), new THREE.Vector3(0, -1, 0)).intersectObject(fleet.meshes.get(mode)!)[0];
+    assert.ok(hit); assert.equal(fleet.idForHit(hit), 'fixture/0');
+    fleet.update(at + 31_000, modes, true); const colour = new THREE.Color();
+    fleet.meshes.get(mode)!.getColorAt(0, colour); assert.ok(Math.abs(colour.r - .4) < .001);
+    assert.equal(fleet.placements.get('fixture/0')!.stale, true);
+    fleet.update(at + 121_000, modes, true); assert.equal(fleet.placements.size, 0);
+    fleet.dispose(); fleet.dispose(); assert.equal(disposed, 1);
+  });
+}
+
+test('missing model assets preserve selectable fallback markers and report failures', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => new Response('', { status: 404 }));
+  try {
+    const fleet = new LiveFleet(() => 0), errors: string[] = [];
+    await fleet.loadModels({ tram: '/missing', bus: '/missing', ferry: '/missing' }, message => errors.push(message));
+    assert.equal(errors.length, 3);
+    fleet.setVehicles([vehicle()]); fleet.update(at, modes, true);
+    assert.equal(fleet.visibleCount, 1); assert.equal(fleet.placements.size, 1); fleet.dispose();
+  } finally { fetchMock.mock.restore(); }
+});
+
+test('a decode completing after disposal releases its model instead of resurrecting the fleet', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => new Response(new ArrayBuffer(1)));
+  const pending: ((value: GLTF) => void)[] = [];
+  const parseMock = mock.method(GLTFLoader.prototype, 'parseAsync', () => new Promise<GLTF>(resolve => pending.push(resolve)));
+  try {
+    const fleet = new LiveFleet(() => 0), errors: string[] = [];
+    const loading = fleet.loadModels({ bus: '/', tram: '/', ferry: '/' }, error => errors.push(error));
+    while (pending.length < 3) await new Promise(resolve => setImmediate(resolve));
+    fleet.dispose(); let materialsDisposed = 0;
+    for (const resolve of pending) {
+      const scene = new THREE.Group(), geometry = new THREE.BoxGeometry(2.5, 3, 12).translate(0, 1.5, 0);
+      const material = new THREE.MeshStandardMaterial(); material.addEventListener('dispose', () => materialsDisposed++);
+      scene.add(new THREE.Mesh(geometry, material)); resolve({ scene } as unknown as GLTF);
+    }
+    await loading; assert.equal(fleet.root.children.length, 0); assert.equal(fleet.meshes.size, 0);
+    assert.equal(materialsDisposed, 3); assert.deepEqual(errors, []);
+  } finally { fetchMock.mock.restore(); parseMock.mock.restore(); }
 });
