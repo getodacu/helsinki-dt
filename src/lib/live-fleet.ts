@@ -2,17 +2,18 @@ import type { RailCategory } from './rail.ts';
 import * as THREE from 'three';
 import { wgs84ToScene } from './geo.ts';
 import type { TransitMode, Vehicle } from './types.ts';
-import { TRAFFIC_STALE_MS, TRAFFIC_REMOVE_MS } from './traffic.ts';
+import { trafficIsStale, trafficShouldRemove } from './traffic.ts';
+import { marineHeading, MARINE_BUFFER_MS, MARINE_GAP_MS, MARINE_MAX_DISTANCE_METRES, MARINE_MAX_SPEED_METRES_PER_SECOND, MARINE_MAX_POINTS } from './marine.ts';
 import { parseVehicleModel, disposeVehicleModel, type VehicleModel } from './vehicle-models.ts';
 
-export const MODE_COLOURS = { tram: '#49b69d', bus: '#dfa96b', ferry: '#66a9d0', train: '#b29bd8' };
+export const MODE_COLOURS = { tram: '#49b69d', bus: '#dfa96b', ferry: '#66a9d0', train: '#b29bd8', ship: '#79cbd7' };
 export const VEHICLE_DISPLAY_SCALE = 1;
 export function vehicleVisible(vehicle: Pick<Vehicle, 'mode' | 'routeId' | 'rail'>, modes: Record<TransitMode, boolean> & Partial<Record<RailCategory, boolean>>, routeId: string | null = null): boolean {
-  return modes[vehicle.mode] && (vehicle.mode !== 'train' || modes[vehicle.rail?.category ?? 'other'] !== false) && (routeId === null || vehicle.routeId === routeId);
+  return modes[vehicle.mode] && (vehicle.mode !== 'train' || modes[vehicle.rail?.category ?? 'other'] !== false) && (vehicle.mode === 'ship' || routeId === null || vehicle.routeId === routeId);
 }
 const BUFFER_MS = 1_200;
 const GAP_MS = 10_000;
-type Position = { x: number; z: number; heading: number; at: number };
+type Position = { x: number; z: number; heading: number | null; at: number };
 type Track = { vehicle: Vehicle; positions: Position[] };
 
 /** A small report-time buffer; its last position is a hard stop, never a prediction. */
@@ -20,26 +21,43 @@ export class ReceivedPositions {
   tracks = new Map<string, Track>();
   upsert(vehicle: Vehicle) {
     const at = Date.parse(vehicle.reportedAt);
+    const ship = vehicle.mode === 'ship';
+    if (ship && vehicle.marine?.positionSecond === 63) return;
     if (vehicle.longitude === null || vehicle.latitude === null || !Number.isFinite(at)
       || !Number.isFinite(vehicle.longitude) || !Number.isFinite(vehicle.latitude)
       || Math.abs(vehicle.longitude) > 180 || Math.abs(vehicle.latitude) > 90) return;
     const old = this.tracks.get(vehicle.id);
     const last = old?.positions.at(-1);
     if (last && at < last.at) return;
-    if (last && at === last.at) { old!.vehicle = vehicle; return; }
+    if (last && at === last.at) {
+      if (ship) {
+        const [x, , z] = wgs84ToScene(vehicle.longitude, vehicle.latitude), heading = marineHeading(vehicle);
+        const newConflict = vehicle.quality.includes('position-same-second-conflict') && !old!.vehicle.quality.includes('position-same-second-conflict');
+        if (x !== last.x || z !== last.z || heading !== last.heading || newConflict) old!.positions = [{ x, z, heading, at }];
+      }
+      old!.vehicle = vehicle;
+      return;
+    }
     const [x, , z] = wgs84ToScene(vehicle.longitude, vehicle.latitude);
     const movement = last ? Math.hypot(x - last.x, z - last.z) : 0;
     const bearing = vehicle.mode === 'train' && last && movement >= 3 ? (Math.atan2(x - last.x, last.z - z) * 180 / Math.PI + 360) % 360 : null;
-    const next = { x, z, heading: vehicle.headingDegrees ?? bearing ?? last?.heading ?? 0, at };
+    const next = { x, z, heading: ship ? marineHeading(vehicle) : vehicle.headingDegrees ?? bearing ?? last?.heading ?? 0, at };
     const distance = last ? Math.hypot(next.x - last.x, next.z - last.z) : 0;
     const gap = last ? at - last.at : 0;
     const train = vehicle.mode === 'train';
-    const snap = gap > (train ? 25_000 : GAP_MS) || distance > (train ? 1500 : 200) || (gap > 0 && distance / (gap / 1000) > (train ? 100 : 60));
+    const sameSecond = ship && last && old?.vehicle.marine?.positionSource !== vehicle.marine?.positionSource && Math.floor(at / 1000) === Math.floor(last.at / 1000);
+    const snap = gap > (ship ? MARINE_GAP_MS : train ? 25_000 : GAP_MS)
+      || distance > (ship ? MARINE_MAX_DISTANCE_METRES : train ? 1500 : 200)
+      || (gap > 0 && distance / (gap / 1000) > (ship ? MARINE_MAX_SPEED_METRES_PER_SECOND : train ? 100 : 60))
+      || (ship && (sameSecond || vehicle.quality.includes('position-same-second-conflict')));
+    if (ship && gap > 0 && gap <= MARINE_GAP_MS && !sameSecond && distance / (gap / 1000) > MARINE_MAX_SPEED_METRES_PER_SECOND) {
+      vehicle = { ...vehicle, quality: [...new Set([...vehicle.quality, 'position-implausible-motion'])] };
+    }
     if (train && bearing !== null && old?.positions.length === 1 && !snap) old.positions[0].heading = bearing;
     if (train && snap) next.heading = last?.heading ?? 0;
     const history = [...(old?.positions ?? []), next];
-    this.tracks.set(vehicle.id, { vehicle, positions: snap ? [next] : train
-      ? history.filter((point, index) => point.at >= at - 25_000 || (history[index + 1]?.at ?? 0) >= at - 25_000).slice(-64)
+    this.tracks.set(vehicle.id, { vehicle, positions: snap ? [next] : train || ship
+      ? history.filter((point, index) => point.at >= at - (ship ? MARINE_GAP_MS : 25_000) || (history[index + 1]?.at ?? 0) >= at - (ship ? MARINE_GAP_MS : 25_000)).slice(-(ship ? MARINE_MAX_POINTS : 64))
       : history.slice(-5) });
   }
   setSnapshot(vehicles: Vehicle[]) {
@@ -48,19 +66,19 @@ export class ReceivedPositions {
     for (const vehicle of vehicles) this.upsert(vehicle);
   }
   position(id: string, now: number, reducedMotion = false): Position | null {
-    const positions = this.tracks.get(id)?.positions;
+    const track = this.tracks.get(id), positions = track?.positions;
     const last = positions?.at(-1);
-    if (!positions || !last || now - last.at >= TRAFFIC_REMOVE_MS) return null;
-    if (reducedMotion || now - last.at >= TRAFFIC_STALE_MS || positions.length === 1) return last;
-    const time = now - (this.tracks.get(id)?.vehicle.mode === 'train' ? 12_000 : BUFFER_MS);
+    if (!positions || !last || !track || trafficShouldRemove(track.vehicle, now)) return null;
+    if (reducedMotion || trafficIsStale(track.vehicle, now) || positions.length === 1) return last;
+    const time = now - (track.vehicle.mode === 'ship' ? MARINE_BUFFER_MS : track.vehicle.mode === 'train' ? 12_000 : BUFFER_MS);
     if (time >= last.at) return last;
     if (time <= positions[0].at) return positions[0];
     const index = positions.findIndex(position => position.at >= time);
     const a = positions[index - 1], b = positions[index];
     const t = Math.max(0, Math.min(1, (time - a.at) / (b.at - a.at)));
-    const headingDelta = ((b.heading - a.heading + 540) % 360) - 180;
+    const heading = a.heading === null || b.heading === null ? null : a.heading + (((b.heading - a.heading + 540) % 360) - 180) * t;
     return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t,
-      heading: a.heading + headingDelta * t, at: time };
+      heading, at: time };
   }
 }
 
@@ -73,6 +91,9 @@ export class LiveFleet {
   instanceIds = new Map<TransitMode, string[]>();
   placements = new Map<string, VehiclePlacement>();
   private models = new Map<TransitMode, VehicleModel>();
+  private shipDirection: THREE.InstancedMesh | null = null;
+  private shipDirectionGeometry = new THREE.ConeGeometry(2.2, 5, 3).rotateX(-Math.PI / 2).translate(0, 2.5, -2);
+  private shipDirectionMaterial = new THREE.MeshBasicMaterial({ color: '#ecffff' });
   private loadAbort = new AbortController();
   private disposed = false;
   visibleCount = 0;
@@ -88,8 +109,10 @@ export class LiveFleet {
       this.models.set(mode, { geometry: new THREE.BoxGeometry(width, height, length).translate(0, roofHeight - height / 2, 0),
         materials: [new THREE.MeshStandardMaterial({ color: MODE_COLOURS[mode], roughness: .65 })], roofHeight });
     }
+    this.models.set('ship', { geometry: new THREE.CylinderGeometry(7, 7, 2, 16).translate(0, 1, 0),
+      materials: [new THREE.MeshStandardMaterial({ color: MODE_COLOURS.ship, roughness: .65 })], roofHeight: 3 });
   }
-  async loadModels(urls: Record<TransitMode, string>, onError: (message: string) => void) {
+  async loadModels(urls: Record<Exclude<TransitMode, 'ship'>, string>, onError: (message: string) => void) {
     await Promise.all((['tram', 'bus', 'ferry', 'train'] as const).map(async mode => {
       try {
         const response = await fetch(urls[mode], { signal: AbortSignal.any([this.loadAbort.signal, AbortSignal.timeout(15_000)]) });
@@ -125,32 +148,52 @@ export class LiveFleet {
     }
     return mesh;
   }
-  update(now: number, modes: Record<TransitMode, boolean>, reducedMotion: boolean, routeId: string | null = null) {
+  update(now: number, modes: Record<TransitMode, boolean>, reducedMotion: boolean, routeId: string | null = null, marinePaused = false) {
     if (this.disposed) return;
     this.visibleCount = 0; this.unplacedCount = 0; this.placements.clear();
-    for (const mode of ['tram', 'bus', 'ferry', 'train'] as const) {
+    // Showing the latest fix retires earlier points so resuming the display delay cannot rewind it.
+    if (marinePaused || reducedMotion) for (const track of this.motion.tracks.values()) {
+      if (track.vehicle.mode === 'ship' && track.positions.length > 1) track.positions = track.positions.slice(-1);
+    }
+    for (const mode of ['tram', 'bus', 'ferry', 'train', 'ship'] as const) {
       const entries: { id: string; position: Position; height: number; stale: boolean }[] = [];
       for (const [id, track] of this.motion.tracks) {
         if (track.vehicle.mode !== mode || !vehicleVisible(track.vehicle, modes, routeId)) continue;
-        const position = this.motion.position(id, now, reducedMotion);
+        const position = this.motion.position(id, now, reducedMotion || (mode === 'ship' && marinePaused));
         if (!position) continue;
-        const height = mode === 'ferry' ? this.waterHeight : this.groundHeight(position.x, position.z);
+        const height = mode === 'ferry' || mode === 'ship' ? this.waterHeight : this.groundHeight(position.x, position.z);
         if (height === null) { this.unplacedCount++; continue; }
-        entries.push({ id, position, height, stale: now - Date.parse(track.vehicle.reportedAt) >= TRAFFIC_STALE_MS });
+        entries.push({ id, position, height, stale: trafficIsStale(track.vehicle, now) });
       }
       const mesh = this.mesh(mode, entries.length);
+      if (mode === 'ship' && (!this.shipDirection || this.shipDirection.instanceMatrix.count < mesh.instanceMatrix.count)) {
+        this.shipDirection?.removeFromParent(); this.shipDirection?.dispose();
+        this.shipDirection = new THREE.InstancedMesh(this.shipDirectionGeometry, this.shipDirectionMaterial, mesh.instanceMatrix.count);
+        this.shipDirection.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.shipDirection.frustumCulled = false;
+        this.root.add(this.shipDirection);
+      }
+      if (mode === 'ship' && this.shipDirection) { this.shipDirection.count = entries.length; this.shipDirection.visible = modes.ship; }
       mesh.count = entries.length; mesh.visible = modes[mode];
       this.instanceIds.set(mode, entries.map(entry => entry.id));
       entries.forEach((entry, index) => {
-        const y = entry.height + (mode === 'ferry' ? 0 : .08);
+        const y = entry.height + (mode === 'ferry' || mode === 'ship' ? 0 : .08);
         this.dummy.position.set(entry.position.x, y, entry.position.z);
-        this.dummy.rotation.set(0, -entry.position.heading * Math.PI / 180, 0);
+        this.dummy.rotation.set(0, -(entry.position.heading ?? 0) * Math.PI / 180, 0);
         this.dummy.scale.setScalar(VEHICLE_DISPLAY_SCALE); this.dummy.updateMatrix();
         mesh.setMatrixAt(index, this.dummy.matrix);
         mesh.setColorAt(index, new THREE.Color().setScalar(entry.stale ? .4 : 1));
+        if (mode === 'ship' && this.shipDirection) {
+          this.dummy.scale.setScalar(entry.position.heading === null ? 0 : VEHICLE_DISPLAY_SCALE); this.dummy.updateMatrix();
+          this.shipDirection.setMatrixAt(index, this.dummy.matrix);
+          this.shipDirection.setColorAt(index, new THREE.Color().setScalar(entry.stale ? .4 : 1));
+        }
         this.placements.set(entry.id, { vehicle: this.motion.tracks.get(entry.id)!.vehicle, x: entry.position.x, y,
           z: entry.position.z, roofHeight: this.models.get(mode)!.roofHeight, stale: entry.stale });
       });
+      if (mode === 'ship' && this.shipDirection) {
+        this.shipDirection.instanceMatrix.needsUpdate = true;
+        if (this.shipDirection.instanceColor) this.shipDirection.instanceColor.needsUpdate = true;
+      }
       mesh.instanceMatrix.needsUpdate = true;
       mesh.computeBoundingSphere();
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -164,6 +207,7 @@ export class LiveFleet {
     if (this.disposed) return;
     this.disposed = true; this.loadAbort.abort();
     for (const mesh of this.meshes.values()) mesh.dispose();
+    this.shipDirection?.dispose(); this.shipDirectionGeometry.dispose(); this.shipDirectionMaterial.dispose(); this.shipDirection = null;
     for (const model of this.models.values()) disposeVehicleModel(model);
     this.models.clear(); this.placements.clear();
     this.meshes.clear(); this.instanceIds.clear(); this.motion.tracks.clear(); this.root.clear();

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildingAddress, buildingName, buildingAttribute, knownValue, delayLabel, signedSeconds, matchesBuilding, matchesVehicle, formatDate } from '../src/lib/inspection.ts';
+import { buildingAddress, buildingName, buildingAttribute, knownValue, delayLabel, signedSeconds, matchesBuilding, matchesVehicle, formatDate, marineSourceLabel, vehicleSourceLabel } from '../src/lib/inspection.ts';
+import { routeRequestUrl } from '../src/lib/route-context.ts';
+import { vehicleLabel } from '../src/lib/rail.ts';
 import type { Building, Vehicle } from '../src/lib/types.ts';
 
 const building: Building = { id: 'BID_001', gmlId: 'BID_001', vtjPrt: '00123X', ratu: null, uuid: null,
@@ -35,4 +37,25 @@ test('building facts omit missing values and keep a real zero', () => {
   assert.equal(buildingAttribute({ ...building, attributes: { yearOfConstruction: 'Unknown', rakennusvuosi: '1975', storeysAboveGround: '0' } }, ['yearOfConstruction', 'rakennusvuosi']), '1975');
   assert.equal(buildingAttribute({ ...building, attributes: { storeysAboveGround: '0' } }, ['storeysAboveGround']), '0');
   assert.equal(buildingName({ ...building, attributes: { name: 'Unavailable', Address: 'Unknown' } }), 'Building');
+});
+
+test('ships search by name, MMSI and call sign and have no transit journey', () => {
+  const vehicle = { mode: 'ship', routeId: null, id: 'ais:230123456', vehicleId: '230123456', ownerOperatorId: null,
+    marine: { mmsi: '230123456', name: 'Mänty', callSign: 'OJAB' } } as Vehicle;
+  for (const query of ['manty', '230123456', 'ojab']) assert.equal(matchesVehicle(vehicle, query), true);
+  assert.equal(matchesVehicle(vehicle, 'null'), false);
+  assert.equal(vehicleLabel(vehicle, 'Obsolete route'), 'Mänty');
+  assert.equal(vehicleLabel({ ...vehicle, marine: { ...vehicle.marine!, name: null } }), 'MMSI 230123456');
+  assert.equal(vehicleLabel({ ...vehicle, marine: undefined }), '230123456');
+  assert.equal(routeRequestUrl(vehicle), null); assert.equal(vehicleSourceLabel(vehicle), 'Fintraffic AIS');
+});
+
+test('marine source labels keep periodic, stale and degraded states independent from connected transport', () => {
+  const source = { state: 'live' as const, connectedAt: null, lastPositionAt: null, retryAt: null };
+  assert.equal(marineSourceLabel(source), 'Live updates');
+  assert.equal(marineSourceLabel({ ...source, periodic: true }), 'Periodic updates');
+  assert.equal(marineSourceLabel({ ...source, degraded: true }), 'Degraded updates');
+  assert.equal(marineSourceLabel({ ...source, stale: true }), 'Stale source');
+  assert.equal(marineSourceLabel({ ...source, state: 'reconnecting' }), 'Reconnecting');
+  assert.equal(marineSourceLabel(), 'Starting');
 });

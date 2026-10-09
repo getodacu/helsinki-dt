@@ -105,6 +105,26 @@ test('release workbook preparation retains more than 500 identities and counts a
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test('concurrent streaming inspections drain trailing workbook metadata and retain every sheet', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'energy-workbook-order-'));
+  try {
+    const path = join(directory, 'metadata-last.xlsx'), workbook = new ExcelJS.Workbook();
+    const data = workbook.addWorksheet('data'), metadata = workbook.addWorksheet('metadata');
+    data.addRow(['vtj_prt', 'yearly_demand']); data.addRow([fixture.buildings[0].vtjPrt, null]); data.addRow(['outside', 7]);
+    metadata.addRow(['vtj_prt', 'description']); metadata.addRow(['outside', 'Shared strings and sheet names must survive']);
+    // ExcelJS writes worksheet entries before shared strings and workbook.xml.
+    await workbook.xlsx.writeFile(path);
+    const results = await Promise.allSettled(Array.from({ length: 16 }, () => inspectWorkbook(path, fixture.buildings)));
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+      assert.deepEqual(result.value.sheets.map(sheet => sheet.name), ['data', 'metadata']);
+      assert.deepEqual(result.value.sheets.map(sheet => sheet.rowCount), [3, 2]);
+      assert.deepEqual(result.value.sheets[0].rows.map(row => row.values), [{ vtj_prt: fixture.buildings[0].vtjPrt, yearly_demand: null }]);
+      assert.equal(result.value.sheets[1].rows[0].values.description, 'Shared strings and sheet names must survive');
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('failed publication and a changed source preserve the dated valid generation with diagnostics', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'energy-publication-'));
   try {

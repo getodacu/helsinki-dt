@@ -1,0 +1,18 @@
+{
+  "topic": "vessels-v2/273273160/metadata",
+  "payload": {
+    "callSign": "UARE2",
+    "destination": "FOR ORDERS",
+    "draught": 138,
+    "eta": 707328,
+    "imo": 9544281,
+    "name": "PERSEY",
+    "posType": 1,
+    "refA": 214,
+    "refB": 35,
+    "refC": 22,
+    "refD": 22,
+    "timestamp": 1791575875009,
+    "type": 80
+  }
+}

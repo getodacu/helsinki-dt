@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { downloadFile, requestBytes, requestText } from '../src/lib/server/io.ts';
+import { downloadFile, requestBytes, requestText, UpstreamHttpError } from '../src/lib/server/io.ts';
 
 test('bounded downloads reject oversized bodies and retain a valid cache', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'helsinki-download-'));
@@ -42,4 +42,18 @@ test('upstream deadline aborts a stalled body after successful response headers'
     await assert.rejects(requestText('https://source.example/observations', { maxBytes: 1024, timeoutMs: 10 }), { name: 'TimeoutError' });
     assert.equal(aborted, true);
   } finally { clearInterval(keepAlive); globalThis.fetch = original; }
+});
+
+
+test('upstream HTTP failures preserve status and Retry-After without consuming error data', async () => {
+  const original = globalThis.fetch; let cancelled = false;
+  try {
+    globalThis.fetch = async () => new Response(new ReadableStream({ cancel() { cancelled = true; } }),
+      { status: 429, headers: { 'Retry-After': '120' } });
+    await assert.rejects(requestText('https://source.example/vessels'), error => {
+      assert.ok(error instanceof UpstreamHttpError); assert.equal(error.status, 429);
+      assert.equal(error.retryAfter, '120'); assert.match(error.message, /HTTP 429/); return true;
+    });
+    assert.equal(cancelled, true);
+  } finally { globalThis.fetch = original; }
 });

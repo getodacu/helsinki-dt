@@ -1,3 +1,4 @@
+import type { MarineStatus } from './marine.ts';
 import type { Building, Vehicle } from './types.ts';
 
 export const ON_TIME_BAND_SECONDS = 60;
@@ -33,4 +34,13 @@ export function buildingAddress(building: Building): string | null {
 export const buildingName = (building: Building) => buildingAttribute(building, ['name', 'nimi', 'rakennuksen_nimi']) ?? buildingAddress(building) ?? 'Building';
 export const matchesBuilding = (building: Building, query: string) => searchText([buildingName(building), buildingAddress(building), building.id,
   building.gmlId, building.vtjPrt, building.ratu, building.uuid].filter(Boolean).join(' ')).includes(searchText(query));
-export const matchesVehicle = (vehicle: Vehicle, query: string, routeLabel?: string) => searchText(`${vehicle.mode} ${vehicle.routeId} ${routeLabel ?? ''} ${vehicle.id} ${vehicle.ownerOperatorId ?? ''}/${vehicle.vehicleId} ${vehicle.rail?.label ?? ''} ${vehicle.rail?.destination ?? ''} ${vehicle.rail?.origin ?? ''} ${vehicle.rail?.nextEvent?.stationName ?? ''}`).includes(searchText(query));
+export const matchesVehicle = (vehicle: Vehicle, query: string, routeLabel?: string) => searchText(`${vehicle.mode} ${vehicle.routeId ?? ''} ${routeLabel ?? ''} ${vehicle.id} ${vehicle.ownerOperatorId ?? ''}/${vehicle.vehicleId} ${vehicle.rail?.label ?? ''} ${vehicle.rail?.destination ?? ''} ${vehicle.rail?.origin ?? ''} ${vehicle.rail?.nextEvent?.stationName ?? ''} ${vehicle.marine?.name ?? ''} ${vehicle.marine?.mmsi ?? ''} ${vehicle.marine?.callSign ?? ''}`).includes(searchText(query));
+
+export const vehicleSourceLabel = (vehicle: Pick<Vehicle, 'mode'>) => vehicle.mode === 'ship' ? 'Fintraffic AIS' : vehicle.mode === 'train' ? 'Fintraffic rail' : 'HSL';
+export function marineSourceLabel(source?: MarineStatus): string {
+  if (!source) return 'Starting';
+  if (source.stale) return 'Stale source';
+  if (source.periodic) return 'Periodic updates';
+  if (source.degraded) return 'Degraded updates';
+  return source.state === 'live' ? 'Live updates' : source.state === 'reconnecting' ? 'Reconnecting' : source.state === 'connecting' ? 'Connecting' : 'Waiting for reports';
+}

@@ -12,9 +12,10 @@ import { wgs84ToScene } from './geo.ts';
 import { LiveFleet, vehicleVisible } from './live-fleet.ts';
 import { VehicleFlags } from './vehicle-flags.ts';
 import { StationFlags } from './station-flags.ts';
+import { vehicleLabel } from './rail.ts';
 import { buildingName } from './inspection.ts';
 import type { RouteCatalog, RouteContext } from './route-context.ts';
-import { TRAFFIC_REMOVE_MS, type TrafficSnapshot } from './traffic.ts';
+import { trafficShouldRemove, type TrafficSnapshot } from './traffic.ts';
 import type { Building, BuildingChunk, TransitMode, Vehicle } from './types.ts';
 import { NO_ENERGY_COLOUR } from './energy-display.ts';
 
@@ -26,7 +27,7 @@ export type Selection = { kind: 'building'; building: Building; unloaded?: boole
   | { kind: 'vehicle'; vehicle: Vehicle; removed?: boolean }
   | { kind: 'station'; station: SceneStation };
 export type Layers = Record<TransitMode | 'buildings' | 'roads' | 'terrain' | 'weather' | 'airQuality' | 'imagery' | 'railStations' | RailCategory, boolean>;
-export const INITIAL_LAYERS: Layers = { imagery: true, buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, train: true, railStations: true, commuter: true, 'long-distance': true, freight: true, other: true, weather: true, airQuality: true };
+export const INITIAL_LAYERS: Layers = { imagery: true, buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, train: true, ship: true, railStations: true, commuter: true, 'long-distance': true, freight: true, other: true, weather: true, airQuality: true };
 export type SceneStats = { fps: number; drawCalls: number; triangles: number; geometries: number;
   loadedChunks: number; vehicles: number; unplacedVehicles: number; lastReceiptLatencyMs: number | null };
 type Callbacks = { onSelection: (selection: Selection | null, message?: string) => void;
@@ -170,10 +171,10 @@ export function createCityRenderer() {
   return new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
 }
 
-export function createCityScene(container: HTMLElement, manifest: CityManifest, base: CityBase, callbacks: Callbacks, cache: CityAssetCache = new CityAssetCache(), modelUrls: Record<TransitMode, string> = { bus: '/models/bus.glb', tram: '/models/tram.glb', ferry: '/models/ferry.glb', train: '/models/train.glb' }) {
+export function createCityScene(container: HTMLElement, manifest: CityManifest, base: CityBase, callbacks: Callbacks, cache: CityAssetCache = new CityAssetCache(), modelUrls: Record<Exclude<TransitMode, 'ship'>, string> = { bus: '/models/bus.glb', tram: '/models/tram.glb', ferry: '/models/ferry.glb', train: '/models/train.glb' }) {
   let disposed = false, frame = 0, layers = { ...INITIAL_LAYERS }, selected: Selection | null = null, hoverId: string | null = null;
   let followId: string | null = null, lastReceiptLatencyMs: number | null = null;
-  let routeFilter: string | null = null, route: RouteContext | null = null;
+  let routeFilter: string | null = null, route: RouteContext | null = null, marinePaused = false, marineSourcePaused = false;
   let buildingColours: ReadonlyMap<string, string> = new Map(), buildingThemed = false;
   const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   let reducedMotion = reducedQuery.matches;
@@ -405,7 +406,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     }
     return null;
   }
-  const select = (selection: Selection | null, message?: string) => { selected = selection; followId = null; refreshHighlights(); callbacks.onSelection(selection, message); };
+  const select = (selection: Selection | null, message?: string) => { if (selection?.kind === 'vehicle' && selection.vehicle.mode === 'ship') { route = null; disposeTree(routeHighlight); } selected = selection; followId = null; refreshHighlights(); callbacks.onSelection(selection, message); };
   let down: { x: number; y: number } | null = null, hoverAt = 0;
   const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; };
   const pointerUp = (event: PointerEvent) => { if (down && initiallyReady && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) select(pick(event)); down = null; };
@@ -413,7 +414,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     const feature = pick(event), id = feature?.kind === 'building' ? feature.building.id : null;
     hoveredVehicleId = feature?.kind === 'vehicle' ? feature.vehicle.id : null;
     renderer.domElement.style.cursor = feature ? 'pointer' : 'grab';
-    callbacks.onHover(feature?.kind === 'building' ? buildingName(feature.building) : feature?.kind === 'vehicle' ? `${feature.vehicle.mode} · ${feature.vehicle.routeId}` : '');
+    callbacks.onHover(feature?.kind === 'building' ? buildingName(feature.building) : feature?.kind === 'vehicle' ? `${feature.vehicle.mode} · ${vehicleLabel(feature.vehicle)}` : '');
     if (id !== hoverId) { hoverId = id; refreshHighlights(); } };
   const pointerLeave = () => { hoverId = null; hoveredVehicleId = null; refreshHighlights(); callbacks.onHover(''); };
   renderer.domElement.addEventListener('pointerdown', pointerDown); renderer.domElement.addEventListener('pointerup', pointerUp);
@@ -427,12 +428,12 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       if (keyboardBlocked()) stopKeyboard();
       else panKeyboardCamera(camera, controls.target, heldKeys, elapsedSeconds);
     }
-    fleet.update(Date.now(), layers, reducedMotion, routeFilter);
+    fleet.update(Date.now(), layers, reducedMotion, routeFilter, marinePaused || marineSourcePaused);
     if (selected?.kind === 'vehicle') {
       const latest = fleet.motion.tracks.get(selected.vehicle.id)?.vehicle;
-      const position = fleet.motion.position(selected.vehicle.id, Date.now(), reducedMotion);
+      const position = fleet.motion.position(selected.vehicle.id, Date.now(), reducedMotion || (selected.vehicle.mode === 'ship' && (marinePaused || marineSourcePaused)));
       if ((!latest || !position) && !selected.removed) { selected = { ...selected, removed: true }; followId = null; callbacks.onSelection(selected); }
-      const height = position ? (selected.vehicle.mode === 'ferry' ? base.waterLevel : sampleTerrainHeight(base.terrain, position.x, position.z)) : null;
+      const height = position ? (selected.vehicle.mode === 'ferry' || selected.vehicle.mode === 'ship' ? base.waterLevel : sampleTerrainHeight(base.terrain, position.x, position.z)) : null;
       vehicleRing.visible = Boolean(position && height !== null && vehicleVisible(selected.vehicle, layers, routeFilter) && !selected.removed);
       if (position) {
         if (height !== null) vehicleRing.position.set(position.x, height + 0.5, position.z);
@@ -478,6 +479,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       requestViewUpdate(); },
     openAvailableMap() { appearance.openAvailable(); viewLoading.openAvailable(); reportLoad(); },
     setLayers(next: Layers) { layers = { ...next }; stationFlags.setStations(stations.filter(station => station.kind !== 'rail' || layers.railStations)); if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); requestViewUpdate(); },
+    setMarinePaused(paused: boolean) { marinePaused = paused; },
     setStations(next: SceneStation[]) {
       stations = next; stationFlags.setStations(next.filter(station => station.kind !== 'rail' || layers.railStations));
       if (selected?.kind === 'station') {
@@ -505,10 +507,11 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     setRouteFilter(next: string | null) { routeFilter = next; refreshContext(); },
     setTraffic(snapshot: TrafficSnapshot) {
       const now = Date.now(); fleet.setVehicles(snapshot.vehicles);
+      marineSourcePaused = snapshot.sources?.marine?.state !== 'live' || !!snapshot.sources?.marine?.stale || !!snapshot.sources?.marine?.periodic;
       const receipts = snapshot.vehicles.map(vehicle => Date.parse(vehicle.receivedAt)).filter(at => Number.isFinite(at));
       lastReceiptLatencyMs = receipts.length ? Math.max(0, now - Math.max(...receipts)) : null;
       if (selected?.kind === 'vehicle') { const selectedId = selected.vehicle.id; const vehicle = snapshot.vehicles.find(vehicle => vehicle.id === selectedId);
-        selected = vehicle ? { kind: 'vehicle', vehicle, removed: now - Date.parse(vehicle.reportedAt) >= TRAFFIC_REMOVE_MS } : { ...selected, removed: true };
+        selected = vehicle ? { kind: 'vehicle', vehicle, removed: trafficShouldRemove(vehicle, now) } : { ...selected, removed: true };
         if (selected.removed) followId = null; callbacks.onSelection(selected); }
     },
     select(selection: Selection | null) {

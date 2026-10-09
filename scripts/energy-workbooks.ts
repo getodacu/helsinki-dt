@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs';
+import { Readable } from 'node:stream';
 import yauzl from 'yauzl';
 import ExcelJS from 'exceljs';
 import type { Building } from '../src/lib/types.ts';
@@ -58,6 +59,12 @@ export async function inspectWorkbook(path: string, buildings: Building[], optio
   const bounded = await verifyWorkbookInflation(path);
   const wanted = new Set(buildings.flatMap(building => [building.gmlId, building.vtjPrt, building.uuid]).filter(Boolean));
   const input = createReadStream(path);
+  const pipe = input.pipe.bind(input);
+  // unzipper signals end before paused ZIP entries drain; keep the bounded entry stream flowing.
+  input.pipe = (destination, options) => {
+    if (destination instanceof Readable) destination.on('pause', () => destination.resume());
+    return pipe(destination, options);
+  };
   // ponytail: supports verified provider ZIP ordering; revisit if a provider moves workbook metadata after worksheet parsing.
   const reader = new ExcelJS.stream.xlsx.WorkbookReader(input, {
     worksheets: 'emit', sharedStrings: 'cache', hyperlinks: 'ignore', styles: 'ignore', entries: 'ignore'

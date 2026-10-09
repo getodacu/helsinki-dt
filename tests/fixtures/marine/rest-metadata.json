@@ -1,0 +1,16 @@
+{
+  "callSign": "OJ2477",
+  "destination": "HELSINKI",
+  "draught": 20,
+  "eta": 439296,
+  "imo": 0,
+  "mmsi": 230044550,
+  "name": "YOLDIA",
+  "posType": 15,
+  "referencePointA": 4,
+  "referencePointB": 8,
+  "referencePointC": 2,
+  "referencePointD": 2,
+  "shipType": 34,
+  "timestamp": 1791575515736
+}

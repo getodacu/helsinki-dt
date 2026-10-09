@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { TrafficFeed, type TrafficConnection } from '../src/lib/server/traffic.ts';
 import { createTrafficResponse } from '../src/lib/server/traffic-stream.ts';
-import { TRAFFIC_IDLE_MS, TRAFFIC_MAX_VEHICLES, type TrafficEvent } from '../src/lib/traffic.ts';
+import { TRAFFIC_IDLE_MS, TRAFFIC_MAX_VEHICLES, TRAFFIC_MAX_QUEUE_BYTES, type TrafficEvent } from '../src/lib/traffic.ts';
 
 const fixture = process.argv.includes('--fixture');
 const argument = (name: string, fallback: number) => {
@@ -57,7 +57,7 @@ const consume = async (index: number) => {
     const {done, value} = await reader.read();
     if (done) return;
     remainder += new TextDecoder().decode(value);
-    assert(remainder.length < 2 * 1024 * 1024, 'Unbounded SSE parse buffer');
+    assert(Buffer.byteLength(remainder) <= TRAFFIC_MAX_QUEUE_BYTES, 'Unbounded SSE parse buffer');
     let end: number;
     while ((end = remainder.indexOf('\n\n')) >= 0) {
       const frame = remainder.slice(0, end); remainder = remainder.slice(end + 2);

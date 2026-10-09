@@ -3,6 +3,15 @@ import { mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 export interface RequestOptions { maxBytes?: number; timeoutMs?: number; redirect?: RequestRedirect; headers?: HeadersInit; signal?: AbortSignal }
+export class UpstreamHttpError extends Error {
+  readonly status: number;
+  readonly retryAfter: string | null;
+  constructor(status: number, url: string, retryAfter: string | null) {
+    super(`Upstream HTTP ${status}: ${url}`); this.name = 'UpstreamHttpError';
+    this.status = status; this.retryAfter = retryAfter;
+  }
+}
+
 interface ResponseMetadata {
   status: number; url: string; durationMs: number; retrievedAt: string; headers: Headers;
 }
@@ -17,7 +26,7 @@ async function startRequest(url: string, options: RequestOptions) {
   const response = await fetch(parsed, { signal: AbortSignal.any([AbortSignal.timeout(options.timeoutMs ?? 30_000), ...(options.signal ? [options.signal] : [])]), headers: options.headers, redirect: options.redirect ?? 'follow' });
   if (!response.ok || !response.body) {
     await response.body?.cancel();
-    throw new Error(`Upstream HTTP ${response.status}: ${parsed.origin}${parsed.pathname}`);
+    throw new UpstreamHttpError(response.status, `${parsed.origin}${parsed.pathname}`, response.headers.get('retry-after'));
   }
   const declared = Number(response.headers.get('content-length'));
   if (declared > (options.maxBytes ?? 16 * 1024 * 1024)) {

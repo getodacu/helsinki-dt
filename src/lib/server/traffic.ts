@@ -1,8 +1,10 @@
 import { RailFeed, type RailSource, type RailFeedUpdate } from './rail-feed.ts';
+import { MarineFeed, type MarineSource, type MarineFeedUpdate } from './marine-feed.ts';
+import type { MarineStatus } from '../marine.ts';
 import mqtt, { type MqttClient } from 'mqtt';
 import { RELEASE_BOUNDS, inBounds } from '../area.ts';
 import { decodeHfp } from '../data/hfp.ts';
-import { TRAFFIC_IDLE_MS, TRAFFIC_MAX_VEHICLES, TRAFFIC_REMOVE_MS,
+import { TRAFFIC_IDLE_MS, TRAFFIC_MAX_VEHICLES, TRAFFIC_REMOVE_MS, trafficShouldRemove,
   type TrafficEvent, type TrafficSnapshot, type TrafficStatus } from '../traffic.ts';
 import type { Vehicle } from '../types.ts';
 
@@ -23,6 +25,9 @@ function connectHsl(): TrafficConnection {
 export class TrafficFeed {
   private client: TrafficConnection | null = null;
   private railVehicles = new Map<string, Vehicle>();
+  private marineVehicles = new Map<string, Vehicle>();
+  private marineStatus: MarineStatus | null = null;
+  private lifetime = 0;
   private railStatus: TrafficStatus = { state: 'idle', connectedAt: null, lastPositionAt: null, retryAt: null };
   private consumers = 0;
   private releases = new Set<() => void>();
@@ -45,16 +50,21 @@ export class TrafficFeed {
 
   private connector: () => TrafficConnection;
   private rail: RailSource | null;
-  constructor(connector: () => TrafficConnection = connectHsl, rail: RailSource | null = null) { this.connector = connector; this.rail = rail; }
+  private marine: MarineSource | null;
+  constructor(connector: () => TrafficConnection = connectHsl, rail: RailSource | null = null, marine: MarineSource | null = null) {
+    this.connector = connector; this.rail = rail; this.marine = marine;
+  }
 
   acquire(): () => void {
     this.consumers++;
-    if (!this.tick) this.rail?.start(update => this.receiveRail(update));
     if (this.idle) clearTimeout(this.idle);
     this.idle = null;
     if (!this.tick) {
       this.tick = setInterval(() => this.flush(), 1_000);
       this.tick.unref?.();
+      const lifetime = ++this.lifetime;
+      this.rail?.start(update => { if (this.lifetime === lifetime) this.receiveRail(update); });
+      this.marine?.start(update => { if (this.lifetime === lifetime) this.receiveMarine(update); });
     }
     if (!this.client && !this.retry) this.connect();
     let active = true;
@@ -89,24 +99,39 @@ export class TrafficFeed {
   snapshot(): TrafficSnapshot {
     this.expire();
     return { type: 'snapshot', generatedAt: new Date().toISOString(),
-      vehicles: [...this.vehicles.values(), ...this.railVehicles.values()], status: { ...this.status }, sources: this.sources() };
+      vehicles: [...this.vehicles.values(), ...this.railVehicles.values(), ...this.marineVehicles.values()], status: { ...this.status }, sources: this.sources() };
   }
 
-  private sources() { return this.rail ? { hsl: { ...this.status }, rail: { ...this.railStatus } } : undefined; }
+  private sources() {
+    return this.rail || this.marine ? { hsl: { ...this.status },
+      ...(this.rail ? { rail: { ...this.railStatus } } : {}),
+      ...(this.marineStatus ? { marine: { ...this.marineStatus } } : {}) } : undefined;
+  }
   private receiveRail(update: RailFeedUpdate) {
     this.railStatus = update.status;
-    const next = new Map(update.vehicles.filter(vehicle => Date.now() - Date.parse(vehicle.reportedAt) < TRAFFIC_REMOVE_MS).map(vehicle => [vehicle.id, vehicle]));
-    for (const id of this.railVehicles.keys()) if (!next.has(id)) { this.pending.delete(id); this.removed.add(id); }
+    const next = new Map(update.vehicles.filter(vehicle => !trafficShouldRemove(vehicle)).map(vehicle => [vehicle.id, vehicle]));
+    for (const id of this.railVehicles.keys()) if (!next.has(id)) this.remove(id, this.railVehicles);
     for (const [id, vehicle] of next) {
       if (this.railVehicles.get(id) !== vehicle) this.pending.set(id, vehicle);
       this.removed.delete(id);
     }
     this.railVehicles = next; this.dirty = true;
   }
+  private receiveMarine(update: MarineFeedUpdate) {
+    this.marineStatus = update.status;
+    const next = new Map(update.vehicles.filter(vehicle => !trafficShouldRemove(vehicle)).map(vehicle => [vehicle.id, vehicle]));
+    for (const id of this.marineVehicles.keys()) if (!next.has(id)) this.remove(id, this.marineVehicles);
+    for (const [id, vehicle] of next) {
+      if (this.marineVehicles.get(id) !== vehicle) this.pending.set(id, vehicle);
+      this.removed.delete(id);
+    }
+    this.marineVehicles = next; this.dirty = true;
+  }
 
   diagnostics() {
     return { ...this.counts, upstreamConnections: this.client ? 1 : 0, subscribers: this.listeners.size,
       consumers: this.consumers, railVehicles: this.railVehicles.size, vehicles: this.vehicles.size, identities: this.reportedTimes.size,
+      marineVehicles: this.marineVehicles.size, marine: this.marine?.diagnostics?.(),
       pendingVehicles: this.pending.size, pendingRemovals: this.removed.size,
       timers: Number(!!this.tick) + Number(!!this.idle) + Number(!!this.retry) };
   }
@@ -133,8 +158,9 @@ export class TrafficFeed {
         if (error || granted?.some(topic => topic.qos === 128)) { this.failed(); return; }
         this.retryDelay = 1_000;
         this.status = { ...this.status, state: 'live', connectedAt: new Date().toISOString(), retryAt: null };
+        const snapshot = this.snapshot();
         this.pending.clear(); this.removed.clear(); this.dirty = false; this.fullSnapshot = false;
-        this.broadcast(this.snapshot());
+        this.broadcast(snapshot);
       });
     });
     client.on('message', (topic, bytes) => {
@@ -146,13 +172,16 @@ export class TrafficFeed {
     const client = this.client;
     this.client = null;
     client?.end(true);
-    if (!this.consumers) { this.stop(); return; }
+    if (!this.consumers) {
+      this.status = { ...this.status, state: 'reconnecting', connectedAt: null, retryAt: null };
+      this.dirty = true; return;
+    }
     const delay = this.retryDelay;
     this.retryDelay = Math.min(30_000, delay * 2);
     this.status = { ...this.status, state: 'reconnecting', connectedAt: null,
       retryAt: new Date(Date.now() + delay).toISOString() };
     this.dirty = true;
-    this.retry = setTimeout(() => { this.retry = null; this.connect(); }, delay);
+    this.retry = setTimeout(() => { this.retry = null; if (this.consumers) this.connect(); }, delay);
     this.retry.unref?.();
   }
 
@@ -168,7 +197,8 @@ export class TrafficFeed {
     catch { this.counts.rejected++; return; }
     const reportedTime = Date.parse(vehicle.reportedAt);
     if (vehicle.longitude === null || vehicle.latitude === null || reportedTime > Date.now() + 5_000
-      || Date.now() - reportedTime >= TRAFFIC_REMOVE_MS || vehicle.id.length > 64 || Buffer.byteLength(vehicle.routeId) > 64
+      || [vehicle.routeId, vehicle.operatingOperatorId, vehicle.journeyReference].some(value => value !== null && (!value.isWellFormed() || /[\u0000-\u001f]/.test(value)))
+      || Date.now() - reportedTime >= TRAFFIC_REMOVE_MS || vehicle.id.length > 64 || Buffer.byteLength(vehicle.routeId ?? '') > 64
       || Buffer.byteLength(vehicle.operatingOperatorId ?? '') > 64 || Buffer.byteLength(vehicle.journeyReference ?? '') > 64
       || (vehicle.speedMetresPerSecond !== null && (vehicle.speedMetresPerSecond < 0 || vehicle.speedMetresPerSecond > 100))
       || (vehicle.headingDegrees !== null && (vehicle.headingDegrees < 0 || vehicle.headingDegrees > 360))
@@ -195,8 +225,8 @@ export class TrafficFeed {
     this.dirty = true;
   }
 
-  private remove(id: string): void {
-    if (!this.vehicles.delete(id)) return;
+  private remove(id: string, vehicles = this.vehicles): void {
+    if (!vehicles.delete(id)) return;
     this.pending.delete(id);
     this.removed.add(id);
     // A full refresh bounds removal churn even if repeated snapshots expire many identities between ticks.
@@ -207,8 +237,8 @@ export class TrafficFeed {
 
   private expire(): void {
     const now = Date.now();
-    for (const [id, vehicle] of this.railVehicles) if (now - Date.parse(vehicle.reportedAt) >= TRAFFIC_REMOVE_MS) {
-      this.railVehicles.delete(id); this.pending.delete(id); this.removed.add(id); this.dirty = true;
+    for (const vehicles of [this.railVehicles, this.marineVehicles]) {
+      for (const [id, vehicle] of vehicles) if (trafficShouldRemove(vehicle, now)) this.remove(id, vehicles);
     }
     for (const [id, reportedTime] of this.reportedTimes) {
       if (now - reportedTime >= TRAFFIC_REMOVE_MS) { this.remove(id); this.reportedTimes.delete(id); }
@@ -234,7 +264,9 @@ export class TrafficFeed {
   }
 
   private stop(): void {
+    this.lifetime++;
     this.rail?.stop(); this.railVehicles.clear();
+    this.marine?.stop(); this.marineVehicles.clear(); this.marineStatus = null;
     this.railStatus = { state: 'idle', connectedAt: null, lastPositionAt: null, retryAt: null };
     if (this.tick) clearInterval(this.tick);
     if (this.idle) clearTimeout(this.idle);
@@ -250,4 +282,4 @@ export class TrafficFeed {
   }
 }
 
-export const trafficFeed = new TrafficFeed(connectHsl, new RailFeed());
+export const trafficFeed = new TrafficFeed(connectHsl, new RailFeed(), new MarineFeed());

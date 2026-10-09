@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { mapClippingPlanes, measureGroundScale, panKeyboardCamera, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
+import { INITIAL_LAYERS, mapClippingPlanes, measureGroundScale, panKeyboardCamera, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
 import { buildingIdForTriangle } from '../src/lib/data/geometry.ts';
 import type { BuildingChunk } from '../src/lib/types.ts';
 import type { RouteContext } from '../src/lib/route-context.ts';
@@ -179,3 +179,5 @@ test('map clipping follows all four terrain edges at every building height', () 
     for (const [x, z] of [[-100.01, 0], [300.01, 0], [0, -200.01], [0, 400.01]]) assert.equal(visible(x, z, height), false);
   }
 });
+
+test('ships start enabled alongside transit without a model asset requirement', () => { assert.equal(INITIAL_LAYERS.ship, true); });

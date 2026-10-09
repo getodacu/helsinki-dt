@@ -9,17 +9,18 @@ export interface RouteStop {
 }
 export interface RouteContext {
   status: 'exact' | 'missing' | 'ambiguous' | 'unavailable';
-  vehicleId: string; routeId: string; routeLabel: string | null; destination: string | null;
+  vehicleId: string; routeId: string | null; routeLabel: string | null; destination: string | null;
   tripId: string | null; departureAt: string | null; candidates: string[];
   shape: [number, number][][]; stops: RouteStop[]; reason: string | null;
   sourceId: 'hsl-gtfs' | 'digitraffic-gtfs'; generatedAt: string | null; source: RouteSource | null;
 }
 export interface RouteCatalog {
   status: 'ready' | 'unavailable'; generatedAt: string | null; reason: string | null; source: RouteSource | null;
-  routes: { routeId: string; label: string; name: string; mode: TransitMode }[];
+  routes: { routeId: string; label: string; name: string; mode: Exclude<TransitMode, 'ship'> }[];
 }
 export type JourneyIdentity = Pick<Vehicle, 'id' | 'ownerOperatorId' | 'vehicleId' | 'routeId' | 'directionId' | 'serviceDate' | 'startTime'>;
-export function routeRequestUrl(vehicle: JourneyIdentity): string {
+export function routeRequestUrl(vehicle: JourneyIdentity): string | null {
+  if (vehicle.routeId === null) return null;
   const query = new URLSearchParams();
   for (const key of ['ownerOperatorId', 'vehicleId', 'routeId', 'directionId', 'serviceDate', 'startTime'] as const) {
     if (vehicle[key] != null) query.set(key, vehicle[key]);

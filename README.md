@@ -70,6 +70,7 @@ flowchart LR
     Cache --> App
     HSL[HSL live MQTT] --> App
     Rail[Fintraffic rail positions and timetables] --> App
+    AIS[Fintraffic AIS REST and MQTT] --> App
     Observations[FMI and HSY station observations] --> App
     Nuuka[Nuuka property electricity] --> App
     App --> Browser[Svelte UI and Three.js scene]
@@ -79,7 +80,7 @@ Preparation converts and validates source data once, publishes immutable generat
 
 Browsers load prepared `/data/` geometry and its visible-chunk metadata, then request visible municipal imagery and textured buildings through `/api/city-asset`. The Node server validates and caches these municipal assets on disk for all visitors. Browser Cache Storage is an optional additional cache; it is independent of the server cache and of GPU resources.
 
-Each Node process shares one demand-driven HSL MQTT connection and one Digitraffic rail position poll across its browsers and forwards snapshots/updates through SSE. Station observations and measured electricity use separate server services. A small entity catalog summary supplies themes and source status. Building search, inspection and theme values use SQLite-backed APIs; TanStack Svelte Query caches bounded responses by dataset generation. Run one application process; multiple workers would need shared live-feed coordination.
+Each Node process shares demand-driven HSL and marine MQTT connections and one Digitraffic rail position poll across its browsers, forwarding combined snapshots/updates through SSE. Marine positions also use bounded REST bootstrap/recovery. Station observations and measured electricity use separate server services. A small entity catalog summary supplies themes and source status. Building search, inspection and theme values use SQLite-backed APIs; TanStack Svelte Query caches bounded responses by dataset generation. Run one application process; multiple workers would need shared live-feed coordination.
 
 Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.js `[east, elevation, -north]` coordinates around longitude 24.952, latitude 60.1695, elevation 0. Heights retain the N2000 datum; projection does not perform a vertical datum conversion. See [data contracts](docs/data-contracts.md) and [coordinate controls](docs/coordinate-controls-evidence.md).
 
@@ -98,6 +99,7 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 | `static/data/manifest.json` and `static/data/generations/` | Foundation sample pointer and immutable generations. |
 | `static/data/city/` | City manifest, terrain/context, semantic geometry and building metadata. |
 | `static/data/rail-index.json` | Separate Digitraffic train numbers, active calendars, clipped shapes and ordered stops. |
+| `.cache/task-f/` | Ignored marine verifier reports, browser evidence and bounded diagnostics; never raw national AIS payloads. |
 | `static/data/route-index.json` | Prepared route labels, trips, shapes and stop patterns. |
 | `static/data/energy-manifest.json` and `static/data/energy/` | Energy catalog pointer and immutable catalogs. |
 | `server/data/entities/` | Private immutable SQLite generations and their active manifest; rebuilt from prepared data with `entities:prepare`. |
@@ -222,6 +224,12 @@ npm run build
 
 An offline rebuild may use `npm run rail:prepare -- .cache/rail/gtfs-all.zip`. Its retrieval sidecar is trusted only when the archive checksum matches. Failed preparation preserves the previous index. Rail adds no scheduler or database. See [rail source evidence and verification](docs/rail-evidence.md) for exact limits, attribution and sampled coverage.
 
+### Ships
+
+Ships have their own toggle and remain visible independently of transit route filtering. Search accepts name, MMSI and call sign. Selecting a ship shows its AIS position, broad type, navigation status, motion/quality fields, report age and independent marine source state; it does not request a transit journey. AIS is partial Class A coverage: fishing vessels are filtered upstream, the current map bounds exclude Vuosaari, and an empty local window does not prove the harbour is empty. HSL and AIS vessel identities remain separate, so overlapping reports can appear independently.
+
+Marine positions use a 10-second buffer of received reports for display and never extrapolate beyond the last accepted report. Freshness is measured from the provider's position time: moving or unknown-status ships become stale at two minutes and are removed after ten; anchored/moored ships with valid speed at or below 0.5 knots become stale at ten minutes and are removed after thirty. See [marine contracts](docs/data-contracts.md), [access and source evidence](docs/data-access.md), and [Task F results](docs/milestone-results/F.md) for source clocks, limits and dated verification.
+
 ### Weather and air quality
 
 Weather uses Kaisaniemi station **100971**; air quality uses Mannerheimintie station **100742** through FMI/HSY. Requests cover a fixed recent six-hour window. The process shares requests and becomes eligible to refresh weather every five minutes and air quality every fifteen minutes. These intervals are not claims about provider publication cadence.
@@ -316,7 +324,7 @@ npx vite --config tests/city-depth.config.ts
 
 Open `http://127.0.0.1:5175/tests/city-depth.html`: it must report `PASS` for 144 camera positions. On the same server, `/tests/building-highlight.html` checks 108 views for tint coverage, selection/hover precedence, clearing and occlusion. Both use local renderer fixtures. Vehicle verification is described below.
 
-Explicit live verifications are separate from regression tests. `node scripts/verify-traffic.ts` runs a 30-minute HSL soak plus idle cleanup and writes `.cache/task-b/` diagnostics. After recording a real peak, `node scripts/verify-traffic.ts --fixture --peak=<recorded-peak> --seconds=300` runs a labelled offline workload at twice that population. Recorded release/browser performance and known device exceptions are in [release results](docs/milestone-results/E.md).
+Explicit live verifications are separate from regression tests. `node scripts/verify-traffic.ts` runs the HSL soak; `node scripts/verify-marine.ts --integrated` exercises the shared HSL/rail/marine feed and two in-process SSE readers, with bounded real-provider observation and cleanup. `node scripts/verify-marine.ts --integrated --fixture --peak=<observed-peak> --seconds=300` runs a labelled offline fixture at twice the supplied AIS peak. Marine reports are written under ignored `.cache/task-f/`; they do not store national raw payloads. Results distinguish provider age, server delivery and browser delivery; the in-process verifier does not measure browser/network latency. See [Task F results](docs/milestone-results/F.md) for the recorded scope and any remaining gates, and [release results](docs/milestone-results/E.md) for earlier release/browser evidence.
 
 | Symptom | Check/action |
 | --- | --- |
