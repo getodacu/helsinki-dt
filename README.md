@@ -110,6 +110,8 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 
 ## Using the view
 
+City Console groups the controls into **Explore**, **Transport**, **Buildings**, **Energy**, **Environment**, and **Help**. Choose a tool in the left palette to reveal its controls; the location bar moves to a neighborhood. On phones, the tools sit in the bottom bar and open a sheet. Tap the active tool again to return to the map. Building inspection has **Overview**, **Energy**, and **Details** views; source identifiers and register records remain available in Details. **Data & sources** opens the source status and attribution drawer.
+
 Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Keyboard navigation pauses in form controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow. Turn off **WASD navigation** in the scene controls to disable these shortcuts; it starts enabled on each page load.
 
 Choose City Centre, South Harbour, Suomenlinna, the Senate district energy preset, Central Station or Pasila, then use the scene controls to navigate. Toggle buildings, terrain, roads, imagery, transit modes and station layers. Search covers available building metadata/addresses, vehicles and prepared route labels; search and scene picking use the same selection contract. Escape clears selection, and compact layouts expose separate controls and inspection sheets.

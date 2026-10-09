@@ -49,9 +49,9 @@
     return () => request.abort();
   });
 </script>
-{#if loadingCatalog || showProperty || model || solar.length}
   <section class="energy-section" aria-label="Building energy and solar records">
     <h4>Energy & solar</h4>
+    {#if !loadingCatalog && !showProperty && !model && !solar.length}<p class="panel-note">{error || catalogState.message || 'No verified energy or solar records are available for this building.'}</p>{/if}
     {#if loadingCatalog}<p class="notice" role="status">Loading…</p>{:else if catalogState.status === 'stale'}<p class="notice" role="status">Stale</p>{/if}
     {#if unresolved.length}<p class="notice">Unresolved energy association</p>{/if}
     {#if showProperty && property}
@@ -89,7 +89,6 @@
       </div>
     {/if}
   </section>
-{/if}
 
 <style>
   .energy-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
