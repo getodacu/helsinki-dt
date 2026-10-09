@@ -59,7 +59,7 @@ test('shape clipping retains boundary crossings and separate reentries without c
   assert.deepEqual(boundedShape([[west-0.06,60.17],[west-0.02,60.17]]),[]);
 });
 test('journey query validates exact bounded identifiers, duplicate inputs and calendar dates', () => {
-  const url=new URL(routeRequestUrl(vehicle),'http://fixture'); assert.equal(journeyIdentity(url.searchParams).id,vehicle.id);
+  const url=new URL(routeRequestUrl(vehicle)!,'http://fixture'); assert.equal(journeyIdentity(url.searchParams).id,vehicle.id);
   for (const [key,value] of [['ownerOperatorId','40'],['vehicleId','x'],['routeId','../archive'],['directionId','0'],['serviceDate','2026-02-30'],['startTime','25:10']]) {
     const query=new URLSearchParams(url.searchParams); query.set(key,value); assert.throws(()=>journeyIdentity(query));
   }
@@ -132,4 +132,13 @@ test('retrieval time is recovered only from a source record with the same archiv
   assert.equal(matchingRouteRetrieval('new',{checksum:'old',retrievedAt}),null);
   assert.equal(matchingRouteRetrieval('same',{checksum:'same',retrievedAt:'unknown'}),null);
   assert.equal(matchingRouteRetrieval('same',null),null);
+});
+
+
+test('a route-less report yields no request or scheduled geometry', () => {
+  const ship = { ...vehicle, mode: 'ship' as const, routeId: null, serviceDate: null, startTime: null };
+  assert.equal(routeRequestUrl(ship), null);
+  const route = routeForJourney(ship, fixture());
+  assert.equal(route.status, 'unavailable'); assert.equal(route.routeId, null);
+  assert.deepEqual(route.shape, []); assert.deepEqual(route.stops, []); assert.match(route.reason!, /no transit journey/);
 });

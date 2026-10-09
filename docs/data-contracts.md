@@ -77,3 +77,24 @@ Read-only APIs return `RailResult<T>` (`ready|stale|unavailable`, data, retrieve
 Rail times are ISO UTC instants displayed in `Europe/Helsinki`. Estimated and actual times remain distinct from scheduled time. Delay is `(actual or estimated) - scheduled` for the named event; absence stays null. Cancelled services and events are explicit. The next event comes from ordered timetable progress, labelled schedule-based, never from snapping a position.
 
 The rail index is independent of HSL. It groups exact numeric train IDs with their service calendars, ordered stops and clipped shapes. The date suffix of an upstream trip ID denotes its timetable period; it is not used as the live departure date. Only one active journey for the reported date yields a route. Unknown, conflicting, missing-shape or expired data yields no invented geometry. GTFS extended hours and Helsinki DST use the shared noon-minus-12-hour service-day rule.
+
+## Digitraffic marine AIS contract
+
+Ships are separate `Vehicle` records with mode `ship`, source `digitraffic-marine`, and identity `ais:<canonical-nine-digit-MMSI>`. AIS identity is never merged with an HSL ferry by proximity or name. A valid in-area position remains visible when its optional metadata is absent. The current release bounds exclude Vuosaari; Digitraffic supplies Class A AIS only and filters fishing vessels, so local counts are reports rather than a complete or deduplicated harbour inventory.
+
+| Field | Meaning and boundary rule |
+| --- | --- |
+| REST `properties.timestampExternal` | Position record time in epoch milliseconds; this drives `reportedAt`. |
+| REST `properties.timestamp` | AIS second-of-minute/status code, not a timestamp. Codes 61 and 62 flag manual/estimated fixes; 63 is inoperative and not animated. |
+| MQTT location `time` | Position record time in epoch seconds; convert to milliseconds exactly once. |
+| REST/MQTT metadata `timestamp` | Metadata record time in epoch milliseconds; cannot refresh position age or receipt time. |
+| MQTT status `updated` | Marine status record time in epoch seconds; does not refresh vessel positions. |
+| Local receipt time | Record independently from each upstream timestamp for latency and age reporting. |
+| SOG / COG / heading | Speeds arrive in knots and convert by `1852/3600` to shared metres/second. SOG `102.3`, COG `360`, and heading `511` mean unavailable; capped SOG `102.2` is unusable for motion. True heading stays distinct from course over ground. |
+| Position and identity | Require finite WGS84 coordinates, reject `181/91` unavailable sentinels, validate the MMSI range/topic/property agreement, and reject older position revisions. Invalid optional metadata never discards a valid position. |
+
+REST and MQTT records are reconciled by position record time. Since MQTT position time has second precision while REST keeps milliseconds, an equal-second record prefers the more precise REST observation; identical records are duplicates and conflicting same-second samples do not animate. A later-second MQTT report wins. Neither reconnect nor bootstrap may move a ship backward in record time. Metadata revisions are checked independently.
+
+Marine age uses the provider position time. Moving or unknown-status vessels become stale after two minutes and leave the active scene after ten minutes. The stationary exception applies only to an anchored/moored vessel with valid speed no greater than 0.5 knots: stale after ten minutes, removed after thirty. Metadata age and marine source health remain separate. Rendering buffers ten seconds of received position samples, retains at most 64 points over 30 seconds plus a preceding point, and never extrapolates. Orientation uses true heading or, above 0.5 knots, course; otherwise the marker is nondirectional.
+
+The feed bounds active ships at 250, metadata entries at 500, recent identity/version entries at 1,000, and queued metadata lookups at 250. It allows two concurrent metadata requests and 20 starts per minute, caches successful metadata for six hours and misses/failures for 15 minutes, and caps an individual REST body at 8 MiB with a 12-second timeout and no redirects. Position fallback/recovery is at most once per minute. MQTT input is capped at 32 KiB per message, 1,000 messages per second and 1 MiB per second. One WebSocket MQTT connection is shared per Node process; reconnect delays are 15/30/60 seconds plus jitter. Quiet marine state becomes stale after two minutes without a valid source update. The combined per-client SSE queue remains 8 MiB.

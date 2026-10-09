@@ -9,7 +9,7 @@ export const ROUTE_INDEX_MAX_BYTES = 64 * 1024 ** 2;
 export type RouteTrip = [id: string, routeId: string, serviceId: string, directionId: string, shapeId: string, destination: string, departure: string, firstStopId: string, patternId: string];
 export interface RouteIndex {
   version: 1; generatedAt: string; sourceId: 'hsl-gtfs'; bounds: number[]; source: RouteSource;
-  routes: Record<string, { label: string; name: string; mode: TransitMode }>;
+  routes: Record<string, { label: string; name: string; mode: Exclude<TransitMode, 'ship'> }>;
   calendar: GtfsRow[]; calendarDates: GtfsRow[]; feedInfo: GtfsRow[];
   trips: RouteTrip[]; shapes: Record<string, [number, number][][]>;
   stops: Record<string, { name: string; longitude: number; latitude: number }>;
@@ -51,6 +51,7 @@ export function boundedShape(points: [number, number][], bounds: readonly number
   return segments;
 }
 export function routeForJourney(vehicle: JourneyIdentity, index: RouteIndex, routeTrips = index.trips.filter(trip => trip[1] === vehicle.routeId)): RouteContext {
+  if (vehicle.routeId === null) return emptyRoute(vehicle, 'This report has no transit journey.');
   const base = { ...emptyRoute(vehicle, 'No scheduled journey matches these report identifiers.'), generatedAt: index.generatedAt, source: index.source,
     routeLabel: index.routes[vehicle.routeId]?.label ?? null };
   const compactDate = vehicle.serviceDate?.replaceAll('-', '');
@@ -150,7 +151,7 @@ export class RouteContextStore {
     if (!this.index) return emptyRoute(vehicle, this.failure);
     const key = [vehicle.id, vehicle.routeId, vehicle.serviceDate, vehicle.directionId, vehicle.startTime].join('/');
     const cached = this.results.get(key); if (cached) return cached;
-    const result = routeForJourney(vehicle, this.index, this.routeTrips.get(vehicle.routeId) ?? []);
+    const result = routeForJourney(vehicle, this.index, vehicle.routeId === null ? [] : this.routeTrips.get(vehicle.routeId) ?? []);
     if (this.results.size >= 128) this.results.delete(this.results.keys().next().value!);
     this.results.set(key, result); return result;
   }

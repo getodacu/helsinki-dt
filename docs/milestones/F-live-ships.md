@@ -1,6 +1,6 @@
 # Milestone F Live ship layer
 
-**Status:** Planned — 9 October 2026
+**Status:** Complete — implementation, acceptance checks and 30-minute live soak passed locally; no deployment — 10 October 2026
 **Depends on:** Existing city scene and traffic snapshot/SSE delivery from B–E; preserve the current rail integration.
 **Task:** Add observed Digitraffic AIS vessels to Helsinki Lens through REST bootstrap and MQTT updates. Follow [the implementation plan](../implementation-plan.md) and [marine feasibility research](../digitraffic-marine-feasibility.md).
 
@@ -53,9 +53,9 @@ The marine summary carries canonical MMSI, nullable IMO/name/call sign/type/navi
 
 Discard malformed positions, future record times more than five seconds ahead, and older position revisions. Validate metadata independently; reject its older revisions without replacing useful existing metadata. Because MQTT truncates position time to seconds while REST retains milliseconds, equal-second REST/MQTT records require a deterministic policy: prefer the more precise REST record within that second, treat identical records as duplicates, and never animate conflicting same-second samples. A later-second MQTT report wins. No refresh or reconnect may move a vessel backwards in record time.
 
-## Initial operating policy
+## Operating policy
 
-These are application defaults to verify during acceptance, not provider guarantees. Define them once and use them consistently in server expiration, browser lists, the inspector and `ReceivedPositions`.
+These application policies were verified during acceptance; they are not provider guarantees. Define them once and use them consistently in server expiration, browser lists, the inspector and `ReceivedPositions`.
 
 | Concern | Initial policy |
 |---|---|
@@ -72,13 +72,13 @@ These are application defaults to verify during acceptance, not provider guarant
 | Quiet connections | Track receipt of broker messages and source status separately from local positions. A quiet Helsinki fleet is valid. Replayed status with an old `updated` value does not establish upstream freshness. If no valid status/message arrives for two minutes, mark marine stale/disconnected and recover. |
 | State budgets | At most 250 active local ships, 500 metadata cache entries and 1,000 recent identity/version records. Evict expired/old entries; if active capacity is exhausted, report the limit and rejected additions instead of silent truncation. |
 | Input budgets | 32-KiB individual MQTT payload; initial aggregate caps of 1,000 messages/s and 1 MiB/s. Drop/count invalid or excess input and surface degraded status. Measure national wildcard throughput before finalizing these limits. |
-| Delivery/lifetime | Reuse one-second traffic coalescing, bounded removal/full-snapshot recovery, 1-MiB per-client SSE queue and 30-second last-consumer idle shutdown. Hidden tabs continue using the existing disconnect/resume behavior. |
+| Delivery/lifetime | Reuse one-second traffic coalescing, bounded removal/full-snapshot recovery, the existing 8-MiB per-client SSE queue and 30-second last-consumer idle shutdown. Hidden tabs continue using the existing disconnect/resume behavior. |
 
 Keep HSL and rail freshness/interpolation unchanged. Preserve HTTP status and `Retry-After` on upstream errors if needed through a small compatible extension of `server/io.ts`; never parse an error body as vessel data. Honour a valid longer retry delay on 429/503. New limits stay source-local constants rather than a configuration system.
 
 ## Implementation sequence
 
-Complete F1 → F2 → F3 → F4 → F5. Each step includes its focused tests; F5 verifies the integrated result. Estimates total approximately 4–6 working days for one developer familiar with this codebase, excluding waiting for representative live traffic.
+Complete F1 → F2 → F3 → F4 → F5. Each step includes its focused tests; F5 verifies the integrated result. F1–F5 implementation, regression checks, final browser fixtures, native Chrome tab-hide/resume and the 30-minute real integrated operating soak have passed. See [Task F results](../milestone-results/F.md) for dated measurements and scope. The estimates total approximately 4–6 working days for one developer familiar with this codebase, excluding waiting for representative live traffic.
 
 ### F1 — Contracts, decoder and fixtures (0.5–1 day)
 
@@ -104,7 +104,7 @@ Expose connection state, last source message/update, last local position, last s
 
 **Files:** `src/lib/server/traffic.ts`, `src/lib/traffic.ts`, `tests/traffic.test.ts`, and existing traffic verification code where its expectations change.
 
-Wire one `MarineFeed` into the existing singleton lifecycle. Merge its changes/removals into the shared pending maps and include `sources.marine` in snapshots and updates. Coalesce repeated updates and retain the existing slow-client disconnect/full-snapshot recovery policy. Include marine counts in diagnostics without changing what existing HSL/rail counters mean. Measure the complete combined snapshot at the supported source maxima against the 1-MiB SSE queue: compact optional metadata or lower the documented marine capacity if necessary. An oversized valid snapshot must not trap clients in a reconnect loop.
+Wire one `MarineFeed` into the existing singleton lifecycle. Merge its changes/removals into the shared pending maps and include `sources.marine` in snapshots and updates. Coalesce repeated updates and retain the existing slow-client disconnect/full-snapshot recovery policy. Include marine counts in diagnostics without changing what existing HSL/rail counters mean. Measure the complete combined snapshot at the supported source maxima against the existing 8-MiB per-client SSE queue; an oversized valid snapshot must not trap clients in a reconnect loop.
 
 Apply marine expiration without the global 120-second transit cutoff accidentally removing stationary ships. Keep HSL/rail records and errors isolated: one provider reconnecting, emitting a snapshot or clearing pending state must not lose another provider's update. Make clients tolerate optional marine status, including snapshots produced before the new source is ready.
 
@@ -136,23 +136,25 @@ Observe a real moving vessel across several reports, a quiet/moored set and a co
 
 **Gate:** evidence marks each acceptance item pass/fail/blocked. Missing moving-vessel evidence or unresolved performance regressions remain open rather than being covered by stationary samples or synthetic motion.
 
+Final validation is recorded in [Task F results](../milestone-results/F.md). The real integrated observation ran 1,800.041 seconds with two shared readers, controlled MQTT recovery, moving and stationary vessel reports, and zero marine rejection/capacity/budget drops. Native Chrome tab-hide/resume passed after a 45-second real hidden interval, and the final desktop/mobile browser fixture passed. Browser delivery latency remains reported separately from provider age and the deliberate 10-second display buffer. This milestone is locally verified; deployment remains separate.
+
 ## Acceptance checklist
 
-- [ ] Fresh, validated AIS positions appear within the current bounds; absent metadata does not hide a valid ship.
-- [ ] REST/MQTT clocks, raw AIS second codes and metadata/feed clocks remain distinct through the UI.
-- [ ] Replayed or delayed REST data cannot overwrite newer updates or resurrect an exited ship.
-- [ ] Marine stale/removal policy agrees in server, scene, object list and inspector; HSL/rail policy is unchanged.
-- [ ] Interpolation uses plausible received reports only, stops at the last report and respects reduced motion and unknown orientation.
-- [ ] Ship selection/search/filtering works by keyboard and pointer without GTFS requests, fake routes or transit delay labels.
-- [ ] Snapshot/SSE delivery is shared and bounded; REST, MQTT, HSL and rail failures remain independent and visible.
-- [ ] Metadata lookup, reconnect, retained state and client queues remain within measured limits; idle shutdown cleans up resources.
-- [ ] Coverage, source attribution, animation delay and any unresolved HSL/AIS overlap are visible and documented. No deduplicated harbour inventory is claimed.
-- [ ] Real moving and stationary observations, recovery, two-client behavior, 30-minute soak, accessibility and performance have dated evidence.
-- [ ] Type checks, relevant regressions and the production build pass; changed files and unresolved findings are recorded in the F results.
+- [x] Fresh, validated AIS positions appear within the current bounds; absent metadata does not hide a valid ship.
+- [x] REST/MQTT clocks, raw AIS second codes and metadata/feed clocks remain distinct through the UI.
+- [x] Replayed or delayed REST data cannot overwrite newer updates or resurrect an exited ship.
+- [x] Marine stale/removal policy agrees in server, scene, object list and inspector; HSL/rail policy is unchanged.
+- [x] Interpolation uses plausible received reports only, stops at the last report and respects reduced motion and unknown orientation.
+- [x] Ship selection/search/filtering works by keyboard and pointer without GTFS requests, fake routes or transit delay labels.
+- [x] Snapshot/SSE delivery is shared and bounded; REST, MQTT, HSL and rail failures remain independent and visible.
+- [x] Metadata lookup, reconnect, retained state and client queues remain within tested limits; idle shutdown cleans up resources.
+- [x] Coverage, source attribution, animation delay and any unresolved HSL/AIS overlap are visible and documented. No deduplicated harbour inventory is claimed.
+- [x] Real moving and stationary observations, recovery, two-client behavior, 30-minute soak, accessibility and performance have dated evidence.
+- [x] Type checks, relevant regressions and the production build pass; changed files and unresolved findings are recorded in the F results.
 
 ## Execution notes and handoff
 
-The working tree already contains unrelated city, energy and rail changes. Inspect current code and test baselines before implementation, preserve those changes, and recheck shared integration points if they evolve. In particular the rail code already has its own source lifecycle and motion buffer; do not replace it with an older research snapshot. Benchmark scratch files are not production integration targets.
+Implementation began from clean baseline `0004ea668f7eb4b6e9382efcf5b3d681ccdb55cf`, which already included the preceding city, energy and rail work. Preserve those baseline features and recheck shared integration points if they evolve. In particular the rail code has its own source lifecycle and motion buffer; do not replace it with an older research snapshot. Benchmark scratch files are not production integration targets.
 
 Release this as a single coherent application change after all gates pass. A failure in a live gate blocks that claim, not unrelated offline checks. Use the normal application version rollback if integration causes a regression; no database or asset migration is introduced. Deployment is a separate action.
 

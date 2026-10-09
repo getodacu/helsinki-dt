@@ -1,0 +1,15 @@
+{
+  "topic": "vessels-v2/273128420/location",
+  "payload": {
+    "cog": 237.3,
+    "heading": 232,
+    "lat": 60.103302,
+    "lon": 27.433415,
+    "navStat": 0,
+    "posAcc": true,
+    "raim": true,
+    "rot": 0,
+    "sog": 11.4,
+    "time": 1791575874
+  }
+}

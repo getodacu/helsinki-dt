@@ -1,6 +1,7 @@
 <script lang="ts">
   import '#lib/city-console.css';
   import ConsoleIcon from '#lib/components/ConsoleIcon.svelte';
+  import MarineVesselDetails from '#lib/components/MarineVesselDetails.svelte';
   import RailTrainDetails from '#lib/components/RailTrainDetails.svelte';
   import RailStationBoard from '#lib/components/RailStationBoard.svelte';
   import { RAIL_CATEGORIES, vehicleLabel, railJourneyUrl, type RailStation, type RailJourney, type RailResult } from '#lib/rail.ts';
@@ -23,10 +24,10 @@
   import { CityAssetCache } from '#lib/city-cache.ts';
   import { INITIAL_LAYERS, type SceneLoadState, type Layers, type Selection, type SceneStation, type SceneStats, type CitySceneController, type CameraPreset } from '#lib/scene.ts';
   import { MODE_COLOURS } from '#lib/live-fleet.ts';
-  import { trafficAge, trafficIsStale, TRAFFIC_REMOVE_MS, type TrafficSnapshot, type TrafficEvent } from '#lib/traffic.ts';
+  import { trafficAge, trafficIsStale, trafficShouldRemove, type TrafficSnapshot, type TrafficEvent } from '#lib/traffic.ts';
   import { groupObservationStations, observationHistory, OBSERVATION_PARAMETERS, type ObservationSnapshot } from '#lib/observations.ts';
   import { loadRouteCatalog, routeRequestUrl, type RouteCatalog, type RouteContext } from '#lib/route-context.ts';
-  import { buildingName, buildingAddress, buildingAttribute, knownValue, matchesVehicle, searchText, delayLabel, signedSeconds, formatDate, label } from '#lib/inspection.ts';
+  import { buildingName, buildingAddress, buildingAttribute, knownValue, matchesVehicle, searchText, delayLabel, signedSeconds, formatDate, label, vehicleSourceLabel, marineSourceLabel } from '#lib/inspection.ts';
   import type { Building, TransitMode, Vehicle } from '#lib/types.ts';
   const consoleTools = [
     { id: 'explore', label: 'Explore' }, { id: 'transport', label: 'Transport' },
@@ -162,15 +163,15 @@
   let theme = $derived({ colours: themeColours, minimum: activeThemeSummary?.minimum ?? null,
     maximum: activeThemeSummary?.maximum ?? null, count: activeThemeSummary?.count ?? 0 });
   let mapCovered = $derived(loading || !ready);
-  const modes: TransitMode[] = ['tram', 'bus', 'ferry', 'train'];
-  const modeNames: Record<TransitMode, string> = { tram: 'Trams', bus: 'Buses', ferry: 'HSL Ferries', train: 'Trains' };
+  const modes: TransitMode[] = ['tram', 'bus', 'ferry', 'train', 'ship'];
+  const modeNames: Record<TransitMode, string> = { tram: 'Trams', bus: 'Buses', ferry: 'HSL Ferries', train: 'Trains', ship: 'Ships' };
   const age = (vehicle: { reportedAt: string }) => `${Math.max(0, Math.floor(trafficAge(vehicle, now) / 1000))} s ago`;
   let releaseBuildingCount = $derived(catalog?.buildingCount ?? null);
   let routes = $derived(routeCatalog?.routes ?? []);
-  const routeName = (id: string) => traffic.vehicles.find(vehicle => vehicle.routeId === id && vehicle.rail)?.rail?.label ?? routes.find(item => item.routeId === id)?.label ?? id;
-  let availableVehicles = $derived(traffic.vehicles.filter(vehicle => trafficAge(vehicle, now) < TRAFFIC_REMOVE_MS));
+  const routeName = (id: string | null) => traffic.vehicles.find(vehicle => vehicle.routeId === id && vehicle.rail)?.rail?.label ?? routes.find(item => item.routeId === id)?.label ?? id ?? '';
+  let availableVehicles = $derived(traffic.vehicles.filter(vehicle => !trafficShouldRemove(vehicle, now)));
   let visibleVehicles = $derived(availableVehicles.filter(vehicle => vehicleVisible(vehicle, layers, routeFilter || null))
-    .sort((a, b) => a.mode.localeCompare(b.mode) || a.routeId.localeCompare(b.routeId) || a.id.localeCompare(b.id)));
+    .sort((a, b) => a.mode.localeCompare(b.mode) || vehicleLabel(a, routeName(a.routeId)).localeCompare(vehicleLabel(b, routeName(b.routeId))) || a.id.localeCompare(b.id)));
   let matchingVehicles = $derived(visibleVehicles.filter(vehicle => !query || matchesVehicle(vehicle, query, routeName(vehicle.routeId))));
   let matchingRoutes = $derived(routes.filter(item => (!routeFilter || item.routeId === routeFilter) && layers[item.mode]
     && (!query || searchText(`${item.routeId} ${item.label} ${item.name}`).includes(searchText(query)))));
@@ -182,8 +183,13 @@
     && (!query || searchText(`${station.id} ${station.name} ${station.id === 'rail:HKI' ? 'Helsinki Central' : ''}`).includes(searchText(query)))));
   let staleCount = $derived(visibleVehicles.filter(vehicle => trafficIsStale(vehicle, now)).length);
   let hslLive = $derived(browserConnected && traffic.status.state === 'live');
-  let railLive = $derived(browserConnected && traffic.sources?.rail.state === 'live');
-  let currentFeed = $derived(hslLive || railLive);
+  let railLive = $derived(browserConnected && traffic.sources?.rail?.state === 'live');
+  let marineSource = $derived(traffic.sources?.marine);
+  let marineLive = $derived(browserConnected && marineSource?.state === 'live' && !marineSource.stale && !marineSource.periodic);
+  let currentFeed = $derived(hslLive || railLive || marineLive);
+  let marineVehicles = $derived(availableVehicles.filter(vehicle => vehicle.mode === 'ship'));
+  let freshMarine = $derived(marineVehicles.filter(vehicle => !trafficIsStale(vehicle, now)));
+  let marineState = $derived(`${browserConnected ? '' : 'Browser paused / disconnected · '}${marineSourceLabel(marineSource)}`);
   let railVehicles = $derived(visibleVehicles.filter(vehicle => vehicle.mode === 'train'));
   let freshRail = $derived(railVehicles.filter(vehicle => !trafficIsStale(vehicle, now)));
   const currentRailDelay = (vehicle: Vehicle) => vehicle.rail?.timetableAt && now - Date.parse(vehicle.rail.timetableAt) < 60_000 && !vehicle.rail.timetableStale ? vehicle.delaySeconds : null;
@@ -197,7 +203,7 @@
   let contextPosition = $derived(selected?.kind === 'vehicle' ? { longitude: selected.vehicle.longitude, latitude: selected.vehicle.latitude }
     : selected?.kind === 'building' ? selected.building : selected?.kind === 'station' ? selected.station : { longitude: 24.952, latitude: 60.1695 });
   let contextScope = $derived(selected?.kind === 'vehicle' ? 'Near the last reported vehicle position' : selected?.kind === 'building' ? 'Near this building' : selected?.kind === 'station' ? 'Near this station' : 'Near the city-centre view origin');
-  let journeyUrl = $derived(selected?.kind === 'vehicle' ? selected.vehicle.rail ? railJourneyUrl(selected.vehicle.rail) : routeRequestUrl(selected.vehicle) : null);
+  let journeyUrl = $derived(selected?.kind === 'vehicle' ? selected.vehicle.mode === 'ship' ? null : selected.vehicle.rail ? railJourneyUrl(selected.vehicle.rail) : routeRequestUrl(selected.vehicle) : null);
   let selectedStationSources = $derived.by(() => { const selection = selected; return selection?.kind === 'station' ? observationSnapshot?.sources.filter(source => selection.station.sourceIds.includes(source.id)) ?? [] : []; });
   const identity = (value: Selection | null) => !value ? null : value.kind === 'vehicle' ? `v:${value.vehicle.id}` : value.kind === 'building' ? `b:${value.building.id}` : `s:${value.station.id}`;
   const focusInspector = () => void tick().then(() => {
@@ -212,6 +218,7 @@
       if (selection) { mobilePanel = 'inspect'; searchOpen = false; focusInspector(); }
       else closeSearch();
     }
+    if (selection?.kind === 'vehicle' && selection.vehicle.mode === 'ship') { route = null; railJourney = null; routeError = ''; }
     selected = selection; selectionMessage = message;
   };
   const selectObject = (selection: Selection) => {
@@ -289,7 +296,7 @@
       traffic = { type: 'snapshot', generatedAt: event.generatedAt, vehicles: [...fleet.values()], status: event.status, sources: event.sources };
       if (!scene && selected?.kind === 'vehicle') {
         const vehicle = fleet.get(selected.vehicle.id);
-        setSelection({ kind: 'vehicle', vehicle: vehicle ?? selected.vehicle, removed: !vehicle });
+        setSelection({ kind: 'vehicle', vehicle: vehicle ?? selected.vehicle, removed: !vehicle || trafficShouldRemove(vehicle, now) });
       }
       browserConnected = true; trafficError = '';
     }
@@ -358,7 +365,7 @@
   });
 </script>
 
-<svelte:head><title>Helsinki Lens · City Console</title><meta name="description" content="Inspect central Helsinki buildings, live HSL and rail vehicle reports and dated environmental station observations." /></svelte:head>
+<svelte:head><title>Helsinki Lens · City Console</title><meta name="description" content="Inspect central Helsinki buildings, live HSL, rail and AIS ship reports and dated environmental station observations." /></svelte:head>
 <svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !sourceOpen) { if (searchOpen) { event.preventDefault(); closeSearch(); } else { clearSelection(); if (mobilePanel) setMobilePanel(null); } } }} onpointerdown={event => { if (searchOpen && event.target instanceof Element && !event.target.closest('.navbar-search')) searchOpen = false; }} />
 <a class="skip-link" href="#city-search">Skip to city search</a>
 <div class="app-shell city-console">
@@ -371,20 +378,20 @@
           <div class="panel-heading"><h2>Search results</h2><button class="icon-button" aria-label="Close search results" onclick={closeSearch}>×</button></div>
           {#if indexState !== 'current'}<p class="panel-note search-status" role="status" data-index-state={indexState}>{indexState === 'loading' ? 'Loading buildings…' : indexMessage}</p>{/if}{#if searchEnabled && searchQuery.isFetching}<p class="panel-note search-status" role="status">Searching…</p>{/if}{#if searchEnabled && searchQuery.error}<p class="notice search-status" role="status">{searchQuery.error.message}</p>{/if}
           {#if query}<button class="text-button clear-search" onclick={() => { query = ''; document.getElementById('city-search')?.focus(); }}>Clear search</button>{/if}
-        <details open><summary>Vehicles <span>{matchingVehicles.length}</span></summary><div class="object-list">{#each matchingVehicles.slice(0, 60) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {vehicleLabel(vehicle, routeName(vehicle.routeId))}</strong><small>{vehicle.rail ? `${vehicle.rail.trainNumber} · ${vehicle.rail.destination ?? 'Destination unavailable'}` : `${vehicle.ownerOperatorId}/${vehicle.vehicleId}`} · {trafficIsStale(vehicle, now) ? 'stale' : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching current vehicles in visible modes / route.</p>{/each}{#if matchingVehicles.length > 60}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div></details>
+        <details open><summary>Vehicle reports <span>{matchingVehicles.length}</span></summary><div class="object-list">{#each matchingVehicles.slice(0, 60) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {vehicleLabel(vehicle, routeName(vehicle.routeId))}</strong><small>{vehicleSourceLabel(vehicle)} · {vehicle.marine ? `MMSI ${vehicle.marine.mmsi}` : vehicle.rail ? `${vehicle.rail.trainNumber} · ${vehicle.rail.destination ?? 'Destination unavailable'}` : `${vehicle.ownerOperatorId}/${vehicle.vehicleId}`} · {trafficIsStale(vehicle, now) ? `stale · ${age(vehicle)}` : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching retained vehicle reports in visible modes / transit route.</p>{/each}{#if matchingVehicles.length > 60}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div></details>
         <details open={!!query}><summary>Routes <span>{matchingRoutes.length}</span></summary><div class="object-list">{#each matchingRoutes.slice(0, 60) as item (item.routeId)}<button onclick={() => chooseRoute(item.routeId)}><span class="mode-swatch" style:background={MODE_COLOURS[item.mode]}></span><span><strong>Route {item.label} · {label(item.mode)}</strong><small>{item.name} · {item.routeId}</small></span></button>{:else}<p class="panel-note">{routeCatalogLoading ? 'Loading prepared route labels…' : routeCatalog?.reason ?? 'No matching prepared route labels.'}</p>{/each}{#if matchingRoutes.length > 60}<p class="panel-note">First 60 routes. Refine your search.</p>{/if}</div></details>
         <details open={!!query || !!(activeRyhtiTheme && ryhtiCategoryKey)}><summary>{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'Matching buildings' : sceneError && !scene ? 'Available buildings' : 'Loaded buildings'} <span>{filteredBuildings.length}</span></summary><div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong>{#if buildingAddress(building) && buildingAddress(building) !== buildingName(building)}<small>{buildingAddress(building)}</small>{/if}</span></button>{:else}<p class="panel-note">{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}{#if searchEnabled}<div class="search-pagination"><button class="text-button" disabled={!cursor || searchQuery.isFetching} onclick={() => pagination = { signature: searchSignature, cursors: pagination.cursors.slice(0, -1) }}>Previous</button><button class="text-button" disabled={!searchQuery.data?.nextCursor || searchQuery.isFetching} onclick={() => pagination = { signature: searchSignature, cursors: [...(pagination.signature === searchSignature ? pagination.cursors : [null]), searchQuery.data!.nextCursor] }}>Next buildings</button></div>{/if}</div></details>
         <details open><summary>Stations <span>{matchingStations.length}</span></summary><div class="object-list">{#each matchingStations as station (station.id)}<button class:selected={selected?.kind === 'station' && selected.station.id === station.id} onclick={() => selectObject({ kind: 'station', station })}><span class="station-swatch {station.kind}" aria-hidden="true">{station.kind === 'weather' ? '○' : station.kind === 'rail' ? '▣' : '◇'}</span><span><strong>{station.name}</strong><small>{label(station.kind)} · {station.id}</small></span></button>{:else}<p class="panel-note">{observationLoading ? 'Loading stations…' : 'No matching stations in the available coverage / layers.'}</p>{/each}</div></details>
         </div>
       {/if}
     </search>
-    <div class="header-status"><span class:connected={currentFeed} class="status-dot"></span><span>{hslLive && railLive ? 'HSL + rail connected' : hslLive ? 'HSL connected · rail unavailable' : railLive ? 'Rail connected · HSL unavailable' : 'Traffic connecting'}</span></div>
+    <div class="header-status"><span class:connected={currentFeed} class="status-dot"></span><span>{hslLive && railLive ? 'HSL + rail connected' : hslLive ? 'HSL connected · rail unavailable' : railLive ? 'Rail connected · HSL unavailable' : 'Traffic connecting'} · AIS {marineSourceLabel(marineSource)}</span></div>
     <button class="console-help" aria-label="Help using the city" onclick={() => chooseTool('help')}>?</button>
     <button class="source-button" onclick={() => sourceOpen = !sourceOpen} aria-expanded={sourceOpen} aria-controls="sources">Data & sources ↗</button>
   </header>
   <main class="city-workspace" data-scene-ready={!mapCovered} aria-busy={mapCovered}>
     {#if city}
-      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} {keyboardNavigation} {stations} {route} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
+      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} marinePaused={!browserConnected} {keyboardNavigation} {stations} {route} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
         onbuildings={(value) => buildings = value} onstats={(value) => stats = value} onhover={(value) => hovered = value}
         onerror={(value) => sceneError = value} oninteraction={() => following = false} onready={() => { ready = true; if (selected) scene?.select(selected); }}
         oncontroller={(value) => scene = value} />
@@ -437,14 +444,17 @@
 
             <p class="panel-note console-intro">Choose a location below, then select something on the map to learn more.</p>
           {:else if activeTool === 'transport'}
-          {#each modes as mode (mode)}<label class="layer-control"><input type="checkbox" aria-label={modeNames[mode]} bind:checked={layers[mode]} /><span class="mode-swatch" style:background={MODE_COLOURS[mode]}></span><span class="mode-label">{modeNames[mode]}</span><small>{availableVehicles.filter(vehicle => vehicle.mode === mode).length}</small></label>{/each}
+          {#each modes as mode (mode)}<label class="layer-control"><input type="checkbox" aria-label={modeNames[mode]} bind:checked={layers[mode]} /><span class="mode-swatch" style:background={MODE_COLOURS[mode]}></span><span class="mode-label">{modeNames[mode]}</span><small aria-label={`${availableVehicles.filter(vehicle => vehicle.mode === mode).length} reports`}>{availableVehicles.filter(vehicle => vehicle.mode === mode).length}</small></label>{/each}
           <label class="layer-control"><input type="checkbox" bind:checked={layers.railStations} /><span class="station-swatch rail" aria-hidden="true">▣</span><span>Rail stations</span></label>
           {#if layers.train}<details class="rail-filters"><summary>Train categories</summary>{#each RAIL_CATEGORIES as category (category)}<label class="layer-control"><input type="checkbox" bind:checked={layers[category]} /><span>{label(category)}</span></label>{/each}</details>{/if}
-          <div class="rail-summary"><strong>Rail · {railLive ? 'connected' : traffic.sources?.rail.state ?? 'connecting'}</strong><span>{freshRail.length} fresh · {railVehicles.length - freshRail.length} stale</span><span>{railDelayed} delayed · {railUnknown} delay unknown</span></div>
-          {#if traffic.sources?.rail.error}<p class="notice">{traffic.sources.rail.error}</p>{/if}
+          <div class="rail-summary"><strong>Rail · {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'}</strong><span>{freshRail.length} fresh · {railVehicles.length - freshRail.length} stale</span><span>{railDelayed} delayed · {railUnknown} delay unknown</span></div>
+          {#if traffic.sources?.rail?.error}<p class="notice">{traffic.sources.rail.error}</p>{/if}
           {#if railStationsError}<p class="panel-note">{railStationsError}</p>{/if}
-          <label class="filter-label">Route filter<select bind:value={routeFilter}><option value="">All received routes</option>{#each [...new Set(availableVehicles.map(vehicle => vehicle.routeId))].sort() as id (id)}<option value={id}>{routeName(id)} · {id}</option>{/each}</select></label>
+          <div class="rail-summary marine-summary"><strong>Ships · {marineState}</strong><span>{freshMarine.length} fresh reports · {marineVehicles.length - freshMarine.length} stale reports</span>{#if !marineVehicles.length}<span>No retained reports in this coverage; this does not establish that no ships are present.</span>{/if}</div>
+          {#if marineSource?.error}<p class="notice">{marineSource.error}</p>{/if}
+          <label class="filter-label">Transit route filter<select bind:value={routeFilter}><option value="">All received routes</option>{#each [...new Set(availableVehicles.flatMap(vehicle => vehicle.routeId === null ? [] : [vehicle.routeId]))].sort() as id (id)}<option value={id}>{routeName(id)} · {id}</option>{/each}</select></label>
           {#if routeFilter}<button class="text-button" onclick={() => routeFilter = ''}>Clear route filter</button>{/if}
+          <p class="panel-note">Transit models use real-world scale. Ship markers are schematic; banners identify their sources. Counts are reports, with possible HSL / AIS overlap.</p>
 
           {:else if activeTool === 'buildings' || activeTool === 'energy'}
             <p class="panel-note console-intro">{activeTool === 'buildings' ? 'Select a building for its address, use and register details. Use colors to explore patterns across the city.' : 'Explore estimated demand and solar potential. Select a building for available measurements and model records.'}</p>
@@ -490,7 +500,7 @@
       {/if}
       {#if activeTool === 'transport'}
       <section class="panel feed-panel" aria-label="Traffic status"><div class="panel-heading"><h2>Reported traffic</h2><span class:connected={currentFeed} class="status-dot"></span></div>
-        <div class="feed-summary"><strong>{visibleVehicles.length}</strong><span>vehicles in visible modes / route<br />{staleCount ? `${staleCount} stale · held at last position` : 'Latest received positions'}</span></div>
+        <div class="feed-summary"><strong>{visibleVehicles.length}</strong><span>reports in visible modes / transit route<br />{staleCount ? `${staleCount} stale · held at last position` : 'Latest received positions'}</span></div>
         <p class="panel-note">{trafficError || (traffic.status.lastPositionAt ? `Last report ${formatDate(traffic.status.lastPositionAt)}` : 'Waiting for real position reports.')}</p>
         {#if stats?.unplacedVehicles}<p class="panel-note">{stats.unplacedVehicles} ground vehicles omitted where terrain height is unknown.</p>{/if}
       </section>
@@ -531,21 +541,23 @@
             {#key selected.building.id}<BuildingEnergy building={selected.building} catalogState={detailEnergy} loadingCatalog={detailQuery.isFetching} buildings={indexedBuildings} onmember={id => { const member = indexedBuildings.find(building => building.id === id); if (member) selectObject({ kind: 'building', building: member }); }} />{/key}
             </div>
           {:else if selected?.kind === 'vehicle'}
-            {#if selected.vehicle.rail}
+            {#if selected.vehicle.mode === 'ship'}
+              <MarineVesselDetails vehicle={selected.vehicle} source={marineSource} connected={browserConnected} {now} removed={selected.removed} />
+            {:else if selected.vehicle.rail}
               <RailTrainDetails vehicle={selected.vehicle} journey={railJourney} {now} removed={selected.removed} loading={routeLoading} error={routeError} />
             {:else}
             <span class="eyebrow">HSL / {selected.vehicle.mode.toUpperCase()}</span><h3>Route {route?.status === 'exact' ? route.routeLabel ?? routeName(selected.vehicle.routeId) : routeName(selected.vehicle.routeId)}</h3>
-            {#if selected.removed || trafficAge(selected.vehicle, now) >= TRAFFIC_REMOVE_MS}<p class="notice">This vehicle has left the current feed or its position expired. Its last reported identity remains here.</p>{:else if trafficIsStale(selected.vehicle, now)}<p class="notice">Stale position. Held at its last received coordinates.</p>{/if}
+            {#if selected.removed || trafficShouldRemove(selected.vehicle, now)}<p class="notice">This vehicle has left the current feed or its position expired. Its last reported identity remains here.</p>{:else if trafficIsStale(selected.vehicle, now)}<p class="notice">Stale position. Held at its last received coordinates.</p>{/if}
             <dl class="properties"><div><dt>Mode</dt><dd>{label(selected.vehicle.mode)}</dd></div><div><dt>Route ID</dt><dd>{selected.vehicle.routeId}</dd></div><div><dt>Direction</dt><dd>{selected.vehicle.directionId === null ? 'Unknown' : `HFP ${selected.vehicle.directionId}`}</dd></div><div><dt>Destination</dt><dd>{route?.status === 'exact' ? route.destination ?? 'Unknown — not supplied' : 'Unknown — journey not verified'}</dd></div><div><dt>Owner / vehicle</dt><dd>{selected.vehicle.ownerOperatorId} / {selected.vehicle.vehicleId}</dd></div><div><dt>Schedule</dt><dd class:late={(selected.vehicle.delaySeconds ?? 0) > 60} class:early={(selected.vehicle.delaySeconds ?? 0) < -60}>{delayLabel(selected.vehicle.delaySeconds)}</dd></div><div><dt>Speed</dt><dd>{selected.vehicle.speedMetresPerSecond === null ? 'Unknown' : `${(selected.vehicle.speedMetresPerSecond * 3.6).toFixed(1)} km/h`}</dd></div><div><dt>Reported</dt><dd>{formatDate(selected.vehicle.reportedAt)}<small>{age(selected.vehicle)}</small></dd></div><div><dt>Received</dt><dd>{formatDate(selected.vehicle.receivedAt)}</dd></div><div><dt>Feed / position</dt><dd>{currentFeed ? 'Browser connected' : 'Browser paused / disconnected'} · {selected.removed ? 'expired' : trafficIsStale(selected.vehicle, now) ? 'stale' : 'current'}</dd></div></dl>
             <p class="panel-note">±60 seconds is an application display convention for “on time”. Exact signed deviation remains below.</p>
             <details class="vehicle-details"><summary>Exact report & journey details</summary><dl class="properties"><div><dt>Raw HFP deviation</dt><dd>{signedSeconds(selected.vehicle.rawDeviationSeconds)}<small>Negative means late in HFP.</small></dd></div><div><dt>Normalized delay</dt><dd>{signedSeconds(selected.vehicle.delaySeconds)}<small>{selected.vehicle.delaySeconds === null ? 'Unknown' : selected.vehicle.delaySeconds > 0 ? 'Positive = late' : selected.vehicle.delaySeconds < 0 ? 'Negative = early' : 'Exact zero'}</small></dd></div><div><dt>Journey</dt><dd>{selected.vehicle.journeyReference ?? 'Unknown'}</dd></div><div><dt>Service date</dt><dd>{selected.vehicle.serviceDate ?? 'Unknown'}</dd></div><div><dt>Start time</dt><dd>{selected.vehicle.startTime ?? 'Unknown'}</dd></div><div><dt>Operating operator</dt><dd>{selected.vehicle.operatingOperatorId ?? 'Unknown'}</dd></div><div><dt>Quality flags</dt><dd>{selected.vehicle.quality.join(', ') || 'No flags supplied'}</dd></div><div><dt>Position</dt><dd>{selected.vehicle.latitude?.toFixed(5) ?? 'Unknown'}, {selected.vehicle.longitude?.toFixed(5) ?? 'Unknown'}</dd></div></dl></details>
             {/if}
-            <button class="follow-button" disabled={!scene || selected.removed || trafficIsStale(selected.vehicle, now)} onclick={() => { following = !following; scene?.followVehicle(following && selected?.kind === 'vehicle' ? selected.vehicle.id : null); }}>{following ? 'Stop following' : selected.vehicle.mode === 'train' ? 'Follow train' : 'Follow vehicle'} <span>↗</span></button>
+            <button class="follow-button" disabled={!scene || selected.removed || trafficIsStale(selected.vehicle, now)} onclick={() => { following = !following; scene?.followVehicle(following && selected?.kind === 'vehicle' ? selected.vehicle.id : null); }}>{following ? 'Stop following' : selected.vehicle.mode === 'ship' ? 'Follow ship' : selected.vehicle.mode === 'train' ? 'Follow train' : 'Follow vehicle'} <span>↗</span></button>
             <p class="panel-note">{!scene ? 'Follow requires the 3D scene. ' : ''}Moving the camera cancels follow. Positions stop when reports stop.</p>
-            <div class="route-context" data-route-status={routeLoading ? 'loading' : route?.status ?? 'unavailable'}><h4>Scheduled route context</h4><p class="panel-note">{routeLoading ? 'Checking the exact reported journey…' : routeError || route?.reason || (route?.status === 'exact' ? 'Verified journey shape and stops. The raw vehicle position is not snapped to this path.' : 'Journey mapping unavailable. No guessed path is drawn.')}</p>
+            {#if selected.vehicle.mode !== 'ship'}<div class="route-context" data-route-status={routeLoading ? 'loading' : route?.status ?? 'unavailable'}><h4>Scheduled route context</h4><p class="panel-note">{routeLoading ? 'Checking the exact reported journey…' : routeError || route?.reason || (route?.status === 'exact' ? 'Verified journey shape and stops. The raw vehicle position is not snapped to this path.' : 'Journey mapping unavailable. No guessed path is drawn.')}</p>
               {#if route}<p class="route-match">Match: {route.status}</p>{/if}
               {#if route?.status === 'exact'}<dl class="properties"><div><dt>Trip</dt><dd>{route.tripId}</dd></div><div><dt>Departure</dt><dd>{formatDate(route.departureAt)}</dd></div><div><dt>Index prepared</dt><dd>{formatDate(route.generatedAt)}</dd></div><div><dt>GTFS retrieved</dt><dd>{formatDate(route.source?.retrievedAt)}</dd></div></dl><details><summary>{route.stops.length} scheduled stops in this area</summary><ol class="route-stop-list">{#each route.stops as stop (stop.sequence)}<li><strong>{stop.name}</strong><span>{formatDate(stop.arrivalAt ?? stop.departureAt)}</span></li>{/each}</ol></details>{/if}
-            </div>
+            </div>{/if}
           {:else if selected?.kind === 'station' && selected.station.kind === 'rail'}
             <RailStationBoard station={selected.station} vehicles={availableVehicles} ontrain={(vehicle: Vehicle) => { layers.train = true; layers[vehicle.rail?.category ?? 'other'] = true; routeFilter = ''; selectObject({ kind: 'vehicle', vehicle }); }} />
           {:else if selected?.kind === 'station'}
@@ -561,7 +573,7 @@
       {:else}
       <section class="panel console-welcome"><div class="panel-heading"><h2>Welcome to Helsinki</h2><span aria-hidden="true">▥</span></div><div class="panel-content">
         <span class="eyebrow">YOUR CITY, UP CLOSE</span><h3>Every place has a story.</h3><p class="panel-note">Select a building, vehicle or station to see what is happening there.</p>
-        <div class="console-welcome-actions"><button onclick={() => { document.getElementById('city-search')?.focus(); searchOpen = true; }}><ConsoleIcon name="inspect" /><span>Find a place<small>Search buildings, routes & stations</small></span><span aria-hidden="true">→</span></button><button onclick={() => chooseTool('transport')}><ConsoleIcon name="transport" /><span>Explore transport<small>Trams, buses, trains & ferries</small></span><span aria-hidden="true">→</span></button><button onclick={() => chooseTool('environment')}><ConsoleIcon name="environment" /><span>Nearby conditions<small>Weather & air-quality readings</small></span><span aria-hidden="true">→</span></button></div>
+        <div class="console-welcome-actions"><button onclick={() => { document.getElementById('city-search')?.focus(); searchOpen = true; }}><ConsoleIcon name="inspect" /><span>Find a place<small>Search buildings, routes & stations</small></span><span aria-hidden="true">→</span></button><button onclick={() => chooseTool('transport')}><ConsoleIcon name="transport" /><span>Explore transport<small>Trams, buses, trains, ferries & ships</small></span><span aria-hidden="true">→</span></button><button onclick={() => chooseTool('environment')}><ConsoleIcon name="environment" /><span>Nearby conditions<small>Weather & air-quality readings</small></span><span aria-hidden="true">→</span></button></div>
         <p class="panel-note console-welcome-note">Real source records. Missing or out-of-date readings stay clearly marked.</p>
       </div></section>
       {/if}
@@ -579,7 +591,8 @@
       {#if observationLoading && !observationSnapshot}<p class="notice">Loading observations…</p>{/if}{#if observationError}<p class="notice">Unavailable refresh · {observationError}</p>{/if}
       {#each observationSnapshot?.sources ?? [] as source (source.id)}<details class="source-record" open><summary>{source.provider} · <span class="badge {source.state}">{source.state}</span></summary><p class="panel-note">{source.message}</p>{#if source.lastError}<p class="notice">Outage: {source.lastError}</p>{/if}<p class="panel-note">{source.attribution}</p><a href={source.url} target="_blank" rel="noreferrer">Source query reference ↗</a><dl class="properties"><div><dt>Observed</dt><dd>{formatDate(source.observedAt)}</dd></div><div><dt>Retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>Metadata retrieved</dt><dd>{formatDate(source.metadataRetrievedAt)}</dd></div><div><dt>Last check</dt><dd>{formatDate(source.lastAttemptAt)}</dd></div><div><dt>Next eligible check</dt><dd>{formatDate(source.nextRefreshAt)}</dd></div><div><dt>Refresh check</dt><dd>{source.refreshMs / 60_000} min</dd></div><div><dt>Vintage / window</dt><dd>{source.vintage ?? 'Unknown'}</dd></div><div><dt>License</dt><dd>{source.license}</dd></div><div><dt>Coverage</dt><dd>{source.coverage}</dd></div><div><dt>Resolution</dt><dd>{source.resolution}</dd></div><div><dt>Units</dt><dd>{source.units.join(', ') || 'Unknown'}</dd></div><div><dt>Parameters</dt><dd>{source.parameters.join(', ')}</dd></div></dl><p class="panel-note">{source.method}</p>{#if source.requests?.length}<details><summary>Actual bounded source requests</summary>{#each source.requests as request, index (index)}<a href={request.url} target="_blank" rel="noreferrer">Request {index + 1} ↗</a><p class="panel-note">Retrieved {formatDate(request.retrievedAt)} · received {formatDate(request.receivedAt)}</p>{/each}</details>{/if}</details>{/each}
       <p class="panel-note">Weather refresh checks start at five minutes; air-quality checks at fifteen minutes. Provider publication cadence and per-parameter freshness differ. Refreshing never changes an observation time.</p>
-      <h3>Rail traffic · Fintraffic Digitraffic</h3><p class="panel-note">Positions: {railLive ? 'connected' : traffic.sources?.rail.state ?? 'connecting'} · last report {formatDate(traffic.sources?.rail.lastPositionAt)}. {traffic.sources?.rail.error ?? ''}</p><p class="panel-note">Position checks every five seconds; timetables every 30 seconds. Train display buffers 12 seconds of received reports. Stale at 30 seconds; removed at 120 seconds. Representative two-car model; approximate terrain height. GPS coverage is incomplete, including freight and yard operations.</p><p class="panel-note">Station catalog: {railStations?.state ?? 'loading'} · checked {formatDate(railStations?.retrievedAt)}. {railStationsError}</p><a href="https://www.digitraffic.fi/en/railway-traffic/" target="_blank" rel="noreferrer">Fintraffic railway data · CC BY 4.0 ↗</a>
+      <h3>Rail traffic · Fintraffic Digitraffic</h3><p class="panel-note">Positions: {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'} · last report {formatDate(traffic.sources?.rail?.lastPositionAt)}. {traffic.sources?.rail?.error ?? ''}</p><p class="panel-note">Position checks every five seconds; timetables every 30 seconds. Train display buffers 12 seconds of received reports. Stale at 30 seconds; removed at 120 seconds. Representative two-car model; approximate terrain height. GPS coverage is incomplete, including freight and yard operations.</p><p class="panel-note">Station catalog: {railStations?.state ?? 'loading'} · checked {formatDate(railStations?.retrievedAt)}. {railStationsError}</p><a href="https://www.digitraffic.fi/en/railway-traffic/" target="_blank" rel="noreferrer">Fintraffic railway data · CC BY 4.0 ↗</a>
+      <h3>Ships · Fintraffic Digitraffic</h3><p class="panel-note">{marineState} · last local position report {formatDate(marineSource?.lastPositionAt)}. Last source update {formatDate(marineSource?.feedUpdatedAt)}. {marineSource?.positionError ?? marineSource?.error ?? ''}</p><p class="panel-note">Ship display delays received reports by 10 seconds to smooth movement. Reduced motion and interrupted feeds show the latest accepted position. Positions stop when reports stop. Moving or unknown-status reports become stale after 2 minutes and leave the scene after 10 minutes. At anchor or moored with low reported speed: stale after 10 minutes, removed after 30 minutes.</p><p class="panel-note">Partial Class A AIS coverage; fishing vessels are filtered upstream. Helsinki coverage excludes Vuosaari. An empty list is not evidence of an empty harbour. HSL ferries and AIS identities remain separate and can overlap; counts describe reports. Markers are schematic at the sea display datum.</p><p class="panel-note">Marine data: Fintraffic / Digitraffic, CC BY 4.0. Filtered to Helsinki; positions interpolated for display.</p><a href="https://www.digitraffic.fi/en/marine-traffic/" target="_blank" rel="noreferrer">Fintraffic marine data ↗</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a>
       <h3>HSL traffic</h3><p class="panel-note">Browser stream: {hslLive ? 'connected' : 'paused / disconnected'} · last upstream state: {traffic.status.state}. Last provider report {formatDate(traffic.status.lastPositionAt)}. {trafficError}</p><p class="panel-note">Motion buffer: 1.2 seconds of received reports. Stale after 30 seconds; removed after 120 seconds. Representative Blender models use real-world scale. Exact fleet variants are not supplied by HSL; route flags use prepared line labels.</p>
       <h3>Scheduled route data</h3><p class="panel-note">{routeCatalogLoading ? 'Loading route metadata…' : routeCatalog?.status === 'ready' ? `${routes.length} prepared routes available.` : routeCatalog?.reason ?? 'Route metadata unavailable.'}</p>{#if routeCatalog?.source}<a class="source-link" href={routeCatalog.source.url} target="_blank" rel="noreferrer">HSL GTFS source ↗</a><dl class="properties"><div><dt>Provider</dt><dd>Helsinki Region Transport (HSL)</dd></div><div><dt>Index prepared</dt><dd>{formatDate(routeCatalog.generatedAt)}</dd></div><div><dt>GTFS retrieved</dt><dd>{formatDate(routeCatalog.source.retrievedAt)}</dd></div><div><dt>Feed version</dt><dd>{routeCatalog.source.feedVersion ?? 'Unknown'}</dd></div><div><dt>Validity</dt><dd>{routeCatalog.source.validFrom}–{routeCatalog.source.validTo}</dd></div><div><dt>Archive SHA256</dt><dd>{routeCatalog.source.archiveSha256}</dd></div></dl><p class="panel-note">Only an exact active journey match supplies shape and stops. Missing or ambiguous matches show an explicit reason.</p>{/if}
       {#if sample.sampleError}<p class="notice">{sample.sampleError}</p>{/if}
@@ -598,7 +611,9 @@
 
 <style>
   .rail-summary { display: grid; gap: 4px; margin: 9px 0; padding: 10px; border-left: 3px solid #b29bd8; background: #b29bd810; font-size: 11px; }
+  .marine-summary { border-color: #79cbd7; background: #79cbd710; }
   .rail-summary strong { color: #d2bdf4; }
+  .marine-summary strong { color: #9be1e9; }
   .rail-filters { margin: 5px 0; }
   .ryhti-legend { display: grid; gap: 0.3rem; }
   .ryhti-legend button { text-align: left; padding: 0.4rem; }

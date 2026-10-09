@@ -30,5 +30,6 @@ export function railDelay(event: RailEvent | null): number | null {
   const time = event?.actualAt ?? event?.estimatedAt;
   return time && event ? Math.round((Date.parse(time) - Date.parse(event.scheduledAt)) / 1000) : null;
 }
-export const vehicleLabel = (vehicle: Pick<Vehicle, 'rail' | 'routeId'>, routeLabel?: string) => vehicle.rail?.label ?? routeLabel ?? vehicle.routeId;
+export const vehicleLabel = (vehicle: Pick<Vehicle, 'rail' | 'routeId'> & Partial<Pick<Vehicle, 'marine' | 'vehicleId'>>, routeLabel?: string) =>
+  vehicle.marine ? vehicle.marine.name ?? `MMSI ${vehicle.marine.mmsi}` : vehicle.rail?.label ?? routeLabel ?? vehicle.routeId ?? vehicle.vehicleId ?? 'Unknown vehicle';
 export const railJourneyUrl = (rail: RailSummary) => rail.departureDate ? `/api/rail/trains/${rail.departureDate}/${rail.trainNumber}` : null;

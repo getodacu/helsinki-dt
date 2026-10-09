@@ -39,14 +39,14 @@ export interface BuildingChunk {
   origin: { longitude: number; latitude: number; elevation: number };
 }
 
-export type TransitMode = 'tram' | 'bus' | 'ferry' | 'train';
+export type TransitMode = 'tram' | 'bus' | 'ferry' | 'train' | 'ship';
 export interface Vehicle {
   id: string;
   mode: TransitMode;
   ownerOperatorId: string | null;
   vehicleId: string;
   operatingOperatorId: string | null;
-  routeId: string;
+  routeId: string | null;
   directionId: string | null;
   serviceDate: string | null;
   startTime: string | null;
@@ -62,6 +62,7 @@ export interface Vehicle {
   quality: string[];
   sourceId: string;
   rail?: import('./rail.ts').RailSummary;
+  marine?: import('./marine.ts').MarineSummary;
 }
 
 export interface Observation {

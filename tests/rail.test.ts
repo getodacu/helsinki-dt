@@ -50,6 +50,18 @@ test('journey metadata keeps report age, named delay sign, platforms, cancellati
   assert.equal(railDepartures(Array.from({ length: 20 }, (_, i) => decodeRailJourney(timetable({ trainNumber: i + 1 }), stations, iso(), NOW)), 'HKI', NOW).length, 12);
 });
 
+test('rail display text rejects controls and lone surrogates while preserving valid Unicode and nulls', () => {
+  for (const invalid of ['station\u0001', 'station\n', '\ud800', '\udfff']) {
+    assert.throws(() => decodeRailStations([{ ...stationRows[0], stationName: invalid }]));
+    assert.throws(() => decodeRailJourney(timetable({ operatorShortCode: invalid }), stations, iso(), NOW));
+    assert.throws(() => decodeRailJourney(timetable({ timeTableRows: [event({ commercialTrack: invalid })] }), stations, iso(), NOW));
+  }
+  const unicode = 'Ä東京🚆';
+  assert.equal(decodeRailStations([{ ...stationRows[0], stationName: unicode }])[0].name, unicode);
+  const summary = decodeRailJourney(timetable({ operatorShortCode: unicode, trainType: null }), stations, iso(), NOW).summary;
+  assert.equal(summary.operator, unicode); assert.equal(summary.trainType, null);
+});
+
 test('cache shares requests, bounds concurrency, refreshes at 30 seconds and retains failed data as stale', async () => {
   let now = NOW, fail = false, calls = 0, active = 0, peak = 0;
   const store = new RailDataStore(async path => {
@@ -148,10 +160,10 @@ test('train motion buffers 12 seconds, derives bearing, holds at last report, re
   const buffer = new ReceivedPositions();
   for (let i = 0; i <= 20; i++) buffer.upsert(decodeRailPosition(position({ timestamp: iso(i * 1000), location: { type: 'Point', coordinates: [24.94 + i * .0001, 60.19] } }), iso(i * 1000)));
   const buffered = buffer.position(railId('2026-10-09', '23'), NOW + 20_000)!, discrete = buffer.position(railId('2026-10-09', '23'), NOW + 20_000, true)!;
-  assert.ok(discrete.x - buffered.x > 50); assert.ok(Math.abs(discrete.heading - 90) < 1); assert.equal(buffer.position(railId('2026-10-09', '23'), NOW + 60_000)?.x, discrete.x);
+  assert.ok(discrete.x - buffered.x > 50); assert.ok(Math.abs(discrete.heading! - 90) < 1); assert.equal(buffer.position(railId('2026-10-09', '23'), NOW + 60_000)?.x, discrete.x);
   assert.equal(buffer.position(railId('2026-10-09', '23'), NOW + 140_000), null);
   buffer.upsert(decodeRailPosition(position({ timestamp: iso(21_000), location: { type: 'Point', coordinates: [25.04, 60.19] } }), iso(21_000))); assert.equal(buffer.tracks.values().next().value?.positions.length, 1);
-  const train = withRailJourney(decodeRailPosition(position(), iso()), journey()), modes = { tram: true, bus: true, ferry: true, train: true };
+  const train = withRailJourney(decodeRailPosition(position(), iso()), journey()), modes = { tram: true, bus: true, ferry: true, train: true, ship: true };
   assert.equal(vehicleVisible(train, { ...modes, 'long-distance': false }), false);
   const fleet = new LiveFleet(() => null); fleet.setVehicles([train]); fleet.update(NOW, modes, true); assert.equal(fleet.visibleCount, 0); assert.equal(fleet.unplacedCount, 1); assert.equal(fleet.motion.tracks.size, 1); fleet.dispose();
 });

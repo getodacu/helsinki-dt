@@ -13,7 +13,7 @@ nav button { padding: 8px 14px; background: #244657; margin: 4px; }
 <div id="stage"></div>
 <header><h1>Helsinki transit · Blender → Three.js</h1>
 <p>Representative exteriors in metres. The adjacent building is 20 m tall. Drag to orbit; scroll to zoom.</p>
-<nav><button data-mode="bus">Bus</button><button data-mode="tram">Tram</button><button data-mode="ferry">Ferry</button><button data-mode="train">Train</button><button data-mode="all">All four</button><button id="dense">450 vehicles</button><button id="stale">Stale / current</button></nav>
+<nav><button data-mode="bus">Bus</button><button data-mode="tram">Tram</button><button data-mode="ferry">Ferry</button><button data-mode="train">Train</button><button data-mode="ship">Ship</button><button data-mode="all">All five</button><button id="dense">450 vehicles</button><button id="stale">Stale / current</button></nav>
 <p id="selected">Click a route banner or vehicle to select it.</p><pre id="result">Loading GLBs…</pre></header>
 <script type="module">
 import * as THREE from 'three';
@@ -39,8 +39,9 @@ for (let floor = 0; floor < 5; floor++) for (let column = 0; column < 4; column+
 const camera = new THREE.PerspectiveCamera(42, 1, .1, 3000), controls = new OrbitControls(camera, renderer.domElement);
 controls.minDistance = 10; controls.maxDistance = 1400; controls.maxPolarAngle = Math.PI / 2 - .025;
 const fleet = new LiveFleet(() => 0, 0); scene.add(fleet.root);
-const records = ['bus', 'tram', 'ferry', 'train'].map((mode, i) => ({ id: `fixture/${mode}`, mode, routeId: ['10024', '1002', '1019', 'rail:23'][i],
-  reportedAt: new Date().toISOString(), longitude: 24.952 + (i - 1) * .00055, latitude: 60.1695, headingDegrees: 0 }));
+const records = ['bus', 'tram', 'ferry', 'train', 'ship'].map((mode, i) => ({ id: `fixture/${mode}`, mode, routeId: ['10024', '1002', '1019', 'rail:23', null][i],
+  reportedAt: new Date().toISOString(), longitude: 24.952 + (i - 1) * .00055, latitude: 60.1695, headingDegrees: mode === 'ship' ? null : 0, speedMetresPerSecond: 0, vehicleId: mode === 'ship' ? '230123456' : String(i), quality: [],
+  ...(mode === 'ship' ? { marine: { mmsi: '230123456', name: 'Fixture ship', navigationStatus: 5, courseOverGroundDegrees: null } } : {}) }));
 let selected = null, hovered = null, stale = false, currentMode = 'all', dense = false;
 const flags = new VehicleFlags(stage, vehicle => select(vehicle.id), (id) => hovered = id);
 flags.setRoutes([{ routeId: '10024', label: '24' }, { routeId: '1002', label: '2' }, { routeId: '1019', label: '19' }]);
@@ -49,10 +50,10 @@ function view(mode) {
   currentMode = mode;
   const record = records.find(record => record.mode === mode);
   const [x, , z] = record ? wgs84ToScene(record.longitude, record.latitude) : [0, 0, 0];
-  controls.target.set(x, mode === 'ferry' ? 3 : 1.7, z);
+  controls.target.set(x, mode === 'ferry' || mode === 'ship' ? 3 : 1.7, z);
   const distance = mode === 'bus' ? 25 : mode === 'tram' ? 42 : mode === 'ferry' ? 55 : mode === 'train' ? 65 : 125;
   camera.position.set(x + distance * .95, distance * .58, z - distance * .85); controls.update();
-  ground.material.color.set(mode === 'ferry' ? '#476f84' : '#819295'); building.visible = mode === 'all';
+  ground.material.color.set(mode === 'ferry' || mode === 'ship' ? '#476f84' : '#819295'); building.visible = mode === 'all';
 }
 for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => { dense = false; view(button.dataset.mode); };
 document.querySelector('#stale').onclick = () => stale = !stale;
@@ -72,11 +73,11 @@ function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = i
 addEventListener('resize', resize); resize();
 let frames = 0, statsAt = performance.now();
 function render(now) {
-  const vehicles = dense ? Array.from({ length: 450 }, (_, i) => ({ ...records[i % 4], id: `fixture/${i}`, longitude: 24.951 + i % 30 * .00008,
+  const vehicles = dense ? Array.from({ length: 450 }, (_, i) => ({ ...records[i % 5], id: `fixture/${i}`, longitude: 24.951 + i % 30 * .00008,
     latitude: 60.169 + Math.floor(i / 30) * .00018 })) : records;
   const time = new Date().toISOString();
   fleet.setVehicles(vehicles.map(vehicle => ({ ...vehicle, reportedAt: time })));
-  fleet.update(Date.now() + (stale ? 31_000 : 0), Object.fromEntries(['bus', 'tram', 'ferry', 'train'].map(mode => [mode, dense || currentMode === 'all' || currentMode === mode])), true);
+  fleet.update(Date.now() + (stale ? 601_000 : 0), Object.fromEntries(['bus', 'tram', 'ferry', 'train', 'ship'].map(mode => [mode, dense || currentMode === 'all' || currentMode === mode])), true);
   controls.update(); camera.updateMatrixWorld();
   flags.update(fleet.placements, camera, innerWidth, innerHeight, selected, hovered);
   renderer.render(scene, camera); frames++;

@@ -24,6 +24,15 @@ test('dense views keep a bounded set of separated flags', () => {
   const flags = projectVehicleFlags(placements, wide, 3000, 3000, '399');
   assert.equal(flags.length, 80); assert.equal(flags[0].placement.vehicle.id, '399');
   for (let i = 0; i < flags.length; i++) for (let j = i + 1; j < flags.length; j++) {
-    assert.ok(Math.abs(flags[i].x - flags[j].x) >= 62 || Math.abs(flags[i].y - flags[j].y) >= 102);
+    assert.ok(Math.abs(flags[i].x - flags[j].x) >= 48 || Math.abs(flags[i].y - flags[j].y) >= 66);
   }
+});
+
+test('compact posts fit nearby vehicles and reserve enough room above the roof for the panel and stem', () => {
+  const view = new THREE.OrthographicCamera(-400, 400, 400, -400, 1, 5000);
+  view.position.set(0, 2000, 0); view.lookAt(0, 0, 0); view.updateMatrixWorld();
+  assert.deepEqual(projectVehicleFlags([placement('a'), placement('b', 50)], view, 800, 800)
+    .map(flag => flag.placement.vehicle.id), ['a', 'b']);
+  assert.equal(projectVehicleFlags([placement('near-top', 0, -330)], view, 800, 800).length, 1);
+  assert.equal(projectVehicleFlags([placement('clipped', 0, -350)], view, 800, 800).length, 0);
 });

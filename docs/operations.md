@@ -1,6 +1,6 @@
 # Helsinki Lens operations
 
-Run one Node 24 process with npm 11, from the extracted release or source project root. No upstream credentials are required. The release is intended for Linux/macOS with relative symlinks preserved. Normal HTTP serving needs outbound HTTPS to FMI and Nuuka and TLS MQTT to `mqtt.hsl.fi:8883`; data preparation also downloads the documented City of Helsinki/HSL sources and the pinned Java converter. Provider outages remain visible in the application.
+Run one Node 24 process with npm 11, from the extracted release or source project root. No upstream credentials are required. The release is intended for Linux/macOS with relative symlinks preserved. Normal HTTP serving needs outbound HTTPS to FMI, Nuuka and Digitraffic, TLS MQTT to `mqtt.hsl.fi:8883`, and TLS WebSocket MQTT to `meri.digitraffic.fi:443`; data preparation also downloads the documented City of Helsinki/HSL sources and the pinned Java converter. Provider outages remain visible in the application.
 
 ## Prepare, build and package
 
@@ -54,7 +54,7 @@ Environment variables supplied by the process manager override values in `.env`.
 
 ## Reverse proxy and SSE
 
-Use one worker/process for the application. Each browser shares the process's demand-driven MQTT connection; a cluster or several replicas would create independent feeds. HSL reconnect backoff is 1–30 seconds. Last browser departure releases MQTT after a 30-second grace. Positions are stale at 30 seconds and removed at 120 seconds by provider report time. Hidden tabs close their SSE connection and resume from a full current snapshot. No invented positions replace disconnected reports.
+Use one worker/process for the application. Each browser shares the process's demand-driven HSL and marine MQTT connections; a cluster or several replicas would create independent feeds. HSL reconnect backoff is 1–30 seconds; marine reconnects use 15/30/60-second delays plus jitter. The final browser departure releases feeds after a 30-second grace. HSL/rail positions are stale at 30 seconds and removed at 120 seconds; marine positions use the source-specific age policy in [data contracts](data-contracts.md). Hidden tabs close their SSE connection and resume from a full current snapshot. The per-client SSE queue is capped at 8 MiB; slow clients disconnect and recover from a snapshot. No invented positions replace disconnected reports.
 
 An nginx location for the long-lived stream:
 
@@ -79,9 +79,22 @@ The upstream sends a heartbeat every 15 seconds and `X-Accel-Buffering: no`. Pre
 
 Check **process health** with `curl --fail --max-time 5 http://127.0.0.1:3000/ >/dev/null` from the host, plus the process manager's exit state and memory. The root HTML response does not require upstream sources to be live. Source outage is not a reason for a restart loop.
 
-Check **source health** separately: `GET /api/traffic` returns connection status and dated positions; `GET /api/observations` returns source status plus actual measurement/retrieval times; `GET /api/route` returns prepared labels/validity or an unavailable reason; `GET /api/energy/catalog` returns ready/stale/unavailable state with dated provenance. These endpoints may return HTTP 200 for an honest source outage. `/api/traffic` also acquires demand for MQTT, so a monitoring poll changes the otherwise idle feed lifetime. Do not equate a transport HTTP 200 with fresh data. Inspect the status and dates shown in the product or JSON.
+Check **source health** separately: `GET /api/traffic` returns connection status and dated positions, including independent `sources.hsl`, `sources.rail` and `sources.marine` state; `GET /api/observations` returns source status plus actual measurement/retrieval times; `GET /api/route` returns prepared labels/validity or an unavailable reason; `GET /api/energy/catalog` returns ready/stale/unavailable state with dated provenance. These endpoints may return HTTP 200 for an honest source outage. `/api/traffic` also acquires demand for the shared live feeds, so a monitoring poll changes their otherwise idle lifetime. Do not equate a transport HTTP 200 with fresh data. Inspect the status and dates shown in the product or JSON.
 
 Capture stdout/stderr using the existing process manager or shell redirection and retain restart timestamps/release IDs. There is no project-specific logfile path or account required. For manual inspection, `npm start > /absolute/operator/logs/helsinki.log 2>&1` captures startup/uncaught errors. Rotate logs through the host's standard tooling. Track source outages, cache write errors, request latency, memory and restart count separately. The application does not log upstream credentials; do not add raw payload or environment dumps to operational logs.
+
+### Marine feed and bounded verification
+
+The marine source is healthy only when its own status and recent MQTT/REST timestamps support that conclusion. A quiet local fleet is valid; after two minutes without a valid source message/update the feed marks marine stale and starts bounded recovery. While MQTT is unavailable, position snapshots are retried no more than once per minute. Moving/unknown-status vessels age out at ten minutes; the anchored/moored exception ages out at thirty minutes only with valid speed at or below 0.5 knots. Report time, local receipt time, metadata time and source connection time are distinct. A successful metadata lookup never refreshes position freshness.
+
+Run bounded source checks from a source checkout, not the production bundle:
+
+```sh
+node scripts/verify-marine.ts --integrated --seconds=120
+node scripts/verify-marine.ts --integrated --fixture --peak=40 --seconds=5
+```
+
+The first command observes real Digitraffic MQTT/REST through the shared HSL/rail/marine traffic service and two in-process SSE readers. The second uses an explicitly synthetic fixture at twice the supplied observed AIS peak. The verifier also accepts `--max-bytes`, `--max-messages`, `--interrupt-at` and `--interrupt-for`; its default real observation is capped at 30 minutes. Reports go to ignored `.cache/task-f/` unless `--output` selects another local path. They record bounded summaries and never persist national raw AIS messages. In-process SSE latency is not browser/network latency; use browser evidence for that separately. A live window with zero local ships does not establish an empty harbour. See [Task F results](milestone-results/F.md) for dated runs, scope and unresolved acceptance items.
 
 Weather/AQ caches are bounded in memory and refreshed on demand (weather eligible every five minutes, AQ fifteen, metadata daily); a restart resets these caches and reacquires real observations. Each FMI response is bounded to 2 MiB/30 seconds; failures retain dated valid values while the process lives. Observation age and source connectivity remain distinct.
 

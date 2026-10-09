@@ -97,7 +97,7 @@ export async function probeTransit(durationMs = 30_000): Promise<TransitProbeRes
   }
   const selected = result.vehicles.find((vehicle) => vehicle.mode === 'tram' && vehicle.serviceDate && vehicle.startTime && vehicle.directionId)
     ?? result.vehicles.find((vehicle) => vehicle.serviceDate && vehicle.startTime && vehicle.directionId);
-  if (!selected?.serviceDate) { result.gates.gtfs_journey = { status: 'blocked', evidence: ['No usable real HFP journey in bounded session'], nextAction: 'Repeat HFP probe before checking GTFS' }; return result; }
+  if (!selected?.serviceDate || !selected.routeId) { result.gates.gtfs_journey = { status: 'blocked', evidence: ['No usable real HFP journey in bounded session'], nextAction: 'Repeat HFP probe before checking GTFS' }; return result; }
   try {
     await mkdir('.cache/task-a', { recursive: true });
     const cache = '.cache/task-a/hsl-gtfs.zip';

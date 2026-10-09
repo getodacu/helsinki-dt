@@ -1,0 +1,23 @@
+{
+  "mmsi": 230044550,
+  "type": "Feature",
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      25.025358,
+      60.185162
+    ]
+  },
+  "properties": {
+    "mmsi": 230044550,
+    "sog": 0.0,
+    "cog": 360.0,
+    "navStat": 5,
+    "rot": -128,
+    "posAcc": true,
+    "raim": true,
+    "heading": 511,
+    "timestamp": 48,
+    "timestampExternal": 1791575688270
+  }
+}

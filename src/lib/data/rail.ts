@@ -7,7 +7,7 @@ const object = (value: unknown): Record<string, unknown> => {
 };
 const text = (value: unknown, max = 200): string | null => {
   if (value == null || value === '') return null;
-  if (typeof value !== 'string' || value.length > max) throw new Error('Invalid rail text');
+  if (typeof value !== 'string' || value.length > max || !value.isWellFormed() || /[\u0000-\u001f]/.test(value)) throw new Error('Invalid rail text');
   return value;
 };
 const time = (value: unknown): string | null => {
