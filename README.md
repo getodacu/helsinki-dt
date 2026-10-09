@@ -42,6 +42,7 @@ npm run data:probe -- --source observations
 npm run data:prepare
 npm run city:prepare
 npm run energy:prepare
+npm run ryhti:prepare
 npm run routes:prepare
 ```
 
@@ -131,3 +132,15 @@ Successful measured-energy requests are cached for six hours; failed requests re
 After **every** city preparation, run `npm run energy:prepare`, even when the upstream tileset checksum is unchanged: the energy catalog must match the city generation, semantic source checksum and vintage. Normal preparation reuses verified source caches; `npm run energy:prepare -- --refresh` explicitly retrieves a new source version for review. Review static annual datasets monthly or when a provider announces a new export. Rebuild after preparing static assets. Preserve `static/data/energy-manifest.json`, its referenced immutable catalog, and any `energy-refresh-status.json` alongside the foundation/city/route assets listed in the [D handoff](docs/milestone-results/D.md#e-handoff).
 
 The current energy catalog is 16.75 MB uncompressed and fetched once after scene readiness. The catalog API negotiates gzip and reuses compression for the same validated catalog; SSE remains uncompressed. In the final E production check at 20 Mbps / 50 ms latency with browser cache disabled, the scene became interactive in 1.455 seconds and the complete gzip catalog became usable in 1.988 seconds; internal receipt-to-browser p95 was 935 ms. Solar covers 695/8,909 release buildings in twelve selected district tiles; coverage elsewhere is unqueried. Its meteorological reference year and optional run settings are unknown and stay explicitly labelled. These source coverage limits remain visible; consult E results for final release measurements and browser exceptions. Public deployment is separate.
+
+## Ryhti building register
+
+`npm run ryhti:prepare` prepares open Syke / Ryhti building and permit records for the current city's retained VTJ-PRT identifiers. Run it after city preparation and before the production build. Normal preparation reuses checksum-verified source snapshots; `npm run ryhti:prepare -- --refresh` retrieves both collections again. A failed run retains the previous publication and records its failure. A city-generation mismatch makes enrichment unavailable until preparation runs again.
+
+The inspector shows completed-building register facts separately from municipal geometry attributes, with a list of linked permits. Completion date is not asserted to be the original construction year. Permits can describe historical work; their proposed attributes never overwrite completed-building facts. Exact ambiguous or conflicting associations are withheld. Missing identifiers do not trigger address or proximity matching.
+
+Building colors include Use, Heating method, Heating energy source and Permit action status. Selecting a legend category highlights its buildings and narrows building search; other buildings remain dimmed and pickable. Changing color mode clears this selection. Multiple permit statuses remain explicitly mixed. No linked permit records is not evidence of no construction. Sources & status shows coverage, attribution and snapshot dates.
+
+`GET /api/ryhti/catalog` accepts no parameters, validates the immutable catalog and city-manifest checksum, and reports ready/stale/unavailable. It supports gzip and loads after scene readiness. Existing installations without a Ryhti snapshot remain operational. Release packaging verifies optional Ryhti assets when present. No runtime upstream requests or automatic refresh are added.
+
+The [Ryhti source evidence](docs/ryhti-evidence.md) records measured coverage, limitations and code-list provenance. Syke requires an application identifier for long-term API use; the operator should request it from Syke GIS support as described in the [official instructions](https://ryhti.syke.fi/en/front-page/services/instructions-for-using-open-interfaces-in-the-ryhti-system/). No application identifier has been requested by this integration.

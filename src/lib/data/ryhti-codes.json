@@ -1,0 +1,304 @@
+{
+  "retrievedAt": "2026-10-09T18:34:01.129889+00:00",
+  "sources": [
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/rytj/codeschemes/avoin_rakennusluokitus/codes?pageSize=1000",
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/rytj/codeschemes/lammitystapa/codes?pageSize=1000",
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/rytj/codeschemes/lammitysenergianlahde/codes?pageSize=1000",
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/rytj/codeschemes/rakkohteen-toimenpiteen-tila/codes?pageSize=1000",
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/rytj/codeschemes/Rakentamistoimenpide/codes?pageSize=1000",
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/rytj/codeschemes/kantavanrakenteenrakennusaine/codes?pageSize=1000",
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/rytj/codeschemes/julkisivunrakennusaine/codes?pageSize=1000",
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/vtj/codeschemes/Rake_runkotapa/codes?pageSize=1000",
+    "https://koodistot.suomi.fi/codelist-api/api/v1/coderegistries/vtj/codeschemes/rake_kaytossaolotilanne/codes?pageSize=1000"
+  ],
+  "labels": {
+    "http://uri.suomi.fi/codelist/rytj/avoin_rakennusluokitus/code/01": {
+      "label": "Free-time residential building",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/avoin_rakennusluokitus/code/02": {
+      "label": "Office, production, utility and other buildings",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/avoin_rakennusluokitus/code/03": {
+      "label": "Outbuilding",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/avoin_rakennusluokitus/code/04": {
+      "label": "Sauna building",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/avoin_rakennusluokitus/code/05": {
+      "label": "Detached or semi-detached house",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/avoin_rakennusluokitus/code/06": {
+      "label": "Block of flats",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/avoin_rakennusluokitus/code/07": {
+      "label": "Public building",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitystapa/code/01": {
+      "label": "Central hot-water heating",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitystapa/code/02": {
+      "label": "Central air heating",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitystapa/code/03": {
+      "label": "Electric heating",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitystapa/code/04": {
+      "label": "Furnace/fireplace/stove heating",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitystapa/code/05": {
+      "label": "Solar heating",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitystapa/code/06": {
+      "label": "Air source heat pump",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitystapa/code/07": {
+      "label": "No fixed heating device",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitystapa/code/99": {
+      "label": "Other",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/01": {
+      "label": "District heating",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/02": {
+      "label": "Light fuel oil",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/03": {
+      "label": "Heavy fuel oil",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/04": {
+      "label": "Electricity",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/05": {
+      "label": "Natural gas",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/06": {
+      "label": "Coal",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/07": {
+      "label": "Wood",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/08": {
+      "label": "Peat",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/09": {
+      "label": "Geothermal heating, etc.",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/10": {
+      "label": "Solar energy",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/11": {
+      "label": "Heat pump",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/1101": {
+      "label": "Geothermal heat pump",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/1102": {
+      "label": "Air source heat pump",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/1103": {
+      "label": "Exhaust air heat pump",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/1104": {
+      "label": "Air-to-water heat pump",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/lammitysenergianlahde/code/99": {
+      "label": "Other",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/rakkohteen-toimenpiteen-tila/code/1": {
+      "label": "Suunniteltu",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/rytj/rakkohteen-toimenpiteen-tila/code/2": {
+      "label": "Aloitettu",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/rytj/rakkohteen-toimenpiteen-tila/code/3": {
+      "label": "Keskeytetty",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/rytj/rakkohteen-toimenpiteen-tila/code/4": {
+      "label": "Rauennut",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/rytj/rakkohteen-toimenpiteen-tila/code/5": {
+      "label": "Valmistunut",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/01": {
+      "label": "New building or structure",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/02": {
+      "label": "Expansion",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/03": {
+      "label": "Alteration work comparable to rebuilding",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/04": {
+      "label": "Other alteration work",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/05": {
+      "label": "Demolition",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/06": {
+      "label": "Partial demolition of building",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/07": {
+      "label": "Cityscape action",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/08": {
+      "label": "Landscape-altering action",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/Rakentamistoimenpide/code/09": {
+      "label": "Update of building or structure",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/kantavanrakenteenrakennusaine/code/00": {
+      "label": "Not known",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/kantavanrakenteenrakennusaine/code/01": {
+      "label": "Concrete",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/kantavanrakenteenrakennusaine/code/02": {
+      "label": "Brick",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/kantavanrakenteenrakennusaine/code/03": {
+      "label": "Steel",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/kantavanrakenteenrakennusaine/code/04": {
+      "label": "Wood",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/kantavanrakenteenrakennusaine/code/99": {
+      "label": "Other",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/julkisivunrakennusaine/code/00": {
+      "label": "Not known",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/julkisivunrakennusaine/code/01": {
+      "label": "Concrete",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/julkisivunrakennusaine/code/02": {
+      "label": "Brick",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/julkisivunrakennusaine/code/03": {
+      "label": "Metal sheet",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/julkisivunrakennusaine/code/04": {
+      "label": "Stone",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/julkisivunrakennusaine/code/05": {
+      "label": "Wood",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/julkisivunrakennusaine/code/06": {
+      "label": "Glass",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/rytj/julkisivunrakennusaine/code/99": {
+      "label": "Other",
+      "language": "en"
+    },
+    "http://uri.suomi.fi/codelist/vtj/Rake_runkotapa/code/01": {
+      "label": "Elementti",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/Rake_runkotapa/code/02": {
+      "label": "Paikalla tehty",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/01": {
+      "label": "Käytetään vakinaiseen asumiseen",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/02": {
+      "label": "Toimitila- tai tuotantokäytössä",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/03": {
+      "label": "Käytetään loma-asumiseen",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/04": {
+      "label": "Käytetään muuhun tilapäiseen asumiseen",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/05": {
+      "label": "Tyhjillään",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/06": {
+      "label": "Purettu uudisrakentamisen vuoksi",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/07": {
+      "label": "Purettu muusta syystä",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/08": {
+      "label": "Tuhoutunut",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/09": {
+      "label": "Ränsistymisen vuoksi hylätty",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/10": {
+      "label": "Käytöstä ei ole tietoa",
+      "language": "fi"
+    },
+    "http://uri.suomi.fi/codelist/vtj/rake_kaytossaolotilanne/code/11": {
+      "label": "Muu (sauna, liiteri, kellotapuli, yms.)",
+      "language": "fi"
+    }
+  }
+}

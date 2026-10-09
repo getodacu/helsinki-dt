@@ -2,6 +2,10 @@
   import { onMount, tick } from 'svelte';
   import CityScene from '#lib/components/CityScene.svelte';
   import NearbyConditions from '#lib/components/NearbyConditions.svelte';
+  import BuildingRyhti from '#lib/components/BuildingRyhti.svelte';
+  import { RYHTI_THEMES, ryhtiTheme, ryhtiForCity } from '#lib/ryhti-display.ts';
+  import { validateRyhtiCatalog } from '#lib/data/ryhti.ts';
+  import type { RyhtiCatalogState } from '#lib/ryhti-types.ts';
   import BuildingEnergy from '#lib/components/BuildingEnergy.svelte';
   import { energyThemeOptions, buildingEnergyTheme, energyForCity, ENERGY_COLOURS, NO_ENERGY_COLOUR } from '#lib/energy-display.ts';
   import type { EnergyCatalogState } from '#lib/energy-types.ts';
@@ -19,8 +23,16 @@
   let energyResponse = $state.raw<EnergyCatalogState>({ status: 'unavailable', catalog: null, message: null, attemptedAt: null });
   let energyLoading = $state(true);
   let themeKey = $state('');
-  let sample = $state.raw<Awaited<ReturnType<typeof loadPreparedSample>>>({ manifest: null, buildings: [], sampleError: null });
   let city = $state.raw<{ manifest: CityManifest; base: CityBase; cache: CityAssetCache } | null>(null);
+  let ryhtiResponse = $state.raw<RyhtiCatalogState>({ status: 'unavailable', catalog: null, message: null, attemptedAt: null });
+  let ryhtiLoading = $state(true);
+  let ryhtiCategoryKey = $state('');
+  let ryhti = $derived(ryhtiForCity(ryhtiResponse, city?.manifest.generatedAt ?? null));
+  let activeRyhtiTheme = $derived(ryhti.catalog ? RYHTI_THEMES.find(option => option.key === themeKey) ?? null : null);
+  let ryhtiColors = $derived(ryhtiTheme(ryhti.catalog, activeRyhtiTheme?.key ?? '', ryhtiCategoryKey));
+  let ryhtiById = $derived(new Map(ryhti.catalog?.buildings.map(building => [building.buildingId, building]) ?? []));
+  const changeTheme = (key: string) => { themeKey = key; ryhtiCategoryKey = ''; };
+  let sample = $state.raw<Awaited<ReturnType<typeof loadPreparedSample>>>({ manifest: null, buildings: [], sampleError: null });
   let energy = $derived(energyForCity(energyResponse, city?.manifest ?? null));
   let themeOptions = $derived(energyThemeOptions(energy.catalog));
   let activeTheme = $derived(themeOptions.find(option => option.key === themeKey) ?? null);
@@ -73,7 +85,8 @@
     .sort((a, b) => a.mode.localeCompare(b.mode) || a.routeId.localeCompare(b.routeId) || a.id.localeCompare(b.id)));
   let matchingVehicles = $derived(visibleVehicles.filter(vehicle => !query || matchesVehicle(vehicle, query, routeName(vehicle.routeId))));
   let indexedBuildings = $derived([...new Map([...searchBuildings, ...buildings].map(building => [building.id, building])).values()]);
-  let filteredBuildings = $derived(query ? indexedBuildings.filter(building => matchesBuilding(building, query)) : sceneError && !scene ? indexedBuildings : buildings);
+  let filteredBuildings = $derived((query || (activeRyhtiTheme && ryhtiCategoryKey) || (sceneError && !scene) ? indexedBuildings : buildings)
+    .filter(building => (!query || matchesBuilding(building, query)) && (!activeRyhtiTheme || !ryhtiCategoryKey || ryhtiColors.matchingIds.has(building.id))));
   let matchingRoutes = $derived(routes.filter(item => (!routeFilter || item.routeId === routeFilter) && layers[item.mode]
     && (!query || searchText(`${item.routeId} ${item.label} ${item.name}`).includes(searchText(query)))));
   let observationStations = $derived(observationSnapshot ? groupObservationStations(observationSnapshot) : []);
@@ -142,6 +155,21 @@
       .then(value => { if (!request.signal.aborted) route = value; })
       .catch(error => { if (!request.signal.aborted) routeError = error instanceof Error ? error.message : 'Route context unavailable'; })
       .finally(() => { if (!request.signal.aborted) routeLoading = false; });
+    return () => request.abort();
+  });
+  $effect(() => {
+    if (!ready && !sceneError) return;
+    const request = new AbortController();
+    void fetch('/api/ryhti/catalog', { cache: 'no-store', signal: AbortSignal.any([request.signal, AbortSignal.timeout(60000)]) })
+      .then(async response => {
+        if (!response.ok) throw new Error(`Ryhti catalog unavailable (${response.status})`);
+        const state: RyhtiCatalogState = await response.json();
+        if (!['ready', 'stale', 'unavailable'].includes(state.status) || !(state.message === null || typeof state.message === 'string')) throw new Error('Invalid Ryhti response');
+        if (state.catalog) validateRyhtiCatalog(state.catalog);
+        if (!request.signal.aborted) ryhtiResponse = state;
+      })
+      .catch(error => { if (!request.signal.aborted) ryhtiResponse = { status: 'unavailable', catalog: null, message: String(error), attemptedAt: null }; })
+      .finally(() => { if (!request.signal.aborted) ryhtiLoading = false; });
     return () => request.abort();
   });
   $effect(() => {
@@ -248,7 +276,7 @@
   </header>
   <main class="city-workspace" data-scene-ready={!mapCovered} aria-busy={mapCovered}>
     {#if city}
-      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} {stations} {route} {routes} routeFilter={routeFilter || null} buildingColours={theme.colours} buildingTheme={!!activeTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
+      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} {stations} {route} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
         onbuildings={(value) => buildings = value} onstats={(value) => stats = value} onhover={(value) => hovered = value}
         onerror={(value) => sceneError = value} oninteraction={() => following = false} onready={() => ready = true}
         oncontroller={(value) => scene = value} />
@@ -297,16 +325,24 @@
           <label class="layer-control"><input type="checkbox" bind:checked={layers.weather} /><span class="station-swatch weather" aria-hidden="true">○</span><span>Weather stations</span></label>
           <label class="layer-control"><input type="checkbox" bind:checked={layers.airQuality} /><span class="station-swatch air-quality" aria-hidden="true">◇</span><span>Air-quality stations</span></label>
           <div class="layer-divider"></div>
-          <div class="building-theme" data-building-theme={activeTheme?.kind ?? 'neutral'}>
-            <label class="filter-label">Building colors<select value={activeTheme?.key ?? ''} onchange={event => themeKey = event.currentTarget.value}><option value="">{layers.imagery ? 'Textured buildings' : 'Neutral buildings'}</option>{#each ['modeled-demand', 'solar'] as kind (kind)}<optgroup label={kind === 'modeled-demand' ? 'Modeled demand' : 'Modeled solar potential'}>{#each themeOptions.filter(option => option.kind === kind) as option (option.key)}<option value={option.key}>{label(option.metric)} · {option.unit} · {option.period}{option.scenario ? ` · ${option.scenario}` : ''}</option>{/each}</optgroup>{/each}</select></label>
-            {#if activeTheme}
+          <div class="building-theme" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind ?? 'neutral'}>
+            <label class="filter-label">Building colors<select value={activeRyhtiTheme?.key ?? activeTheme?.key ?? ''} onchange={event => changeTheme(event.currentTarget.value)}><option value="">{layers.imagery ? 'Textured buildings' : 'Neutral buildings'}</option>{#each ['modeled-demand', 'solar'] as kind (kind)}<optgroup label={kind === 'modeled-demand' ? 'Modeled demand' : 'Modeled solar potential'}>{#each themeOptions.filter(option => option.kind === kind) as option (option.key)}<option value={option.key}>{label(option.metric)} · {option.unit} · {option.period}{option.scenario ? ` · ${option.scenario}` : ''}</option>{/each}</optgroup>{/each}<optgroup label="Ryhti register">{#each RYHTI_THEMES as option (option.key)}<option value={option.key} disabled={!ryhti.catalog}>{option.label}</option>{/each}</optgroup></select></label>
+            {#if activeRyhtiTheme}
+              <p class="panel-note">{activeRyhtiTheme.label} · Syke / Ryhti · prepared {formatDate(ryhti.catalog?.generatedAt)}. Select a category to highlight it and narrow building search; other buildings remain pickable.</p>
+              <div class="ryhti-legend" aria-label="Ryhti categories">
+                <button class="text-button" aria-pressed={!ryhtiCategoryKey} onclick={() => ryhtiCategoryKey = ''}>All categories · {ryhti.catalog?.coverage.totalBuildings}</button>
+                {#each ryhtiColors.categories as category (category.key)}<button class="text-button" aria-pressed={ryhtiCategoryKey === category.key} onclick={() => ryhtiCategoryKey = ryhtiCategoryKey === category.key ? '' : category.key}><span class="no-data-swatch" style:background={category.colour}></span>{category.label} · {category.count}</button>{/each}
+              </div>
+              {#if activeRyhtiTheme.key === 'ryhti:permits'}<p class="panel-note">All linked records, including historical permits. Multiple statuses means records report different statuses; this is not a live construction map.</p>{/if}
+            {:else if activeTheme}
               <p class="panel-note">{label(activeTheme.metric)} · {activeTheme.unit}<br />{activeTheme.kind === 'solar' ? 'Modeled solar potential' : 'Modeled building demand'} · {activeTheme.period}{activeTheme.scenario ? ` · ${activeTheme.scenario}` : ''}<br />Source: {activeTheme.sourceId}</p>
               {#if theme.minimum !== null && theme.maximum !== null}<div class="theme-gradient" style:background={`linear-gradient(to right, ${ENERGY_COLOURS[0]} 0% 33.333%, ${ENERGY_COLOURS[1]} 33.333% 66.666%, ${ENERGY_COLOURS[2]} 66.666% 100%)`} aria-hidden="true"></div><div class="theme-limits"><span>{theme.minimum.toLocaleString('en-GB', { maximumFractionDigits: 2 })}</span><span>{theme.maximum.toLocaleString('en-GB', { maximumFractionDigits: 2 })} {activeTheme.unit}</span></div><p class="panel-note">{theme.minimum === theme.maximum ? 'One value; middle color.' : 'Three equal ranges from the displayed minimum to maximum.'}</p>{/if}
               <p class="panel-note" data-theme-covered={theme.count} data-theme-denominator={releaseBuildingCount ?? ''}>{theme.count.toLocaleString()} colored / {releaseBuildingCount?.toLocaleString() ?? 'unknown'} prepared release buildings. Shared property totals and ambiguous associations excluded.</p>
               <p class="panel-note"><span class="no-data-swatch" style:background={NO_ENERGY_COLOUR}></span> Neutral = no comparable record. {theme.count ? '' : 'No comparable values in this dataset selection.'}</p>
-            {:else}<p class="panel-note">{layers.imagery ? 'City building textures. Energy colors replace textures while a metric is selected.' : 'Neutral palette.'} Select one supported modeled demand or solar metric to see its period, units, limits and coverage.</p>{/if}
+            {:else}<p class="panel-note">{layers.imagery ? 'City building textures. Thematic colors replace textures while a category or metric is selected.' : 'Neutral palette.'} Select a Ryhti category, modeled demand or solar metric to see its period, units, limits and coverage.</p>{/if}
             {#if energyLoading}<p class="notice" role="status">{ready ? 'Loading prepared energy and solar records…' : 'Energy records load after the scene is ready.'}</p>{:else if energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
           </div>
+          <p class="panel-note" role="status">Ryhti: {ryhtiLoading ? 'loading after scene readiness' : ryhti.status}. {ryhti.message ?? ''}</p>
           <fieldset class="parameter-controls"><legend>Nearby parameters</legend>{#each OBSERVATION_PARAMETERS as parameter (parameter.id)}<label><input type="checkbox" value={parameter.id} bind:group={enabledParameters} />{parameter.label}</label>{/each}</fieldset>
         </div><p class="panel-note">Station markers show actual locations. Vehicle models use real-world scale; route flags identify their lines.</p>
       </section>
@@ -330,6 +366,7 @@
             <dl class="properties"><div><dt>Address</dt><dd>{buildingAddress(selected.building) ?? 'Unknown'}</dd></div><div><dt>Built</dt><dd>{buildingAttribute(selected.building, ['yearOfConstruction', 'rakennusvuosi']) ?? 'Unknown'}</dd></div><div><dt>Floors</dt><dd>{buildingAttribute(selected.building, ['storeysAboveGround', 'kerrosluku']) ?? 'Unknown'}</dd></div><div><dt>Use</dt><dd>{buildingAttribute(selected.building, ['usage', 'function', 'kayttotarkoitus']) ?? 'Unknown'}</dd></div><div><dt>Stable ID</dt><dd>{selected.building.id}</dd></div><div><dt>GML ID</dt><dd>{selected.building.gmlId}</dd></div><div><dt>VTJ-PRT</dt><dd>{selected.building.vtjPrt ?? 'Unknown'}</dd></div><div><dt>RATU</dt><dd>{selected.building.ratu ?? 'Unknown'}</dd></div><div><dt>UUID</dt><dd>{selected.building.uuid ?? 'Unknown'}</dd></div><div><dt>Geometry vintage</dt><dd>{selectedSource?.vintage ?? 'Unknown — not supplied'}</dd></div><div><dt>Retrieved</dt><dd>{formatDate(selectedSource?.retrievedAt)}</dd></div><div><dt>Source</dt><dd>{selected.building.sourceId}</dd></div></dl>
             {#if selectedSource}<a class="source-link" href={selectedSource.url} target="_blank" rel="noreferrer">Building source reference ↗</a>{/if}
             <details><summary>Available source attributes</summary><dl class="properties">{#each Object.entries(selected.building.attributes) as [key, value] (key)}<div><dt>{label(key)}</dt><dd>{value ?? 'Unknown'}</dd></div>{/each}</dl></details>
+            <BuildingRyhti entry={ryhtiById.get(selected.building.id)} state={ryhti} loading={ryhtiLoading} />
             {#key selected.building.id}<BuildingEnergy building={selected.building} catalogState={energy} loadingCatalog={energyLoading} buildings={indexedBuildings} onmember={id => { const member = indexedBuildings.find(building => building.id === id); if (member) selectObject({ kind: 'building', building: member }); }} onsources={openSources} />{/key}
           {:else if selected?.kind === 'vehicle'}
             <span class="eyebrow">HSL / {selected.vehicle.mode.toUpperCase()}</span><h3>Route {route?.status === 'exact' ? route.routeLabel ?? routeName(selected.vehicle.routeId) : routeName(selected.vehicle.routeId)}</h3>
@@ -357,7 +394,7 @@
         <div class="search-content"><label class="search-label">Vehicle, route, building, address or station<input type="search" bind:value={query} placeholder="Route 4, street or original ID" /></label><p class="panel-note" data-index-state={indexState}>{indexMessage}</p>{#if query}<button class="text-button" onclick={() => query = ''}>Clear search</button>{/if}</div>
         <details open><summary>Vehicles <span>{matchingVehicles.length}</span></summary><div class="object-list">{#each matchingVehicles.slice(0, 60) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {routeName(vehicle.routeId)}</strong><small>{vehicle.ownerOperatorId}/{vehicle.vehicleId} · {trafficIsStale(vehicle, now) ? 'stale' : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching current vehicles in visible modes / route.</p>{/each}{#if matchingVehicles.length > 60}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div></details>
         <details open={!!query}><summary>Routes <span>{matchingRoutes.length}</span></summary><div class="object-list">{#each matchingRoutes.slice(0, 60) as item (item.routeId)}<button onclick={() => chooseRoute(item.routeId)}><span class="mode-swatch" style:background={MODE_COLOURS[item.mode]}></span><span><strong>Route {item.label} · {label(item.mode)}</strong><small>{item.name} · {item.routeId}</small></span></button>{:else}<p class="panel-note">{routeCatalogLoading ? 'Loading prepared route labels…' : routeCatalog?.reason ?? 'No matching prepared route labels.'}</p>{/each}{#if matchingRoutes.length > 60}<p class="panel-note">First 60 routes. Refine your search.</p>{/if}</div></details>
-        <details open={!!query}><summary>{query ? 'Matching buildings' : sceneError && !scene ? 'Available buildings' : 'Loaded buildings'} <span>{filteredBuildings.length}</span></summary><div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong><small>{building.vtjPrt ?? building.ratu ?? building.id}</small></span></button>{:else}<p class="panel-note">{query ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}</div></details>
+        <details open={!!query || !!(activeRyhtiTheme && ryhtiCategoryKey)}><summary>{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'Matching buildings' : sceneError && !scene ? 'Available buildings' : 'Loaded buildings'} <span>{filteredBuildings.length}</span></summary><div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong><small>{building.vtjPrt ?? building.ratu ?? building.id}</small></span></button>{:else}<p class="panel-note">{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}</div></details>
         <details open><summary>Stations <span>{matchingStations.length}</span></summary><div class="object-list">{#each matchingStations as station (station.id)}<button class:selected={selected?.kind === 'station' && selected.station.id === station.id} onclick={() => selectObject({ kind: 'station', station })}><span class="station-swatch {station.kind}" aria-hidden="true">{station.kind === 'weather' ? '○' : '◇'}</span><span><strong>{station.name}</strong><small>{label(station.kind)} · {station.id}</small></span></button>{:else}<p class="panel-note">{observationLoading ? 'Loading stations…' : 'No matching stations in the available coverage / layers.'}</p>{/each}</div></details>
       </section>
     </aside>
@@ -378,7 +415,9 @@
       <h3>Scheduled route data</h3><p class="panel-note">{routeCatalogLoading ? 'Loading route metadata…' : routeCatalog?.status === 'ready' ? `${routes.length} prepared routes available.` : routeCatalog?.reason ?? 'Route metadata unavailable.'}</p>{#if routeCatalog?.source}<a class="source-link" href={routeCatalog.source.url} target="_blank" rel="noreferrer">HSL GTFS source ↗</a><dl class="properties"><div><dt>Provider</dt><dd>Helsinki Region Transport (HSL)</dd></div><div><dt>Index prepared</dt><dd>{formatDate(routeCatalog.generatedAt)}</dd></div><div><dt>GTFS retrieved</dt><dd>{formatDate(routeCatalog.source.retrievedAt)}</dd></div><div><dt>Feed version</dt><dd>{routeCatalog.source.feedVersion ?? 'Unknown'}</dd></div><div><dt>Validity</dt><dd>{routeCatalog.source.validFrom}–{routeCatalog.source.validTo}</dd></div><div><dt>Archive SHA256</dt><dd>{routeCatalog.source.archiveSha256}</dd></div></dl><p class="panel-note">Only an exact active journey match supplies shape and stops. Missing or ambiguous matches show an explicit reason.</p>{/if}
       {#if sample.sampleError}<p class="notice">{sample.sampleError}</p>{/if}
       {#if city}<h3>City coverage</h3><p class="panel-note">{city.manifest.chunks.length} chunks · prepared {formatDate(city.manifest.generatedAt)}. {indexMessage} Buildings retain source dimensions. Sea surface is the N2000 0 m display datum, separate from live sea height.</p><p class="panel-note">Local origin: {city.manifest.origin.longitude}° E, {city.manifest.origin.latitude}° N. ETRS-GK25 / N2000 metres; scene axes east, elevation, −north.</p>{#each city.manifest.gaps as gap (gap)}<p class="notice">{gap}</p>{/each}{/if}
-      <h3>Prepared source records</h3>{#each [...new Map([...(sample.manifest?.sources ?? []), ...(city?.manifest.sources ?? []), ...(energy.catalog?.sources ?? [])].filter(source => !source.id.startsWith('fmi-')).map(source => [source.id, source])).values()] as source (source.id)}<details class="source-record"><summary>{source.provider} · {label(source.id)}</summary><p class="panel-note">{source.attribution}</p>{#if /^https?:\/\//.test(source.url)}<a href={source.url} target="_blank" rel="noreferrer">Source reference ↗</a>{:else}<p class="panel-note">{source.url}</p>{/if}<dl class="properties"><div><dt>Retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>Vintage</dt><dd>{source.vintage ?? 'Unknown'}</dd></div><div><dt>License</dt><dd>{source.license ?? 'Unverified'}</dd></div><div><dt>Checksum</dt><dd>{source.checksum ?? 'Unknown — not supplied'}</dd></div><div><dt>Coordinates</dt><dd>{source.coordinateReference ?? 'Not applicable / unknown'}<small>{source.axisOrder ?? 'Axis order unknown'} · {source.verticalReference ?? 'Vertical reference unknown'}</small></dd></div><div><dt>Coverage</dt><dd>{source.coverage}</dd></div><div><dt>Units</dt><dd>{source.units.join(', ') || 'Unknown'}</dd></div></dl><p class="panel-note">{source.method}</p></details>{/each}
+      <h3>Prepared source records</h3>{#each [...new Map([...(sample.manifest?.sources ?? []), ...(city?.manifest.sources ?? []), ...(energy.catalog?.sources ?? []), ...(ryhti.catalog?.sources ?? [])].filter(source => !source.id.startsWith('fmi-')).map(source => [source.id, source])).values()] as source (source.id)}<details class="source-record"><summary>{source.provider} · {label(source.id)}</summary><p class="panel-note">{source.attribution}</p>{#if /^https?:\/\//.test(source.url)}<a href={source.url} target="_blank" rel="noreferrer">Source reference ↗</a>{:else}<p class="panel-note">{source.url}</p>{/if}<dl class="properties"><div><dt>Retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>Vintage</dt><dd>{source.vintage ?? 'Unknown'}</dd></div><div><dt>License</dt><dd>{source.license ?? 'Unverified'}</dd></div><div><dt>Checksum</dt><dd>{source.checksum ?? 'Unknown — not supplied'}</dd></div><div><dt>Coordinates</dt><dd>{source.coordinateReference ?? 'Not applicable / unknown'}<small>{source.axisOrder ?? 'Axis order unknown'} · {source.verticalReference ?? 'Vertical reference unknown'}</small></dd></div><div><dt>Coverage</dt><dd>{source.coverage}</dd></div><div><dt>Units</dt><dd>{source.units.join(', ') || 'Unknown'}</dd></div></dl><p class="panel-note">{source.method}</p></details>{/each}
+      <h3>Ryhti register & join coverage</h3><p class="panel-note">{ryhtiLoading ? 'Loading prepared catalog' : ryhti.status} · snapshot prepared {formatDate(ryhti.catalog?.generatedAt)} · last attempt {formatDate(ryhti.attemptedAt)}. {ryhti.message ?? ''}</p>
+      {#if ryhti.catalog}<dl class="properties">{#each Object.entries(ryhti.catalog.coverage) as [key, value] (key)}<div><dt>{label(key)}</dt><dd>{value.toLocaleString()}</dd></div>{/each}</dl><p class="panel-note">Exact identifier joins only. Missing values and unresolved identities remain unclassified. Permit records include historical work. Source retrieval and modification dates describe this prepared snapshot, not live activity.</p>{/if}
       <h3>Energy catalog & join coverage</h3><p class="panel-note">{energyLoading ? 'Loading prepared catalog' : energy.status} · catalog prepared {formatDate(energy.catalog?.generatedAt)} · last refresh attempt {formatDate(energy.attemptedAt)}. {energy.message}</p><p class="panel-note">Energy months are historical property measurements. Demand and solar are source models, independent from live transit. Solar radiation is incident energy, not generated electricity; kW, kWh and kWh/m² are separate metrics.</p>
       {#each energy.catalog?.reports ?? [] as report (report.sourceId)}<details class="source-record"><summary>{report.sourceId} · {report.buildingsCovered.toLocaleString()} buildings covered</summary><p class="panel-note">{report.denominator} · vintage {report.sourceVintage ?? 'Unknown'}</p><dl class="properties"><div><dt>Source records</dt><dd>{report.totalSourceRecords.toLocaleString()}</dd></div><div><dt>Within scope</dt><dd>{report.recordsWithinScope.toLocaleString()}</dd></div><div><dt>Exact / reviewed</dt><dd>{report.exactMatches} / {report.reviewedMatches}</dd></div><div><dt>Unmatched</dt><dd>{report.unmatchedRecords}</dd></div><div><dt>Ambiguous / conflict</dt><dd>{report.ambiguousRecords} / {report.conflictingRecords}</dd></div></dl>{#each report.notes as note, index (index)}<p class="panel-note">{note}</p>{/each}</details>{/each}
       <h3>Foundation source probes · historical</h3><p class="panel-note">These probe gates were recorded {formatDate(sample.manifest?.generatedAt)}. Current modeled demand and solar coverage are the validated energy catalog and join reports above.</p>{#each Object.entries(sample.manifest?.gates ?? {}) as [name, gate] (name)}<details class="gate-row"><summary><span>{label(name)}</span><span class="badge {gate.status}">historical {gate.status}</span></summary>{#each gate.evidence as evidence, index (index)}<p class="panel-note">{evidence}</p>{/each}{#if gate.nextAction}<p class="notice">Next: {gate.nextAction}</p>{/if}</details>{/each}
@@ -388,6 +427,9 @@
 {/if}
 
 <style>
+  .ryhti-legend { display: grid; gap: 0.3rem; }
+  .ryhti-legend button { text-align: left; padding: 0.4rem; }
+  .ryhti-legend button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -2px; }
   .theme-gradient { height: 8px; border-radius: 2px; margin: 10px 0 5px; }
   .theme-limits { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; margin-bottom: 8px; }
   .no-data-swatch { width: 10px; height: 10px; display: inline-block; margin-right: 5px; vertical-align: middle; border-radius: 2px; }

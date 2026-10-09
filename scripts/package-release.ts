@@ -5,6 +5,7 @@ import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadCityManifest } from '../src/lib/city-assets.ts';
 import { EnergyCatalogStore } from '../src/lib/server/energy-catalog.ts';
+import { RyhtiCatalogStore, readRyhtiFile, validateRyhtiManifest } from '../src/lib/server/ryhti-catalog.ts';
 import { RouteContextStore } from '../src/lib/server/route-context.ts';
 import { loadPreparedSample } from '../src/routes/sample.ts';
 
@@ -23,6 +24,23 @@ export async function verifyAsset(root: string, asset: Asset): Promise<Asset> {
   assert.equal(hash(await readFile(join(root, 'build/client/data', asset.path))), asset.sha256,
     'Build differs from prepared data; rebuild first: ' + asset.path);
   return asset;
+}
+
+/** Ryhti remains optional, but a published snapshot must be valid and match the build. */
+export async function verifyRyhtiRelease(root: string): Promise<Asset[]> {
+  try { await stat(join(root, 'static/data/ryhti-manifest.json')); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+  const state = await new RyhtiCatalogStore(join(root, 'static/data')).load();
+  assert.ok(state.catalog, state.message ?? 'Invalid Ryhti catalog');
+  const bytes = await readRyhtiFile(join(root, 'static/data'), 'ryhti-manifest.json', 16384);
+  const manifest = validateRyhtiManifest(JSON.parse(bytes.toString()));
+  const assets = [manifest.asset, { path: 'ryhti-manifest.json', bytes: bytes.length, sha256: hash(bytes) }];
+  try {
+    const status = await readRyhtiFile(join(root, 'static/data'), 'ryhti-refresh-status.json', 16384);
+    assets.push({ path: 'ryhti-refresh-status.json', bytes: status.length, sha256: hash(status) });
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  for (const asset of assets) await verifyAsset(root, asset);
+  return assets;
 }
 
 async function inventory(root: string, directory = ''): Promise<Asset[]> {
@@ -76,7 +94,7 @@ export async function packageRelease(root = resolve('.'), output = resolve('.cac
   const checksums: Asset[] = await readJson(checksumPath);
   const expectedCity = [city.baseUrl, ...city.chunks.flatMap(chunk => [chunk.url, chunk.buildingsUrl])];
   assert.deepEqual(checksums.map(asset => '/data/' + asset.path.replace('/data/', '')).sort(), expectedCity.sort(), 'City checksums must cover every active asset');
-  const assets = [...foundation.manifest.assets, ...checksums.map(asset => ({ ...asset, path: asset.path.replace('/data/', '') })), energyManifest.asset];
+  const assets = [...foundation.manifest.assets, ...checksums.map(asset => ({ ...asset, path: asset.path.replace('/data/', '') })), energyManifest.asset, ...await verifyRyhtiRelease(root)];
   for (const path of ['manifest.json', 'city/manifest.json', checksumPath, 'energy-manifest.json', 'route-index.json']) {
     const bytes = await readFile(join(root, 'static/data', path)); assets.push({ path, bytes: bytes.length, sha256: hash(bytes) });
   }

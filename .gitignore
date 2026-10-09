@@ -19,3 +19,7 @@ static/data/route-index.json
 static/data/energy/
 static/data/energy-manifest.json
 static/data/energy-refresh-status.json
+
+static/data/ryhti/
+static/data/ryhti-manifest.json
+static/data/ryhti-refresh-status.json

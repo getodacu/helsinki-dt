@@ -123,3 +123,12 @@ The clean local package check completed at **2026-10-08T15:18:57.651Z** on macOS
 | Catalog response | 843,087 gzip bytes, ready state; original catalog payload is 16.75 MB. |
 
 Actual package/clean-install/start/restart evidence is saved in ignored `.cache/task-e/package*.json` and logs, with final results in [E results](milestone-results/E.md). These measurements describe the recorded local workload, not a production capacity guarantee. The runtime-cache payload bound is at most 64 × 256 KiB (16 MiB) plus filesystem overhead; it is a configured bound, not measured disk usage. Preparation caches/raw source downloads are separate and are not needed on the serving host. Retain room for the current and previous whole releases, locked runtime dependencies, logs and the persistent cache. Use the recorded full-soak measurements as local evidence; measure the intended host and workload before choosing production capacity.
+
+
+## Ryhti snapshots
+
+After `city:prepare`, run `npm run ryhti:prepare` and rebuild the server. Use `--refresh` when reviewing a new upstream snapshot; ordinary preparation reuses verified cached sources. Preserve `.cache/ryhti/` to avoid repeated source requests. The catalog is optional, but an existing published catalog must pass checksum, city compatibility and build parity checks during release packaging.
+
+Keep `static/data/ryhti-manifest.json`, its referenced `ryhti/<generation>/catalog.json`, and any `ryhti-refresh-status.json` together. Publication changes the manifest atomically. Failed refreshes retain the previous dated catalog; a changed city disables that catalog until re-prepared. The API and Sources & status report these states. Roll back the city and Ryhti snapshot together. No scheduler or server-side Ryhti refresh runs automatically.
+
+Before sustained use, request Syke's application identifier and follow its supplied usage instructions. Public one-off probes require no API key. Do not confuse the operator application identifier with a permanent building identifier.
