@@ -17,11 +17,13 @@
     "routes:prepare": "node scripts/prepare-routes.ts",
     "ryhti:prepare": "node scripts/prepare-ryhti.ts",
     "energy:prepare": "node scripts/prepare-energy.ts",
-    "release:package": "node scripts/package-release.ts"
+    "release:package": "node scripts/package-release.ts",
+    "entities:prepare": "node scripts/prepare-entities.ts"
   },
   "dependencies": {
     "@sveltejs/adapter-node": "6.0.0",
     "@sveltejs/kit": "3.0.0",
+    "@tanstack/svelte-query": "6.3.1",
     "csv-parse": "7.0.3",
     "exceljs": "4.4.0",
     "fast-xml-parser": "5.11.2",

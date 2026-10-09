@@ -12,6 +12,7 @@ npm run data:prepare
 npm run city:prepare
 npm run energy:prepare
 npm run routes:prepare
+npm run entities:prepare
 npm run check
 npm test
 npm run build
@@ -20,11 +21,11 @@ npm run release:package
 
 `data:prepare` publishes a usable foundation or retains the previous generation on failure. Exit 2 means a sample was published with historical open A gates: read the diagnostic rather than treating it as a successful complete release. D resolved energy/solar using its separate verified catalog; the foundation's original gate evidence stays historical. Exit 1 means preparation failed. Check each command before continuing; do not deploy partial or mismatched output.
 
-After **every** `city:prepare`, run `energy:prepare`, even when the semantic tileset checksum is unchanged. Energy binds to the exact city generation, source checksum and vintage. Changing only the city disables mismatched energy values/themes. Run `routes:prepare` after the GTFS archive is ready. Then rebuild the production application after every static refresh.
+After **every** `city:prepare`, run `energy:prepare`, even when the semantic tileset checksum is unchanged. Energy binds to the exact city generation, source checksum and vintage. Changing only the city disables mismatched energy values/themes. Run `routes:prepare` after the GTFS archive is ready. Run `entities:prepare` after the foundation, city, energy and optional Ryhti sources are ready, then rebuild the production application after every static refresh.
 
 The packager reads the existing build; it never starts a concurrent build. It validates every active foundation/city/energy checksum, city/energy compatibility, prepared route index and equality with the built HTTP assets. It creates `.cache/task-e/releases/helsinki-lens-<version>-<content-hash>/`; an optional output parent is accepted with `npm run release:package -- /absolute/output/path`. Existing output is not overwritten. `release.json` records all release file checksums, active asset checksums and preparation times. The content hash includes the build, lockfile, notices and documentation; rebuilding or changing those creates a distinct release.
 
-The directory contains `build/`, `package.json`, `package-lock.json`, `.env.example`, `README.md`, `.nvmrc`, `docs/`, `THIRD_PARTY_NOTICES.md` and `release.json`. `static/data` points to `../build/client/data`; the runtime readers and HTTP server therefore use the same asset versions without duplicating data. Preserve this link when transferring: `COPYFILE_DISABLE=1 tar -czf <release-id>.tar.gz -C <release-parent> <release-id>` does so; `COPYFILE_DISABLE=1` suppresses macOS metadata companion files and is harmless on Linux. Keep the active foundation generation, city base/chunk/metadata generation, route index, energy catalog/manifest and optional refresh diagnostic together. The adapter's complete static file table is produced during build, so exclude unused old generations **before** the final build rather than pruning built files. Prior generations can be archived outside `static/` for rollback.
+The directory contains the active private SQLite generation and manifest in `server/data/entities/`, `build/`, `package.json`, `package-lock.json`, `.env.example`, `README.md`, `.nvmrc`, `docs/`, `THIRD_PARTY_NOTICES.md` and `release.json`. `static/data` points to `../build/client/data`; the runtime readers and HTTP server therefore use the same asset versions without duplicating data. Preserve this link when transferring: `COPYFILE_DISABLE=1 tar -czf <release-id>.tar.gz -C <release-parent> <release-id>` does so; `COPYFILE_DISABLE=1` suppresses macOS metadata companion files and is harmless on Linux. Keep the active foundation generation, city base/chunk/metadata generation, route index, energy catalog/manifest and optional refresh diagnostic together. The adapter's complete static file table is produced during build, so exclude unused old generations **before** the final build rather than pruning built files. Prior generations can be archived outside `static/` for rollback.
 
 No `.env`, credentials, raw preparation downloads, `.cache/energy/runtime`, `node_modules` or another workspace's files are bundled. Dependency notices use exact installed locked production package versions and original LICENSE/NOTICE files, with package declarations and README notices when the package lacks a standalone license file. Installing dependencies retains their original package notices. City of Helsinki/Helsinki 3D, Energy and Climate Atlas/Nuuka, HSL/Digitransit, FMI and HSY notices, retrieval dates, source versions and explicitly unknown vintages remain in the shipped manifests/source drawer. The UI uses system fonts and procedural illustrative vehicles; no third-party font or photographic vehicle image is distributed.
 
@@ -39,7 +40,7 @@ mkdir -p .cache/energy/runtime
 npm start
 ```
 
-`npm start` is exactly `node --env-file-if-exists=.env build/index.js`. The build requires locked production dependencies but no Java or source downloads at runtime. The runtime bundle cannot run preparation/build/test commands; use the source checkout for those. The process must read `build/`, the lockfile and `static/data`, and write `.cache/energy/runtime/`. Keep its working directory at the release root; relative server paths resolve there.
+`npm start` is exactly `node --env-file-if-exists=.env build/index.js`. The build requires locked production dependencies but no Java or source downloads at runtime. The runtime bundle cannot run preparation/build/test commands; use the source checkout for those. The process must read `build/`, the lockfile and `static/data` plus `server/data/entities/`, and write `.cache/energy/runtime/`. Keep its working directory at the release root; relative server paths resolve there.
 
 | Environment | Meaning |
 | --- | --- |
@@ -94,7 +95,7 @@ Prepare a new release from the source checkout while the current release continu
 
 To refresh route context, run `npm run data:probe -- --source transit`, then `npm run routes:prepare`. The transit probe has a one-hour GTFS ZIP cache and requires a usable real HFP report; inspect its diagnostic and archive retrieval/validity. A later probe retrieves again once that cache is older than an hour. Runtime route matching never scans/downloads the full archive. Do not publish an expired index as current merely because preparation ran today.
 
-For a city refresh, run `npm run city:prepare` then **immediately** `npm run energy:prepare` (or its reviewed `--refresh` variant), followed by checks, `npm run build`, `npm run release:package` and a clean-directory smoke. Any foundation/route/energy/static change also needs a build. Do not run two builds/preparations into the same output directories at once.
+For a city refresh, run `npm run city:prepare` then **immediately** `npm run energy:prepare` (or its reviewed `--refresh` variant), then matching `ryhti:prepare` when Ryhti is published and `entities:prepare`, followed by checks, `npm run build`, `npm run release:package` and a clean-directory smoke. Any foundation/route/energy/static change also needs a build. Do not run two builds/preparations into the same output directories at once.
 
 Keep runtime caches in a persistent directory across release changes. For example, create `/srv/helsinki/shared/energy-runtime` owned by the application user and, before first start of each new release:
 
@@ -127,8 +128,16 @@ Actual package/clean-install/start/restart evidence is saved in ignored `.cache/
 
 ## Ryhti snapshots
 
-After `city:prepare`, run `npm run ryhti:prepare` and rebuild the server. Use `--refresh` when reviewing a new upstream snapshot; ordinary preparation reuses verified cached sources. Preserve `.cache/ryhti/` to avoid repeated source requests. The catalog is optional, but an existing published catalog must pass checksum, city compatibility and build parity checks during release packaging.
+After `city:prepare`, run `npm run ryhti:prepare`, `npm run entities:prepare`, and rebuild the server. Use `--refresh` when reviewing a new upstream snapshot; ordinary preparation reuses verified cached sources. Preserve `.cache/ryhti/` to avoid repeated source requests. The catalog is optional, but an existing published catalog must pass checksum, city compatibility and build parity checks during release packaging.
 
 Keep `static/data/ryhti-manifest.json`, its referenced `ryhti/<generation>/catalog.json`, and any `ryhti-refresh-status.json` together. Publication changes the manifest atomically. Failed refreshes retain the previous dated catalog; a changed city disables that catalog until re-prepared. The API and Sources & status report these states. Roll back the city and Ryhti snapshot together. No scheduler or server-side Ryhti refresh runs automatically.
 
 Before sustained use, request Syke's application identifier and follow its supplied usage instructions. Public one-off probes require no API key. Do not confuse the operator application identifier with a permanent building identifier.
+
+## SQLite entity database
+
+`npm run entities:prepare` reads validated prepared sources locally and publishes `server/data/entities/<generation>.sqlite`, then atomically replaces its `manifest.json`. Run it after foundation/city/energy/Ryhti changes. Failed imports preserve the previous database; published but incompatible optional catalogs must be re-prepared before importing. The database stays outside the web root. Runtime connections are read-only and verify each new database checksum with a bounded stream. Keep the database directory alongside the matching build and source manifests; the release packager includes only the active SQLite generation and rejects mismatched source generations. Roll back the whole release together.
+
+`GET /api/catalog/status` verifies database/city compatibility and exposes dated source states without transferring full catalogs. A failed source refresh marks the indexed data stale. New source data awaiting import is labelled explicitly. A missing/incompatible database returns 503 and never triggers a browser download of the full catalogs. After publishing a new database, generation-pinned calls return 409 until the caller refreshes status. The UI checks status every 30 seconds while visible, also refreshing on generation conflicts.
+
+TanStack Query caches bounded search/detail/theme responses only. Search is debounced 200 ms; search and theme entries expire after 60 seconds of inactivity, selected-building details after five minutes. Theme keys use stable groups of up to 16 chunks. Generation-pinned detail/theme values remain fresh until the generation changes. These timeouts are inactivity controls, not a hard memory ceiling. SSR clients are isolated and cleared at component destruction, with no server GC timers. Geometry/GPU state and live SSE remain separate.

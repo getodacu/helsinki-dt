@@ -23,3 +23,5 @@ static/data/energy-refresh-status.json
 static/data/ryhti/
 static/data/ryhti-manifest.json
 static/data/ryhti-refresh-status.json
+
+server/data/

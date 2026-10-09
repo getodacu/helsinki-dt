@@ -4,7 +4,7 @@ Researched 2026-10-09. Recommendation: use TanStack Svelte Query for the propose
 
 ## Compatibility and current API
 
-Public npm metadata read with `npm view @tanstack/svelte-query dist-tags version peerDependencies dependencies engines --json` reports **6.3.1**, Svelte peer **^5.25.0**, and dependency **@tanstack/query-core 5.104.1**. No Node engine or SvelteKit peer restriction was reported. The repository’s Svelte 5.57.1 satisfies that peer range; Node 24 / Kit 3 integration still needs a build check. [Package metadata](https://registry.npmjs.org/@tanstack/svelte-query/6.3.1)
+Public npm metadata read with `npm view @tanstack/svelte-query dist-tags version peerDependencies dependencies engines --json` reports **6.3.1**, Svelte peer **^5.25.0**, and dependency **@tanstack/query-core 5.104.1**. No Node engine or SvelteKit peer restriction was reported. The repository’s Svelte 5.57.1 satisfies that peer range; Node 24 / Kit 3 integration passed Svelte/TypeScript checks and production compilation in the implementation worktree. [Package metadata](https://registry.npmjs.org/@tanstack/svelte-query/6.3.1)
 
 Use adapter v6, despite the documentation sidebar saying “v5”: the adapter migrated to Svelte runes while core remains v5. Queries use `createQuery(() => ({ ... }))`; reactive inputs belong inside that callback, and results use `query.data`, without a store `$` prefix. Every changing request parameter belongs in its query key. [Migration guide](https://tanstack.com/query/latest/docs/framework/svelte/migrate-from-v5-to-v6), [query keys](https://tanstack.com/query/latest/docs/framework/react/guides/query-keys)
 
@@ -37,4 +37,17 @@ Start with one QueryClient/provider for the map UI and browser-enabled queries. 
 
 Keep geometry streaming, GPU objects, live traffic SSE, and full catalog blobs outside this cache. No new query abstraction layer, persistence plugin, or TanStack DB is needed.
 
-No dependency installed or application code changed. Bundle cost, memory savings, and integration behavior were not benchmarked; findings rely on official documentation and registry metadata, not inspected package internals.
+The initial assessment used official documentation and registry metadata. The implementation now installs the pinned adapter and integrates search, details and theme queries. Browser checks verify pagination, inspector updates and detail-cache reuse without full energy/Ryhti catalog requests. Heap usage and production concurrency have not been benchmarked.
+
+
+## Implementation source check
+
+The worktree pins Svelte Query 6.3.1 / Query Core 5.104.1. `opensrc path @tanstack/query-core --cwd <worktree>` failed with “error decoding response body”, so the installed pinned sources were inspected as the fallback. `node_modules/@tanstack/query-core/src/removable.ts:23` schedules timers for finite GC durations, and `:33` shows that an explicit value overrides the server's default Infinity. `node_modules/@tanstack/svelte-query/src/QueryClientProvider.svelte:16` unmounts the client without clearing its query cache. The implementation therefore uses browser-only finite GC durations and clears its per-layout client on destruction. SvelteKit 3 uses `$app/env` for the browser flag; the installed type declarations and official Svelte MCP documentation confirm this API.
+
+## Measured implementation scope
+
+The local prepared dataset contains 22,686 unique buildings and 12 themes. Its SQLite database is 189,063,168 bytes on the server. The catalog summary response is 28,589 bytes; a tested 30-building search page is approximately 23–25 KB and a tested building detail is 11,271 bytes. These bounded requests replace whole metadata/energy/Ryhti downloads for search and inspection. Geometry and visible-chunk metadata still stream separately. These are local payload observations, not production capacity measurements.
+
+Rebuild with `npm run entities:prepare` after source preparation. The browser caches immutable details/theme values by the validated generation, refreshes catalog status every 30 seconds while visible, and refreshes it immediately after an API generation conflict.
+
+The adapter source lookup also failed with the same resolver error. Pinned `node_modules/@tanstack/svelte-query/src/createQueries.svelte.ts:292` constructs a new observer when options change. Scene callbacks can return new arrays for unchanged chunk groups, so the page derives a primitive serialized group key before creating options. A browser regression measurement fell from 418 initial theme requests to 11 distinct requests with zero failures after this correction; changing the category while those values were cached issued zero theme requests.

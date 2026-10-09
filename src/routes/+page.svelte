@@ -1,49 +1,35 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { browser } from '$app/env';
+  import { createQuery, createQueries } from '@tanstack/svelte-query';
+  import { fetchEntity } from '#lib/entity-query.ts';
+  import type { EntityCatalog, EntityDetail, EntitySearch, EntityThemeValues } from '#lib/entity-types.ts';
   import CityScene from '#lib/components/CityScene.svelte';
   import NearbyConditions from '#lib/components/NearbyConditions.svelte';
   import BuildingRyhti from '#lib/components/BuildingRyhti.svelte';
-  import { RYHTI_THEMES, ryhtiTheme, ryhtiForCity } from '#lib/ryhti-display.ts';
-  import { validateRyhtiCatalog } from '#lib/data/ryhti.ts';
+  import { RYHTI_THEMES, RYHTI_DIM_COLOUR } from '#lib/ryhti-display.ts';
   import type { RyhtiCatalogState } from '#lib/ryhti-types.ts';
   import BuildingEnergy from '#lib/components/BuildingEnergy.svelte';
-  import { energyThemeOptions, buildingEnergyTheme, energyForCity, ENERGY_COLOURS, NO_ENERGY_COLOUR } from '#lib/energy-display.ts';
+  import { ENERGY_COLOURS, NO_ENERGY_COLOUR } from '#lib/energy-display.ts';
   import type { EnergyCatalogState } from '#lib/energy-types.ts';
   import StationHistory from '#lib/components/StationHistory.svelte';
-  import { loadPreparedSample } from './sample.ts';
-  import { loadCityManifest, loadCityBase, loadBuildingSearchIndex, type CityManifest, type CityBase } from '#lib/city-assets.ts';
+  import { loadCityManifest, loadCityBase, type CityManifest, type CityBase } from '#lib/city-assets.ts';
   import { CityAssetCache } from '#lib/city-cache.ts';
   import { INITIAL_LAYERS, type SceneLoadState, type Layers, type Selection, type SceneStation, type SceneStats, type CitySceneController, type CameraPreset } from '#lib/scene.ts';
   import { MODE_COLOURS } from '#lib/live-fleet.ts';
   import { trafficAge, trafficIsStale, TRAFFIC_REMOVE_MS, type TrafficSnapshot, type TrafficEvent } from '#lib/traffic.ts';
   import { groupObservationStations, observationHistory, OBSERVATION_PARAMETERS, type ObservationSnapshot } from '#lib/observations.ts';
   import { loadRouteCatalog, routeRequestUrl, type RouteCatalog, type RouteContext } from '#lib/route-context.ts';
-  import { buildingName, buildingAddress, buildingAttribute, matchesBuilding, matchesVehicle, searchText, delayLabel, signedSeconds, formatDate, label } from '#lib/inspection.ts';
+  import { buildingName, buildingAddress, buildingAttribute, matchesVehicle, searchText, delayLabel, signedSeconds, formatDate, label } from '#lib/inspection.ts';
   import type { Building, TransitMode } from '#lib/types.ts';
-  let energyResponse = $state.raw<EnergyCatalogState>({ status: 'unavailable', catalog: null, message: null, attemptedAt: null });
-  let energyLoading = $state(true);
   let themeKey = $state('');
   let city = $state.raw<{ manifest: CityManifest; base: CityBase; cache: CityAssetCache } | null>(null);
-  let ryhtiResponse = $state.raw<RyhtiCatalogState>({ status: 'unavailable', catalog: null, message: null, attemptedAt: null });
-  let ryhtiLoading = $state(true);
   let ryhtiCategoryKey = $state('');
-  let ryhti = $derived(ryhtiForCity(ryhtiResponse, city?.manifest.generatedAt ?? null));
-  let activeRyhtiTheme = $derived(ryhti.catalog ? RYHTI_THEMES.find(option => option.key === themeKey) ?? null : null);
-  let ryhtiColors = $derived(ryhtiTheme(ryhti.catalog, activeRyhtiTheme?.key ?? '', ryhtiCategoryKey));
-  let ryhtiById = $derived(new Map(ryhti.catalog?.buildings.map(building => [building.buildingId, building]) ?? []));
   const changeTheme = (key: string) => { themeKey = key; ryhtiCategoryKey = ''; };
-  let sample = $state.raw<Awaited<ReturnType<typeof loadPreparedSample>>>({ manifest: null, buildings: [], sampleError: null });
-  let energy = $derived(energyForCity(energyResponse, city?.manifest ?? null));
-  let themeOptions = $derived(energyThemeOptions(energy.catalog));
-  let activeTheme = $derived(themeOptions.find(option => option.key === themeKey) ?? null);
-  let theme = $derived(buildingEnergyTheme(energy.catalog, activeTheme));
   let scene = $state.raw<CitySceneController | null>(null);
   let layers = $state<Layers>({ ...INITIAL_LAYERS, weather: true, airQuality: true });
   let keyboardNavigation = $state(true);
   let buildings = $state.raw<Building[]>([]);
-  let searchBuildings = $state.raw<Building[]>([]);
-  let indexState = $state('loading');
-  let indexMessage = $state('Loading the prepared building metadata index.');
   let selected = $state.raw<Selection | null>(null);
   let selectionMessage = $state('');
   let hovered = $state('');
@@ -74,20 +60,99 @@
     status: { state: 'idle', connectedAt: null, lastPositionAt: null, retryAt: null } });
   let browserConnected = $state(false);
   let loading = $state(true);
+  const catalogQuery = createQuery(() => ({ queryKey: ['entity-catalog'],
+    queryFn: ({ signal }) => fetchEntity<EntityCatalog>('/api/catalog/status', signal), refetchInterval: 30_000 }));
+  let catalog = $derived.by(() => {
+    const value = catalogQuery.data;
+    if (!value || (city && value.cityGeneratedAt !== city.manifest.generatedAt)) return null;
+    if (!catalogQuery.error) return value;
+    const message = catalogQuery.error.message;
+    return { ...value, status: 'stale' as const, message,
+      energy: { ...value.energy, status: value.energy.catalog ? 'stale' as const : 'unavailable' as const, message },
+      ryhti: { ...value.ryhti, status: value.ryhti.catalog ? 'stale' as const : 'unavailable' as const, message } };
+  });
+  let generation = $derived(catalog?.generation ?? '');
+  let indexState = $derived(catalog ? catalog.status === 'stale' ? 'partial' : 'current' : catalogQuery.isPending ? 'loading' : 'unavailable');
+  let indexMessage = $derived(catalog ? catalog.message ?? `${catalog.buildingCount.toLocaleString()} prepared building identities searchable on the server.`
+    : catalogQuery.error?.message ?? (catalogQuery.data ? 'The city generation changed. Reload to use the current data.' : 'Loading searchable city coverage…'));
+  let sample = $derived({ manifest: catalog?.foundation ?? null, sampleError: null });
+  let energy = $derived<EnergyCatalogState>(catalog?.energy ?? { status: 'unavailable', catalog: null, message: indexMessage, attemptedAt: null });
+  let ryhti = $derived<RyhtiCatalogState>(catalog?.ryhti ?? { status: 'unavailable', catalog: null, message: indexMessage, attemptedAt: null });
+  let energyLoading = $derived(catalogQuery.isPending);
+  let ryhtiLoading = $derived(catalogQuery.isPending);
+  let themeOptions = $derived(catalog?.themes.flatMap(theme => theme.energy ? [theme.energy] : []) ?? []);
+  let activeTheme = $derived(themeOptions.find(option => option.key === themeKey) ?? null);
+  let activeRyhtiTheme = $derived(ryhti.catalog ? RYHTI_THEMES.find(option => option.key === themeKey) ?? null : null);
+  let activeThemeSummary = $derived(catalog?.themes.find(theme => theme.key === themeKey));
+  let debouncedQuery = $state('');
+  $effect(() => {
+    const value = query.trim();
+    const timer = setTimeout(() => debouncedQuery = value, 200);
+    return () => clearTimeout(timer);
+  });
+  let searchEnabled = $derived(!!generation && !!(debouncedQuery || (activeRyhtiTheme && ryhtiCategoryKey) || (sceneError && !scene)));
+  let searchSignature = $derived(JSON.stringify([generation, debouncedQuery, activeRyhtiTheme?.key, ryhtiCategoryKey]));
+  let pagination = $state<{ signature: string; cursors: (string | null)[] }>({ signature: '', cursors: [null] });
+  let cursor = $derived(pagination.signature === searchSignature ? pagination.cursors.at(-1) ?? null : null);
+  const searchQuery = createQuery(() => {
+    const params = new URLSearchParams({ generation, q: debouncedQuery, kind: 'building', limit: '30' });
+    if (activeRyhtiTheme && ryhtiCategoryKey) { params.set('theme', activeRyhtiTheme.key); params.set('category', ryhtiCategoryKey); }
+    if (cursor) params.set('cursor', cursor);
+    const version = generation;
+    return { queryKey: ['entities', version, debouncedQuery, activeRyhtiTheme?.key ?? '', ryhtiCategoryKey, cursor],
+      enabled: browser && searchEnabled, gcTime: browser ? 60_000 : Infinity,
+      queryFn: ({ signal }: { signal: AbortSignal }) => fetchEntity<EntitySearch>(`/api/entities?${params}`, signal, version) };
+  });
+  let selectedBuildingId = $derived(selected?.kind === 'building' ? selected.building.id : '');
+  const detailQuery = createQuery(() => {
+    const version = generation, id = selectedBuildingId;
+    return { queryKey: ['entity-detail', version, id], enabled: browser && !!version && !!id, staleTime: Infinity,
+      queryFn: ({ signal }: { signal: AbortSignal }) => fetchEntity<EntityDetail>(`/api/entities/building/${encodeURIComponent(id)}?${new URLSearchParams({ generation: version })}`, signal, version) };
+  });
+  let detail = $derived(generation && detailQuery.data?.generation === generation && detailQuery.data.building.id === selectedBuildingId ? detailQuery.data : null);
+  let detailEnergy = $derived<EnergyCatalogState>(detail ? { ...detail.energy, status: energy.status, message: energy.message, attemptedAt: energy.attemptedAt }
+    : { status: 'unavailable', catalog: null, message: detailQuery.error?.message ?? null, attemptedAt: null });
+  let detailRyhti = $derived<RyhtiCatalogState>(detail ? { ...detail.ryhti, status: ryhti.status, message: ryhti.message, attemptedAt: ryhti.attemptedAt }
+    : { status: 'unavailable', catalog: null, message: detailQuery.error?.message ?? null, attemptedAt: null });
+  let indexedBuildings = $derived([...new Map([...buildings, ...(detail?.members ?? [])].map(building => [building.id, building])).values()]);
+  let filteredBuildings = $derived(searchEnabled ? searchQuery.data?.buildings ?? [] : buildings);
+  // Stable manifest groups retain cached theme values when adjacent chunks enter or leave the view.
+  let themeGroupKey = $derived.by(() => {
+    if (!generation || !activeThemeSummary || !city || !layers.buildings) return '[]';
+    const loaded = new Set(buildings.map(building => building.chunkRef));
+    const chunks = city.manifest.chunks.map(chunk => chunk.id).sort();
+    const groups: string[][] = [];
+    for (let i = 0; i < chunks.length; i += 16) {
+      const group = chunks.slice(i, i + 16);
+      if (group.some(id => loaded.has(id))) groups.push(group);
+    }
+    return JSON.stringify(groups);
+  });
+  // Equal chunk sets must keep the same options: the adapter recreates its observer on changes.
+  let themeGroups = $derived(JSON.parse(themeGroupKey) as string[][]);
+  const themeQueries = createQueries(() => {
+    const version = generation, key = themeKey;
+    return { queries: themeGroups.map(chunks => ({ queryKey: ['entity-theme', version, key, chunks], enabled: browser,
+      staleTime: Infinity, gcTime: browser ? 60_000 : Infinity,
+      queryFn: ({ signal }: { signal: AbortSignal }) => fetchEntity<EntityThemeValues>(`/api/themes/${encodeURIComponent(key)}?${new URLSearchParams({ generation: version, chunks: chunks.join(',') })}`, signal, version) })),
+      combine: results => ({ values: results.flatMap(result => result.data?.values ?? []),
+        pending: results.some(result => result.isPending), error: results.find(result => result.error)?.error ?? null }) };
+  });
+  let themeColours = $derived(new Map(themeQueries.values.map(([id, colour, category]) => [id, activeRyhtiTheme && ryhtiCategoryKey && category !== ryhtiCategoryKey ? RYHTI_DIM_COLOUR : colour])));
+  let ryhtiColors = $derived({ colours: themeColours, categories: activeThemeSummary?.categories ?? [] });
+  let theme = $derived({ colours: themeColours, minimum: activeThemeSummary?.minimum ?? null,
+    maximum: activeThemeSummary?.maximum ?? null, count: activeThemeSummary?.count ?? 0 });
   let mapCovered = $derived(loading || !ready);
   const modes: TransitMode[] = ['tram', 'bus', 'ferry'];
   const modeNames: Record<TransitMode, string> = { tram: 'Trams', bus: 'Buses', ferry: 'HSL Ferries' };
   const age = (vehicle: { reportedAt: string }) => `${Math.max(0, Math.floor(trafficAge(vehicle, now) / 1000))} s ago`;
-  let releaseBuildingCount = $derived(indexState === 'current' ? searchBuildings.length : null);
+  let releaseBuildingCount = $derived(catalog?.buildingCount ?? null);
   let routes = $derived(routeCatalog?.routes ?? []);
   const routeName = (id: string) => routes.find(item => item.routeId === id)?.label ?? id;
   let availableVehicles = $derived(traffic.vehicles.filter(vehicle => trafficAge(vehicle, now) < TRAFFIC_REMOVE_MS));
   let visibleVehicles = $derived(availableVehicles.filter(vehicle => layers[vehicle.mode] && (!routeFilter || vehicle.routeId === routeFilter))
     .sort((a, b) => a.mode.localeCompare(b.mode) || a.routeId.localeCompare(b.routeId) || a.id.localeCompare(b.id)));
   let matchingVehicles = $derived(visibleVehicles.filter(vehicle => !query || matchesVehicle(vehicle, query, routeName(vehicle.routeId))));
-  let indexedBuildings = $derived([...new Map([...searchBuildings, ...buildings].map(building => [building.id, building])).values()]);
-  let filteredBuildings = $derived((query || (activeRyhtiTheme && ryhtiCategoryKey) || (sceneError && !scene) ? indexedBuildings : buildings)
-    .filter(building => (!query || matchesBuilding(building, query)) && (!activeRyhtiTheme || !ryhtiCategoryKey || ryhtiColors.matchingIds.has(building.id))));
   let matchingRoutes = $derived(routes.filter(item => (!routeFilter || item.routeId === routeFilter) && layers[item.mode]
     && (!query || searchText(`${item.routeId} ${item.label} ${item.name}`).includes(searchText(query)))));
   let observationStations = $derived(observationSnapshot ? groupObservationStations(observationSnapshot) : []);
@@ -121,7 +186,10 @@
     }
     selected = selection; selectionMessage = message;
   };
-  const selectObject = (selection: Selection) => { if (scene) scene.select(selection); else setSelection(selection, '3D rendering unavailable. Showing available source metadata.'); };
+  const selectObject = (selection: Selection) => {
+    if (scene && ready) scene.select(selection);
+    else setSelection(selection, sceneError ? '3D rendering unavailable. Showing available source metadata.' : 'Map loading. Showing source metadata.');
+  };
   const clearSelection = () => { if (scene) scene.clearSelection(); else setSelection(null); };
   const setMobilePanel = (panel: typeof mobilePanel) => {
     const previous = mobilePanel;
@@ -156,37 +224,6 @@
       .then(value => { if (!request.signal.aborted) route = value; })
       .catch(error => { if (!request.signal.aborted) routeError = error instanceof Error ? error.message : 'Route context unavailable'; })
       .finally(() => { if (!request.signal.aborted) routeLoading = false; });
-    return () => request.abort();
-  });
-  $effect(() => {
-    if (!ready && !sceneError) return;
-    const request = new AbortController();
-    void fetch('/api/ryhti/catalog', { cache: 'no-store', signal: AbortSignal.any([request.signal, AbortSignal.timeout(60000)]) })
-      .then(async response => {
-        if (!response.ok) throw new Error(`Ryhti catalog unavailable (${response.status})`);
-        const state: RyhtiCatalogState = await response.json();
-        if (!['ready', 'stale', 'unavailable'].includes(state.status) || !(state.message === null || typeof state.message === 'string')) throw new Error('Invalid Ryhti response');
-        if (state.catalog) validateRyhtiCatalog(state.catalog);
-        if (!request.signal.aborted) ryhtiResponse = state;
-      })
-      .catch(error => { if (!request.signal.aborted) ryhtiResponse = { status: 'unavailable', catalog: null, message: String(error), attemptedAt: null }; })
-      .finally(() => { if (!request.signal.aborted) ryhtiLoading = false; });
-    return () => request.abort();
-  });
-  $effect(() => {
-    if (!ready && !sceneError) return;
-    const request = new AbortController();
-    void fetch('/api/energy/catalog', { cache: 'no-store', signal: AbortSignal.any([request.signal, AbortSignal.timeout(60_000)]) })
-      .then(async response => {
-        if (!response.ok) throw new Error(`Prepared energy catalog unavailable (${response.status}).`);
-        const state = await response.json() as EnergyCatalogState;
-        if (!['ready', 'stale', 'unavailable'].includes(state.status) || (state.catalog && (state.catalog.version !== 1
-          || !Array.isArray(state.catalog.energy) || !Array.isArray(state.catalog.solar) || !Array.isArray(state.catalog.properties)
-          || !Array.isArray(state.catalog.sources) || !Array.isArray(state.catalog.reports)))) throw new Error('Prepared energy catalog could not be read.');
-        return state;
-      }).then(state => { if (!request.signal.aborted) energyResponse = state; })
-      .catch(error => { if (!request.signal.aborted) energyResponse = { status: 'unavailable', catalog: null, message: error instanceof Error ? error.message : 'Energy catalog unavailable.', attemptedAt: null }; })
-      .finally(() => { if (!request.signal.aborted) energyLoading = false; });
     return () => request.abort();
   });
   onMount(() => {
@@ -250,17 +287,11 @@
     const observationsCheck = setInterval(() => void refreshObservations(), 5 * 60_000);
     void connect(); void refreshObservations();
     void loadRouteCatalog(fetch).then(value => { if (!disposed) routeCatalog = value; }).catch(error => { if (!disposed) routeCatalog = { status: 'unavailable', generatedAt: null, source: null, routes: [], reason: error instanceof Error ? error.message : 'Route labels unavailable' }; }).finally(() => { if (!disposed) routeCatalogLoading = false; });
-    void loadPreparedSample(fetch).then(data => { if (!disposed) sample = data; });
     const cache = new CityAssetCache();
     void loadCityManifest(fetch, lifetime.signal).then(async manifest => {
       const base = await loadCityBase(manifest, fetch, lifetime.signal, cache);
       if (disposed) return; city = { manifest, base, cache };
-      void loadBuildingSearchIndex(manifest, fetch, lifetime.signal, cache).then(index => {
-        if (disposed) return; searchBuildings = index.buildings;
-        indexState = index.unavailableChunks.length ? 'partial' : index.buildings.length ? 'current' : 'empty';
-        indexMessage = index.unavailableChunks.length ? `${index.unavailableChunks.length} metadata batches unavailable; searchable coverage is partial.` : `${index.buildings.length.toLocaleString()} prepared building identities searchable.`;
-      }).catch(error => { if (!disposed) { indexState = 'unavailable'; indexMessage = error instanceof Error ? error.message : 'Building index unavailable'; } });
-    }).catch(error => { if (!disposed) { sceneError = error instanceof Error ? error.message : 'City assets unavailable'; indexState = 'unavailable'; indexMessage = 'City index unavailable.'; } })
+    }).catch(error => { if (!disposed) sceneError = error instanceof Error ? error.message : 'City assets unavailable'; })
       .finally(() => { if (!disposed) loading = false; });
     return () => { disposed = true; cache.dispose(); lifetime.abort(); request?.abort(); observationRequest?.abort(); stream?.close(); clearInterval(clock); clearInterval(observationsCheck); document.removeEventListener('visibilitychange', visibility); document.removeEventListener('visibilitychange', resumeObservations); };
   });
@@ -279,7 +310,7 @@
     {#if city}
       <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} {keyboardNavigation} {stations} {route} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
         onbuildings={(value) => buildings = value} onstats={(value) => stats = value} onhover={(value) => hovered = value}
-        onerror={(value) => sceneError = value} oninteraction={() => following = false} onready={() => ready = true}
+        onerror={(value) => sceneError = value} oninteraction={() => following = false} onready={() => { ready = true; if (selected) scene?.select(selected); }}
         oncontroller={(value) => scene = value} />
     {/if}
     {#if mapCovered}
@@ -327,6 +358,8 @@
           <label class="layer-control"><input type="checkbox" bind:checked={layers.weather} /><span class="station-swatch weather" aria-hidden="true">○</span><span>Weather stations</span></label>
           <label class="layer-control"><input type="checkbox" bind:checked={layers.airQuality} /><span class="station-swatch air-quality" aria-hidden="true">◇</span><span>Air-quality stations</span></label>
           <div class="layer-divider"></div>
+          {#if themeQueries.pending}<p class="notice" role="status">Loading colors for the current view…</p>{/if}
+          {#if themeQueries.error}<p class="notice" role="status">{themeQueries.error.message}</p>{/if}
           <div class="building-theme" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind ?? 'neutral'}>
             <label class="filter-label">Building colors<select value={activeRyhtiTheme?.key ?? activeTheme?.key ?? ''} onchange={event => changeTheme(event.currentTarget.value)}><option value="">{layers.imagery ? 'Textured buildings' : 'Neutral buildings'}</option>{#each ['modeled-demand', 'solar'] as kind (kind)}<optgroup label={kind === 'modeled-demand' ? 'Modeled demand' : 'Modeled solar potential'}>{#each themeOptions.filter(option => option.kind === kind) as option (option.key)}<option value={option.key}>{label(option.metric)} · {option.unit} · {option.period}{option.scenario ? ` · ${option.scenario}` : ''}</option>{/each}</optgroup>{/each}<optgroup label="Ryhti register">{#each RYHTI_THEMES as option (option.key)}<option value={option.key} disabled={!ryhti.catalog}>{option.label}</option>{/each}</optgroup></select></label>
             {#if activeRyhtiTheme}
@@ -342,9 +375,9 @@
               <p class="panel-note" data-theme-covered={theme.count} data-theme-denominator={releaseBuildingCount ?? ''}>{theme.count.toLocaleString()} colored / {releaseBuildingCount?.toLocaleString() ?? 'unknown'} prepared release buildings. Shared property totals and ambiguous associations excluded.</p>
               <p class="panel-note"><span class="no-data-swatch" style:background={NO_ENERGY_COLOUR}></span> Neutral = no comparable record. {theme.count ? '' : 'No comparable values in this dataset selection.'}</p>
             {:else}<p class="panel-note">{layers.imagery ? 'City building textures. Thematic colors replace textures while a category or metric is selected.' : 'Neutral palette.'} Select a Ryhti category, modeled demand or solar metric to see its period, units, limits and coverage.</p>{/if}
-            {#if energyLoading}<p class="notice" role="status">{ready ? 'Loading prepared energy and solar records…' : 'Energy records load after the scene is ready.'}</p>{:else if energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
+            {#if energyLoading}<p class="notice" role="status">Loading available energy themes…</p>{:else if energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
           </div>
-          <p class="panel-note" role="status">Ryhti: {ryhtiLoading ? 'loading after scene readiness' : ryhti.status}. {ryhti.message ?? ''}</p>
+          <p class="panel-note" role="status">Ryhti: {ryhtiLoading ? 'loading coverage' : ryhti.status}. {ryhti.message ?? ''}</p>
           <fieldset class="parameter-controls"><legend>Nearby parameters</legend>{#each OBSERVATION_PARAMETERS as parameter (parameter.id)}<label><input type="checkbox" value={parameter.id} bind:group={enabledParameters} />{parameter.label}</label>{/each}</fieldset>
         </div><p class="panel-note">Station markers show actual locations. Vehicle models use real-world scale; route flags identify their lines.</p>
       </section>
@@ -369,8 +402,8 @@
             <dl class="properties"><div><dt>Address</dt><dd>{buildingAddress(selected.building) ?? 'Unknown'}</dd></div><div><dt>Built</dt><dd>{buildingAttribute(selected.building, ['yearOfConstruction', 'rakennusvuosi']) ?? 'Unknown'}</dd></div><div><dt>Floors</dt><dd>{buildingAttribute(selected.building, ['storeysAboveGround', 'kerrosluku']) ?? 'Unknown'}</dd></div><div><dt>Use</dt><dd>{buildingAttribute(selected.building, ['usage', 'function', 'kayttotarkoitus']) ?? 'Unknown'}</dd></div><div><dt>Stable ID</dt><dd>{selected.building.id}</dd></div><div><dt>GML ID</dt><dd>{selected.building.gmlId}</dd></div><div><dt>VTJ-PRT</dt><dd>{selected.building.vtjPrt ?? 'Unknown'}</dd></div><div><dt>RATU</dt><dd>{selected.building.ratu ?? 'Unknown'}</dd></div><div><dt>UUID</dt><dd>{selected.building.uuid ?? 'Unknown'}</dd></div><div><dt>Geometry vintage</dt><dd>{selectedSource?.vintage ?? 'Unknown — not supplied'}</dd></div><div><dt>Retrieved</dt><dd>{formatDate(selectedSource?.retrievedAt)}</dd></div><div><dt>Source</dt><dd>{selected.building.sourceId}</dd></div></dl>
             {#if selectedSource}<a class="source-link" href={selectedSource.url} target="_blank" rel="noreferrer">Building source reference ↗</a>{/if}
             <details><summary>Available source attributes</summary><dl class="properties">{#each Object.entries(selected.building.attributes) as [key, value] (key)}<div><dt>{label(key)}</dt><dd>{value ?? 'Unknown'}</dd></div>{/each}</dl></details>
-            <BuildingRyhti entry={ryhtiById.get(selected.building.id)} state={ryhti} loading={ryhtiLoading} />
-            {#key selected.building.id}<BuildingEnergy building={selected.building} catalogState={energy} loadingCatalog={energyLoading} buildings={indexedBuildings} onmember={id => { const member = indexedBuildings.find(building => building.id === id); if (member) selectObject({ kind: 'building', building: member }); }} onsources={openSources} />{/key}
+            <BuildingRyhti entry={detailRyhti.catalog?.buildings[0]} state={detailRyhti} loading={detailQuery.isFetching} />
+            {#key selected.building.id}<BuildingEnergy building={selected.building} catalogState={detailEnergy} loadingCatalog={detailQuery.isFetching} buildings={indexedBuildings} onmember={id => { const member = indexedBuildings.find(building => building.id === id); if (member) selectObject({ kind: 'building', building: member }); }} onsources={openSources} />{/key}
           {:else if selected?.kind === 'vehicle'}
             <span class="eyebrow">HSL / {selected.vehicle.mode.toUpperCase()}</span><h3>Route {route?.status === 'exact' ? route.routeLabel ?? routeName(selected.vehicle.routeId) : routeName(selected.vehicle.routeId)}</h3>
             {#if selected.removed || trafficAge(selected.vehicle, now) >= TRAFFIC_REMOVE_MS}<p class="notice">This vehicle has left the current feed or its position expired. Its last reported identity remains here.</p>{:else if trafficIsStale(selected.vehicle, now)}<p class="notice">Stale position. Held at its last received coordinates.</p>{/if}
@@ -394,10 +427,10 @@
       </section>
       {/if}
       <section class="panel object-browser" id="object-browser" tabindex="-1"><div class="panel-heading"><h2>Search the city</h2><span>KEYBOARD</span></div>
-        <div class="search-content">{#if selectionMessage}<p class="notice" role="status">{selectionMessage}</p>{/if}<label class="search-label">Vehicle, route, building, address or station<input type="search" bind:value={query} placeholder="Route 4, street or original ID" /></label><p class="panel-note" data-index-state={indexState}>{indexMessage}</p>{#if query}<button class="text-button" onclick={() => query = ''}>Clear search</button>{/if}</div>
+        <div class="search-content">{#if selectionMessage}<p class="notice" role="status">{selectionMessage}</p>{/if}<label class="search-label">Vehicle, route, building, address or station<input type="search" bind:value={query} placeholder="Route 4, street or original ID" /></label><p class="panel-note" data-index-state={indexState}>{indexMessage}</p>{#if searchEnabled && searchQuery.isFetching}<p class="panel-note" role="status">Searching…</p>{/if}{#if searchEnabled && searchQuery.error}<p class="notice" role="status">{searchQuery.error.message}</p>{/if}{#if query}<button class="text-button" onclick={() => query = ''}>Clear search</button>{/if}</div>
         <details open><summary>Vehicles <span>{matchingVehicles.length}</span></summary><div class="object-list">{#each matchingVehicles.slice(0, 60) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {routeName(vehicle.routeId)}</strong><small>{vehicle.ownerOperatorId}/{vehicle.vehicleId} · {trafficIsStale(vehicle, now) ? 'stale' : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching current vehicles in visible modes / route.</p>{/each}{#if matchingVehicles.length > 60}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div></details>
         <details open={!!query}><summary>Routes <span>{matchingRoutes.length}</span></summary><div class="object-list">{#each matchingRoutes.slice(0, 60) as item (item.routeId)}<button onclick={() => chooseRoute(item.routeId)}><span class="mode-swatch" style:background={MODE_COLOURS[item.mode]}></span><span><strong>Route {item.label} · {label(item.mode)}</strong><small>{item.name} · {item.routeId}</small></span></button>{:else}<p class="panel-note">{routeCatalogLoading ? 'Loading prepared route labels…' : routeCatalog?.reason ?? 'No matching prepared route labels.'}</p>{/each}{#if matchingRoutes.length > 60}<p class="panel-note">First 60 routes. Refine your search.</p>{/if}</div></details>
-        <details open={!!query || !!(activeRyhtiTheme && ryhtiCategoryKey)}><summary>{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'Matching buildings' : sceneError && !scene ? 'Available buildings' : 'Loaded buildings'} <span>{filteredBuildings.length}</span></summary><div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong><small>{building.vtjPrt ?? building.ratu ?? building.id}</small></span></button>{:else}<p class="panel-note">{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}</div></details>
+        <details open={!!query || !!(activeRyhtiTheme && ryhtiCategoryKey)}><summary>{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'Matching buildings' : sceneError && !scene ? 'Available buildings' : 'Loaded buildings'} <span>{filteredBuildings.length}</span></summary><div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong><small>{building.vtjPrt ?? building.ratu ?? building.id}</small></span></button>{:else}<p class="panel-note">{query || (activeRyhtiTheme && ryhtiCategoryKey) ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}{#if searchEnabled}<div class="search-pagination"><button class="text-button" disabled={!cursor || searchQuery.isFetching} onclick={() => pagination = { signature: searchSignature, cursors: pagination.cursors.slice(0, -1) }}>Previous</button><button class="text-button" disabled={!searchQuery.data?.nextCursor || searchQuery.isFetching} onclick={() => pagination = { signature: searchSignature, cursors: [...(pagination.signature === searchSignature ? pagination.cursors : [null]), searchQuery.data!.nextCursor] }}>Next buildings</button></div>{/if}</div></details>
         <details open><summary>Stations <span>{matchingStations.length}</span></summary><div class="object-list">{#each matchingStations as station (station.id)}<button class:selected={selected?.kind === 'station' && selected.station.id === station.id} onclick={() => selectObject({ kind: 'station', station })}><span class="station-swatch {station.kind}" aria-hidden="true">{station.kind === 'weather' ? '○' : '◇'}</span><span><strong>{station.name}</strong><small>{label(station.kind)} · {station.id}</small></span></button>{:else}<p class="panel-note">{observationLoading ? 'Loading stations…' : 'No matching stations in the available coverage / layers.'}</p>{/each}</div></details>
       </section>
     </aside>

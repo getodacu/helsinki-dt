@@ -109,7 +109,7 @@ export function sampleTerrainHeight(grid: TerrainGrid, x: number, z: number): nu
   return b == null || c == null || d == null ? null : d + (c - d) * (1 - u) + (b - d) * (1 - v);
 }
 
-function validBuilding(building: Building, chunkId: string, manifest: CityManifest): boolean {
+export function validBuilding(building: Building, chunkId: string, manifest: CityManifest): boolean {
   return !!building && typeof building.id === 'string' && !!building.id
     && typeof building.gmlId === 'string' && !!building.gmlId && building.chunkRef === chunkId
     && [building.vtjPrt, building.ratu, building.uuid].every(value => value == null || typeof value === 'string')

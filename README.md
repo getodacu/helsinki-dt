@@ -41,6 +41,7 @@ npm run city:prepare
 npm run energy:prepare
 npm run ryhti:prepare
 npm run routes:prepare
+npm run entities:prepare
 ```
 
 Inspect each command's result before continuing. `data:prepare` exit **2** means a usable foundation sample was published with explicit open source gates; inspect `.cache/task-a/latest-preparation.json` and the reported gates. Exit **1** means preparation failed and the previous published sample was retained. Historical foundation gates and the later verified energy catalog have separate evidence; see [data access](docs/data-access.md) and [energy/solar evidence](docs/energy-solar-evidence.md).
@@ -74,9 +75,9 @@ flowchart LR
 
 Preparation converts and validates source data once, publishes immutable generations, and changes their manifest pointers only after successful publication. A failed refresh retains the previous valid generation. Raw archives, conversion tools and diagnostics live in `.cache/`; generated datasets are ignored by Git.
 
-Browsers load prepared `/data/` geometry and metadata, then request visible municipal imagery and textured buildings through `/api/city-asset`. The Node server validates and caches these municipal assets on disk for all visitors. Browser Cache Storage is an optional additional cache; it is independent of the server cache and of GPU resources.
+Browsers load prepared `/data/` geometry and its visible-chunk metadata, then request visible municipal imagery and textured buildings through `/api/city-asset`. The Node server validates and caches these municipal assets on disk for all visitors. Browser Cache Storage is an optional additional cache; it is independent of the server cache and of GPU resources.
 
-Each Node process shares one demand-driven HSL MQTT connection across its browsers and forwards snapshots/updates through SSE. Station observations and measured electricity use separate server services. Energy catalog loading follows scene readiness so it does not block initial map interaction. Run one application process; multiple workers would need shared live-feed coordination.
+Each Node process shares one demand-driven HSL MQTT connection across its browsers and forwards snapshots/updates through SSE. Station observations and measured electricity use separate server services. A small entity catalog summary supplies themes and source status. Building search, inspection and theme values use SQLite-backed APIs; TanStack Svelte Query caches bounded responses by dataset generation. Run one application process; multiple workers would need shared live-feed coordination.
 
 Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.js `[east, elevation, -north]` coordinates around longitude 24.952, latitude 60.1695, elevation 0. Heights retain the N2000 datum; projection does not perform a vertical datum conversion. See [data contracts](docs/data-contracts.md) and [coordinate controls](docs/coordinate-controls-evidence.md).
 
@@ -96,6 +97,7 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 | `static/data/city/` | City manifest, terrain/context, semantic geometry and building metadata. |
 | `static/data/route-index.json` | Prepared route labels, trips, shapes and stop patterns. |
 | `static/data/energy-manifest.json` and `static/data/energy/` | Energy catalog pointer and immutable catalogs. |
+| `server/data/entities/` | Private immutable SQLite generations and their active manifest; rebuilt from prepared data with `entities:prepare`. |
 | `.cache/city-map/` | Persistent municipal imagery, tile indexes and textured model bytes; configurable. |
 | `.cache/energy/runtime/` | Persistent measured-electricity cache; preserve across deployments. |
 | `.cache/task-a/`, `.cache/task-b/`, `.cache/task-d/`, `.cache/task-e/` | Source downloads, preparation/verification diagnostics and release artifacts. |
@@ -166,6 +168,7 @@ Saved municipal bytes become eligible for revalidation after 30 days, with older
 | `npm run city:prepare` | Prepare licensed terrain, context, semantic building geometry and metadata. |
 | `npm run energy:prepare` | Publish an energy catalog compatible with the current city. `-- --refresh` retrieves a new source version for review. |
 | `npm run routes:prepare` | Build the route index from `.cache/task-a/hsl-gtfs.zip`; optional positional arguments are archive path and output path. |
+| `npm run entities:prepare` | Build and atomically publish the private SQLite read database after foundation, city, energy or Ryhti preparation; no source downloads. |
 | `npm run city:cache` | Warm the municipal asset cache; see flag combinations above. |
 | `npm run check` | SvelteKit sync, TypeScript and Svelte diagnostics. |
 | `npm test` | Node regression tests using local fixtures. |
@@ -176,7 +179,7 @@ Saved municipal bytes become eligible for revalidation after 30 days, with older
 
 Probes write `.cache/task-a/probe-<source>.json` and use exit 2 when a checked gate is not passing. They may download and cache sources; they are not a publication command. Normal preparation reuses verified raw caches, so rerunning it does not necessarily retrieve a newer upstream version.
 
-After refreshing city data, immediately prepare matching energy, then check/test/build again. Production static assets require a new build; development reads updated prepared files directly. Do not run simultaneous preparations/builds into the same outputs. Review annual source updates monthly or when providers announce exports; energy preparation intentionally checks known source versions and may reject changed schemas/checksums until reviewed.
+After refreshing city data, prepare matching energy and any published Ryhti snapshot, then run `npm run entities:prepare` before checking/testing/building again. Rebuild the entity database after foundation, energy or Ryhti changes too. A missing optional catalog stays explicitly unavailable; an existing invalid or incompatible catalog fails preparation and retains the previous database. Production static assets require a new build; development reads updated prepared files directly. Do not run simultaneous preparations/builds into the same outputs. Review annual source updates monthly or when providers announce exports; energy preparation intentionally checks known source versions and may reject changed schemas/checksums until reviewed.
 
 For route refresh:
 
@@ -207,7 +210,7 @@ Each value keeps its actual observed time, provider unit, aggregation and qualit
 
 The inspector separates **measured property electricity**, **modeled building demand**, and **incident solar energy on modeled roof/wall surfaces**. Exact source identifiers establish links; address/nearest-point guesses are not used. Shared-property consumption is stored once and is never divided into building consumption or used for building colors. Solar irradiation is not installed photovoltaic capacity or electrical output.
 
-The static catalog loads once after scene readiness; `/api/energy/catalog` negotiates gzip. Daily measured requests accept only catalog-listed properties and the previous twelve completed calendar months. Without a month selection, the service chooses the latest completed month with finite readings for every day; incomplete months retain null gaps and no unqualified total.
+The browser requests energy and Ryhti records only for the selected building; theme values arrive in bounded chunk groups. Source summaries retain global ranges, counts and provenance. The full `/api/energy/catalog` and `/api/ryhti/catalog` endpoints remain available for compatibility, but the app does not call them. Daily measured requests accept only catalog-listed properties and the previous twelve completed calendar months. Without a month selection, the service chooses the latest completed month with finite readings for every day; incomplete months retain null gaps and no unqualified total.
 
 Successful measured requests are eligible for refresh after six hours, failures after one minute. Identical lookups coalesce; limits are four concurrent requests, 24 starts/minute, and 256 KiB/15 seconds/366 daily rows per upstream response. Its checksum-validated raw cache has at most 64 disk entries and 64 memory entries at `.cache/energy/runtime`. New month or city/source/membership versions start a new lookup. Provider publication cadence is unknown.
 
@@ -217,6 +220,11 @@ Coverage is incomplete by design. The dated 8 October 2026 release evidence reco
 
 | Endpoint | Contract |
 | --- | --- |
+| `GET /api/catalog/status` | Compact coverage, sources, foundation gates, theme metadata and active SQLite generation. |
+| `GET /api/entities?generation=...&q=...&kind=building&limit=30&cursor=...` | Accent-insensitive substring search and exact-ID priority; 1–60 buildings per page, opaque next cursor. Optional `theme` plus `category` narrows search. |
+| `GET /api/entities/building/:id?generation=...` | One building, its energy/Ryhti records, join evidence and shared-property member identities. URL-encode the original ID. |
+| `GET /api/themes?generation=...` | Available theme options, global ranges, categories and counts. |
+| `GET /api/themes/:key?generation=...&chunks=...` | Colour/category tuples for 1–16 distinct comma-separated chunk IDs; global colour scale stays fixed while panning. |
 | `GET /api/city-asset?url=...` | Validated municipal asset proxy/cache; only approved model paths and bounded aerial requests are accepted. |
 | `GET /api/city-cache` | Runtime warmer progress and storage issue; partial warming may trigger a retry. |
 | `POST /api/city-cache` | Start/resume automatic overview warming. |
@@ -227,6 +235,8 @@ Coverage is incomplete by design. The dated 8 October 2026 release evidence reco
 | `GET /api/route?...` | Exact journey lookup using `ownerOperatorId`, `vehicleId`, `routeId`, `directionId`, `serviceDate` and `startTime`. |
 | `GET /api/energy/catalog` | Validated catalog with city compatibility/source status and gzip negotiation. |
 | `GET /api/energy?property=...&month=YYYY-MM` | Measured series for a prepared property; `month` is optional. |
+
+Entity endpoints require the generation returned by `/api/catalog/status` and return 409 after a new publication; the client refreshes catalog metadata and retries under new keys. Unknown/duplicate parameters return 400, missing entities 404, oversized responses 413, and missing/incompatible databases 503. Successful responses support ETags, and bodies are capped at 2 MB. Static search covers buildings; compact route labels and live vehicle/station searches retain their existing APIs.
 
 Source-status responses can be HTTP 200 while showing unavailable or dated data. Check the JSON status and report/observation times as well as HTTP/process health. Polling `/api/traffic` itself creates MQTT demand.
 
@@ -246,6 +256,7 @@ Source-status responses can be HTTP 200 while showing unavailable or dated data.
 To build and run from a prepared source checkout:
 
 ```sh
+npm run entities:prepare
 npm run check
 npm test
 npm run build
@@ -254,9 +265,9 @@ npm start
 
 Keep the process working directory at the project or extracted release root so file readers resolve the correct data. Give it access to prepared assets and write permission for both runtime cache directories.
 
-For a transferable release, run `npm run release:package` after building. It checks active source checksums, city/energy compatibility, route availability and equality between prepared data and `build/client/data`. Output lives under `.cache/task-e/releases/helsinki-lens-<version>-<content-hash>/`; `release.json` records file and data checksums. Archive unused old generations before the final build, since the build's static inventory and packaged files must stay consistent.
+For a transferable release, run `npm run release:package` after building. It checks the private database checksum and source generations, active source checksums, city/energy compatibility, route availability and equality between prepared data and `build/client/data`. Output lives under `.cache/task-e/releases/helsinki-lens-<version>-<content-hash>/`; `release.json` records file and data checksums. Archive unused old generations before the final build, since the build's static inventory and packaged files must stay consistent.
 
-The bundle includes `build/`, npm manifests/lockfile, `.nvmrc`, `.env.example`, dependency notices and documentation. It contains a relative `static/data` symlink to `build/client/data`; preserve it when copying or archiving. It excludes `.env`, credentials, `node_modules`, raw downloads and runtime caches. It serves prepared assets and cannot run source preparation, rebuilds, tests or the cache CLI.
+The bundle includes `build/`, the active private SQLite database and manifest under `server/data/entities/`, npm manifests/lockfile, `.nvmrc`, `.env.example`, dependency notices and documentation. It contains a relative `static/data` symlink to `build/client/data`; preserve it when copying or archiving. It excludes `.env`, credentials, `node_modules`, raw downloads and runtime caches. It serves prepared assets and cannot run source preparation, rebuilds, tests or the cache CLI.
 
 From the extracted release root:
 
@@ -292,7 +303,7 @@ Explicit live verifications are separate from regression tests. `node scripts/ve
 | Map cache exits `partial` | Inspect reported missing URLs and connectivity; resume without `--refresh`; the CLI includes all model detail levels by default. |
 | Map cache exits `stopped` | Check disk space and directory permissions; retain saved assets and rerun after fixing storage. |
 | CLI succeeds but deployment downloads assets again | Confirm CLI and app use the same persistent cache directory and matching prepared area. |
-| Energy/themes unavailable after city refresh | Run `energy:prepare` for the new city, then rebuild/repackage production static assets. |
+| Search/details/themes unavailable after a source refresh | Prepare matching energy and any published Ryhti data, then run `entities:prepare` and rebuild/repackage. Keep the private database with its matching city assets. |
 | Route missing or expired | Inspect full journey identity and feed validity, refresh the transit archive/index, then rebuild production. |
 | Live traffic disconnected or dated | Check outbound TLS MQTT and SSE/proxy handling; compare provider report times. Missing feeds do not create substitute vehicles. |
 | Station readings missing or old | Check FMI access and source status/observed timestamps; refresh timing cannot create unpublished readings. |

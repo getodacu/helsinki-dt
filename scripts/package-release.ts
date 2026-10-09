@@ -8,6 +8,7 @@ import { EnergyCatalogStore } from '../src/lib/server/energy-catalog.ts';
 import { RyhtiCatalogStore, readRyhtiFile, validateRyhtiManifest } from '../src/lib/server/ryhti-catalog.ts';
 import { RouteContextStore } from '../src/lib/server/route-context.ts';
 import { loadPreparedSample } from '../src/routes/sample.ts';
+import { EntityStore } from '../src/lib/server/entities.ts';
 
 interface Asset { path: string; bytes: number; sha256: string }
 const hash = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
@@ -88,6 +89,13 @@ export async function packageRelease(root = resolve('.'), output = resolve('.cac
   assert.ok(energy.catalog, energy.message ?? 'Energy is not prepared or mismatches city');
   const route = await new RouteContextStore(join(root, 'static/data/route-index.json')).catalog();
   assert.equal(route.status, 'ready', route.reason ?? 'Routes are not prepared');
+  const entities = new EntityStore(join(root, 'server/data/entities'), join(root, 'static/data'));
+  let entityCatalog;
+  try { entityCatalog = (await entities.load()).catalog; } finally { entities.close(); }
+  assert.equal(entityCatalog.energy.catalog?.generatedAt, energy.catalog.generatedAt, 'Run entities:prepare after refreshing energy');
+  assert.equal(entityCatalog.foundation?.generatedAt, foundation.manifest.generatedAt, 'Run entities:prepare after refreshing foundation data');
+  const ryhti = await new RyhtiCatalogStore(join(root, 'static/data')).load();
+  assert.equal(entityCatalog.ryhti.catalog?.generatedAt, ryhti.catalog?.generatedAt, 'Run entities:prepare after refreshing Ryhti');
   const readJson = async (path: string) => JSON.parse(await readFile(join(root, 'static/data', path), 'utf8'));
   const energyManifest = await readJson('energy-manifest.json');
   const checksumPath = city.baseUrl.replace('/data/', '').replace('base.json', 'checksums.json');
@@ -110,6 +118,14 @@ export async function packageRelease(root = resolve('.'), output = resolve('.cac
   await mkdir(staging, { recursive: true });
   try {
     for (const path of ['build', 'docs', 'package.json', 'package-lock.json', 'README.md', '.env.example', '.nvmrc']) await cp(join(root, path), join(staging, path), { recursive: true, errorOnExist: true, force: false });
+    const entityDirectory = join(staging, 'server/data/entities');
+    await mkdir(entityDirectory, { recursive: true });
+    for (const name of ['manifest.json', entityCatalog.generation + '.sqlite']) {
+      await cp(join(root, 'server/data/entities', name), join(entityDirectory, name), { errorOnExist: true, force: false });
+    }
+    const packagedEntities = new EntityStore(entityDirectory, join(root, 'static/data'));
+    try { assert.equal((await packagedEntities.load()).catalog.generation, entityCatalog.generation, 'Entity publication changed during packaging'); }
+    finally { packagedEntities.close(); }
     await writeFile(join(staging, 'THIRD_PARTY_NOTICES.md'), await dependencyNotices(root));
     const files = await inventory(staging);
     const id = pkg.name + '-' + pkg.version + '-' + hash(JSON.stringify(files)).slice(0, 12);
@@ -118,7 +134,7 @@ export async function packageRelease(root = resolve('.'), output = resolve('.cac
     const release = { version: 1, id, packagedAt: new Date().toISOString(), node: pkg.engines.node,
       foundationGeneratedAt: foundation.manifest.generatedAt, cityGeneratedAt: city.generatedAt,
       energyGeneratedAt: energy.catalog.generatedAt, routeGeneratedAt: route.generatedAt,
-      energyStatus: energy.status, dataAssets: assets, files, fileBytes: files.reduce((sum, file) => sum + file.bytes, 0) };
+      entityGeneration: entityCatalog.generation, energyStatus: energy.status, dataAssets: assets, files, fileBytes: files.reduce((sum, file) => sum + file.bytes, 0) };
     await writeFile(join(staging, 'release.json'), JSON.stringify(release, null, 2) + '\n');
     for (const asset of assets) await verifyAsset(staging, asset);
     const destination = join(output, id);

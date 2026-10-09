@@ -53,3 +53,11 @@ HSY solar production is modeled potential, not installed panels or live output. 
 ## Publication
 
 Only licensed records enter distributable sample assets. An asset manifest records bytes, SHA-256, count and generation-relative path. Stage and validate the complete generation before replacing `static/data/manifest.json`. Failed preparation keeps the prior valid pointer; old generations are bounded and retained briefly for clients finishing older samples. Raw downloads, converter tools and runtime caches are ignored.
+
+## Server-side entity queries
+
+Private SQLite generations are derived from the prepared municipal building metadata, energy and Ryhti catalogs. Stable building IDs and all original attributes are retained. Split render chunks link to one entity without merging conflicting identities. Search normalizes accents/case with the existing Finnish search helper, uses a trigram FTS5 index for substrings of at least three characters, and a bounded source scan for shorter queries. Exact original identifiers rank first. Cursor ordering is stable by rank and original ID; cursors are bound to the normalized query, category and generation.
+
+Detail responses contain one building's applicable records and associations, plus the identities of its shared-property members. Summary responses omit catalog record arrays and association lists while keeping global source metadata, coverage and join counts. Existing energy/solar exact-match and ambiguity exclusions determine precomputed theme colours; ranges and category counts describe the full prepared release and never change with viewport size. Unknown values stay neutral.
+
+Every data query specifies the active generation. The server validates it against the private manifest; responses carry the same generation. The frontend declines a catalog from a different city generation. Source refresh failures retain dated, labelled data; a city mismatch prevents any catalog attachment. No source refresh runs inside an entity request.
