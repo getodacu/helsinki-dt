@@ -29,8 +29,8 @@ test('real Ryhti control records retain exact joins, source dates and multiple h
   assert.ok(value.buildings.some(b => b.permits.length === 2));
   for (const b of value.buildings) assert.equal(b.completed?.properties.permanent_building_identifier, b.vtjPrt);
   assert.equal(ryhtiDate('1970-01-01Z'), '1970-01-01');
-  assert.equal(ryhtiValue(null), 'Unknown — not supplied');
-  assert.match(ryhtiValue('http://uri.suomi.fi/codelist/unknown/code/999'), /Unrecognized code/);
+  assert.equal(ryhtiValue(null), 'Unknown');
+  assert.equal(ryhtiValue('http://uri.suomi.fi/codelist/unknown/code/999'), 'Unknown');
   assert.equal(ryhtiValue('http://uri.suomi.fi/codelist/rytj/avoin_rakennusluokitus/code/02'), 'Office, production, utility and other buildings');
   assert.throws(() => ryhtiDate('2025-02-29Z'), /calendar date/);
   assert.throws(() => decodeRyhtiRecord({ ...feature, properties: { ...feature.properties, number_of_storeys: -1 } }), /floor count/);
