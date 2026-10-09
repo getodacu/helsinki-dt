@@ -1,6 +1,5 @@
 <script lang="ts">
   import { compatibleEnergyHistory, energyChartSegments, formatEnergyDate } from '#lib/energy-display.ts';
-  import { label } from '#lib/inspection.ts';
   import type { EnergyRecord } from '#lib/types.ts';
   let { records }: { records: EnergyRecord[] } = $props();
   let cursor = $state<number | null>(null);
@@ -16,8 +15,7 @@
   const day = (value: string) => new Intl.DateTimeFormat('en-GB', { timeZone: /^\d{4}-\d{2}-\d{2}$/.test(value) ? 'UTC' : 'Europe/Helsinki', day: 'numeric', month: 'short' }).format(new Date(value));
 </script>
 <div class="history-section">
-  <div class="history-title"><h4>Daily measured consumption</h4><span>PROPERTY</span></div>
-  <p class="panel-note">{label(history[0]?.metric ?? 'electricity_consumption')} ({history[0]?.unit ?? 'kWh'}) · day, Europe/Helsinki. Null readings and missing days remain gaps.</p>
+  <div class="history-title"><h4>Daily property electricity</h4><span>{history[0]?.unit ?? 'kWh'}</span></div>
   {#if finite.length}
     <svg class="history-chart" viewBox="0 0 290 130" role="img" aria-label={`Daily measured property consumption in ${history[0].unit}`}>
       <title>Daily measured property consumption</title><desc>Horizontal axis: day in Europe/Helsinki. Vertical axis: {history[0].unit}. Missing values and missing daily intervals break the line.</desc>
@@ -29,8 +27,7 @@
       {#if point}<line x1={x(point)} y1="22" x2={x(point)} y2="100" class="chart-cursor" />{#if point.value !== null}<circle cx={x(point)} cy={y(point)} r="4" class="chart-point" />{/if}{/if}
       <text x="43" y="120">{day(history[0].period.start)}</text><text x="258" y="120" text-anchor="end">{day(history.at(-1)!.period.start)}</text>
     </svg>
-    <label class="history-cursor">Inspect a measured day<input type="range" min="0" max={Math.max(0, history.length - 1)} value={cursor ?? history.length - 1} oninput={event => cursor = Number(event.currentTarget.value)} aria-valuetext={point ? `${day(point.period.start)}: ${point.value ?? 'Missing'} ${point.value !== null ? point.unit : ''}` : 'Move to inspect a day'} disabled={history.length < 2} /></label>
-    {#if point}<p class="history-reading">Measured day: <strong>{point.value ?? 'Missing'} {point.value !== null ? point.unit : ''}</strong><br />{formatEnergyDate(point.period.start)} – {formatEnergyDate(point.period.end)}<br /><span>Property boundary · {point.sourceId}</span></p><button class="text-button" onclick={() => cursor = null}>Clear energy history cursor</button>{/if}
-  {:else}<p class="notice">No valid measured values in this month. Missing consumption is unknown.</p>{/if}
-  <p class="panel-note history-independence">Transit remains live with its own report times. This energy month and cursor do not replay traffic.</p>
+    <label class="history-cursor">Inspect a measured day<input type="range" min="0" max={Math.max(0, history.length - 1)} value={cursor ?? history.length - 1} oninput={event => cursor = Number(event.currentTarget.value)} aria-valuetext={point ? `${day(point.period.start)}: ${point.value?.toLocaleString('en-GB', { maximumFractionDigits: 2 }) ?? 'Missing'} ${point.value !== null ? point.unit : ''}` : 'Move to inspect a day'} disabled={history.length < 2} /></label>
+    {#if point}<p class="history-reading">Measured day: <strong>{point.value?.toLocaleString('en-GB', { maximumFractionDigits: 2 }) ?? 'Missing'} {point.value !== null ? point.unit : ''}</strong><br />{formatEnergyDate(point.period.start)} – {formatEnergyDate(point.period.end)}</p><button class="text-button" onclick={() => cursor = null}>Clear energy history cursor</button>{/if}
+  {:else}<p class="notice">Unavailable</p>{/if}
 </div>

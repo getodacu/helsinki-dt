@@ -10,7 +10,8 @@ import { buildingIdForTriangle } from './data/geometry.ts';
 import { wgs84ToScene } from './geo.ts';
 import { LiveFleet, vehicleVisible } from './live-fleet.ts';
 import { VehicleFlags } from './vehicle-flags.ts';
-import { RELEASE_BOUNDS, inBounds } from './area.ts';
+import { StationFlags } from './station-flags.ts';
+import { buildingName } from './inspection.ts';
 import type { RouteCatalog, RouteContext } from './route-context.ts';
 import { TRAFFIC_REMOVE_MS, type TrafficSnapshot } from './traffic.ts';
 import type { Building, BuildingChunk, TransitMode, Vehicle } from './types.ts';
@@ -118,19 +119,6 @@ function terrainGeometry(terrain: CityBase['terrain']) {
   geometry.computeVertexNormals(); return geometry;
 }
 
-/** Station glyphs keep provider string identity and use only known terrain. */
-export function makeStationMarker(station: SceneStation, base: CityBase): THREE.Mesh | null {
-  if (!station.id || !inBounds(station.longitude, station.latitude, RELEASE_BOUNDS)) return null;
-  const [x, , z] = wgs84ToScene(station.longitude, station.latitude), height = sampleTerrainHeight(base.terrain, x, z);
-  if (height === null) return null;
-  const geometry = station.kind === 'weather' ? new THREE.SphereGeometry(13, 12, 8) : new THREE.OctahedronGeometry(16);
-  const marker = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: station.kind === 'weather' ? '#88c9eb' : '#d8b5e8', roughness: 0.6 }));
-  marker.position.set(x, height + 25, z); marker.userData.station = station;
-  return marker;
-}
-export function stationForHit(hit: Pick<THREE.Intersection, 'object'>): SceneStation | null {
-  return hit.object.userData.station ?? null;
-}
 export function routeGeometry(route: RouteContext, base: CityBase, ferry = false): THREE.BufferGeometry {
   const positions: number[] = [];
   for (const path of route.status === 'exact' ? route.shape : []) for (let i = 1; i < path.length; i++) {
@@ -207,7 +195,8 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const sun = new THREE.DirectionalLight('#fff0d4', 2.3); sun.position.set(-2000, 3500, 800); scene.add(sun);
   const land = new THREE.Group(), context = new THREE.Group(), buildings = new THREE.Group();
   scene.add(land, context, buildings);
-  const stations = new THREE.Group(), routeHighlight = new THREE.Group(); scene.add(stations, routeHighlight);
+  let stations: SceneStation[] = [];
+  const routeHighlight = new THREE.Group(); scene.add(routeHighlight);
   land.add(new THREE.Mesh(terrainGeometry(base.terrain), new THREE.MeshStandardMaterial({ color: '#697c72', roughness: 1, side: THREE.DoubleSide })));
   const water = new THREE.Mesh(waterGeometry(base), new THREE.MeshStandardMaterial({ color: '#234d61', roughness: 0.78 }));
   scene.add(water);
@@ -222,6 +211,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   let hoveredVehicleId: string | null = null;
   const flags = new VehicleFlags(container, vehicle => { if (initiallyReady) select({ kind: 'vehicle', vehicle }); },
     (id, label) => { hoveredVehicleId = id; callbacks.onHover(label); });
+  const stationFlags = new StationFlags(container, base, station => { if (initiallyReady) select({ kind: 'station', station }); }, callbacks.onHover);
   void fleet.loadModels(modelUrls, callbacks.onError);
   const vehicleRing = new THREE.Mesh(new THREE.RingGeometry(12, 16, 40), new THREE.MeshBasicMaterial({ color: '#d5f6e6', side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.95 }));
   vehicleRing.rotation.x = -Math.PI / 2; vehicleRing.renderOrder = 4; vehicleRing.visible = false; scene.add(vehicleRing);
@@ -248,11 +238,6 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const pending = new Map<string, AbortController>(), failedUntil = new AssetRetries();
   let wanted = new Set<string>();
   const refreshContext = () => {
-    for (const marker of stations.children) {
-      const station = marker.userData.station as SceneStation;
-      marker.visible = station.kind === 'weather' ? layers.weather : layers.airQuality;
-      marker.scale.setScalar(selected?.kind === 'station' && selected.station.id === station.id && selected.station.kind === station.kind ? 1.6 : 1);
-    }
     routeHighlight.visible = Boolean(route?.status === 'exact' && selected?.kind === 'vehicle'
       && route.vehicleId === selected.vehicle.id && route.routeId === selected.vehicle.routeId && !selected.removed && vehicleVisible(selected.vehicle, layers, routeFilter));
   };
@@ -408,10 +393,9 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     if (!initiallyReady) return null;
     const rect = renderer.domElement.getBoundingClientRect(); pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
-    const objects: THREE.Object3D[] = [...(layers.buildings ? buildings.children : []), ...[...fleet.meshes.values()].filter(mesh => mesh.visible), ...stations.children.filter(marker => marker.visible)];
+    const objects: THREE.Object3D[] = [...(layers.buildings ? buildings.children : []), ...[...fleet.meshes.values()].filter(mesh => mesh.visible)];
     for (const hit of raycaster.intersectObjects(objects, false)) {
       if (renderer.clippingPlanes.some(plane => plane.distanceToPoint(hit.point) < 0)) continue;
-      const station = stationForHit(hit); if (station) return { kind: 'station', station };
       const id = fleet.idForHit(hit);
       if (id) { const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) return { kind: 'vehicle', vehicle }; }
       const chunk = chunks.get(hit.object.userData.chunkId)?.chunk;
@@ -428,7 +412,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     const feature = pick(event), id = feature?.kind === 'building' ? feature.building.id : null;
     hoveredVehicleId = feature?.kind === 'vehicle' ? feature.vehicle.id : null;
     renderer.domElement.style.cursor = feature ? 'pointer' : 'grab';
-    callbacks.onHover(feature?.kind === 'building' ? feature.building.gmlId : feature?.kind === 'station' ? `${feature.station.kind === 'weather' ? 'Weather' : 'Air quality'} station · ${feature.station.name}` : feature ? `${feature.vehicle.mode} · ${feature.vehicle.routeId}` : '');
+    callbacks.onHover(feature?.kind === 'building' ? buildingName(feature.building) : feature?.kind === 'vehicle' ? `${feature.vehicle.mode} · ${feature.vehicle.routeId}` : '');
     if (id !== hoverId) { hoverId = id; refreshHighlights(); } };
   const pointerLeave = () => { hoverId = null; hoveredVehicleId = null; refreshHighlights(); callbacks.onHover(''); };
   renderer.domElement.addEventListener('pointerdown', pointerDown); renderer.domElement.addEventListener('pointerup', pointerUp);
@@ -466,6 +450,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     }
     flags.update(fleet.placements, camera, container.clientWidth, container.clientHeight,
       selected?.kind === 'vehicle' && !selected.removed ? selected.vehicle.id : null, hoveredVehicleId);
+    stationFlags.update(camera, container.clientWidth, container.clientHeight, selected?.kind === 'station' ? selected.station : null);
     const renderedRevision = semanticRevision + appearance.revision; renderer.render(scene, camera); frames++;
     viewLoading.rendered(renderedRevision); reportLoad();
     if (followId && followViewDirty && cache.viewSettled && now - followedAt >= 1500) {
@@ -493,8 +478,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     openAvailableMap() { appearance.openAvailable(); viewLoading.openAvailable(); reportLoad(); },
     setLayers(next: Layers) { layers = { ...next }; if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); requestViewUpdate(); },
     setStations(next: SceneStation[]) {
-      disposeTree(stations);
-      for (const station of next) { const marker = makeStationMarker(station, base); if (marker) stations.add(marker); }
+      stations = next; stationFlags.setStations(next);
       if (selected?.kind === 'station') {
         const previous = selected.station;
         const station = next.find(station => station.id === previous.id && station.kind === previous.kind);
@@ -542,7 +526,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     },
     selectStation(id: string) {
       if (!initiallyReady) return;
-      const station = stations.children.map(marker => marker.userData.station as SceneStation).find(station => station.id === id);
+      const station = stations.find(station => station.id === id);
       if (station) select({ kind: 'station', station });
     },
     selectBuilding(id: string) {
@@ -570,7 +554,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       clearTimeout(cachePoll); clearTimeout(retryTimer); backgroundAbort.abort(); cache.dispose();
       for (const controller of pending.values()) controller.abort(); pending.clear(); loader.dispose();
       appearance.aerial.removeFromParent(); appearance.buildings.removeFromParent(); appearance.dispose();
-      flags.dispose(); fleet.root.removeFromParent(); fleet.dispose(); disposeTree(scene); chunks.clear(); identities.clear(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
+      stationFlags.dispose(); flags.dispose(); fleet.root.removeFromParent(); fleet.dispose(); disposeTree(scene); chunks.clear(); identities.clear(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
     }
   };
 }

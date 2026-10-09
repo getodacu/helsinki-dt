@@ -11,12 +11,12 @@ export const RYHTI_DIM_COLOUR = '#737b80';
 const palette = ['#0072b2', '#e69f00', '#009e73', '#cc79a7', '#56b4e9', '#d55e00', '#f0e442', '#785ef0', '#dc267f', '#648fff', '#fe6100', '#7a9a01', '#976e48', '#00a6a6', '#b45491', '#8b96a9'];
 const labels: Record<string, { label: string; language: string }> = codeLists.labels;
 export function ryhtiValue(value: string | number | null): string {
-  if (value === null) return 'Unknown — not supplied';
+  if (value === null) return 'Unknown';
   if (typeof value === 'number') return String(value);
   if (/^\d{4}-\d{2}-\d{2}Z?$/.test(value)) return ryhtiDate(value);
   if (/^https?:/.test(value)) {
     const item = labels[value];
-    return item ? item.label + (item.language === 'fi' ? ' (Finnish)' : '') : 'Unrecognized code: ' + value;
+    return item?.label ?? 'Unknown';
   }
   return value;
 }

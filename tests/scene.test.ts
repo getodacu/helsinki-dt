@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { mapClippingPlanes, measureGroundScale, panKeyboardCamera, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, makeStationMarker, stationForHit, routeGeometry } from '../src/lib/scene.ts';
+import { mapClippingPlanes, measureGroundScale, panKeyboardCamera, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
 import { buildingIdForTriangle } from '../src/lib/data/geometry.ts';
 import type { BuildingChunk } from '../src/lib/types.ts';
-import type { SceneStation } from '../src/lib/scene.ts';
 import type { RouteContext } from '../src/lib/route-context.ts';
 import type { CityBase, CityChunkEntry } from '../src/lib/city-assets.ts';
 const chunk: BuildingChunk = { id: 'test', positions: [0,0,0, 1,0,0, 0,0,1, 2,0,0, 3,0,0, 2,0,1, 4,0,0, 5,0,0, 4,0,1],
@@ -56,18 +55,6 @@ test('sea triangles include reported sea and never cover negative or unknown off
 });
 
 
-test('station markers retain string IDs, source/type and actual projected positions through real picking', () => {
-  const station: SceneStation={id:'00100742',name:'Fixture air station',longitude:24.952,latitude:60.1695,kind:'air-quality',sourceIds:['fmi-air-quality']};
-  const base: CityBase={terrain:{width:2,height:2,origin:[-100,-100],step:[200,200],elevations:[12,12,12,12]},shorelines:[],roads:[],rails:[],waterLevel:0,bounds:[-100,-100,100,100]};
-  const marker=makeStationMarker(station,base)!; assert.ok(marker); assert.ok(Math.abs(marker.position.x)<0.01); assert.ok(Math.abs(marker.position.z)<0.01);
-  assert.equal(marker.position.y,37); marker.updateMatrixWorld();
-  const hits=new THREE.Raycaster(new THREE.Vector3(0,100,0),new THREE.Vector3(0,-1,0)).intersectObject(marker);
-  assert.ok(hits.length); assert.equal(stationForHit(hits[0]),station); assert.equal(stationForHit(hits[0])!.id,'00100742');
-  const weather=makeStationMarker({...station,id:'weather',kind:'weather'},base)!; assert.notEqual(weather.geometry.type,marker.geometry.type);
-  assert.equal(makeStationMarker({...station,longitude:26},base),null);
-  assert.equal(makeStationMarker(station,{...base,terrain:{...base.terrain,elevations:[null,null,null,null]}}),null);
-  marker.geometry.dispose();(marker.material as THREE.Material).dispose();weather.geometry.dispose();(weather.material as THREE.Material).dispose();
-});
 test('scheduled route rendering leaves unknown terrain and explicit unavailable paths empty', () => {
   const base: CityBase={terrain:{width:2,height:2,origin:[-100,-100],step:[200,200],elevations:[12,12,12,12]},shorelines:[],roads:[],rails:[],waterLevel:0,bounds:[-100,-100,100,100]};
   const route: RouteContext={status:'exact',vehicleId:'0040/00001',routeId:'1002',routeLabel:'2',destination:null,tripId:'fixture',departureAt:null,candidates:['fixture'],

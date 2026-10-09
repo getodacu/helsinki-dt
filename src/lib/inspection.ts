@@ -16,8 +16,9 @@ export function formatDate(value: string | null | undefined): string {
 }
 export const label = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ');
 export const searchText = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fi').trim();
+export const knownValue = (value: string | null | undefined): value is string => !!value?.trim() && !/^((unknown|unavailable|not known|not available)(\s*[—–:]\s*.*)?|n\/a)$/i.test(value.trim());
 export function buildingAttribute(building: Building, names: string[]): string | null {
-  return Object.entries(building.attributes).find(([key, value]) => names.some(name => searchText(name) === searchText(key)) && value?.trim())?.[1] ?? null;
+  return Object.entries(building.attributes).find(([key, value]) => names.some(name => searchText(name) === searchText(key)) && knownValue(value))?.[1] ?? null;
 }
 export function buildingAddress(building: Building): string | null {
   const address = buildingAttribute(building, ['address', 'osoite']);
@@ -29,7 +30,7 @@ export function buildingAddress(building: Building): string | null {
     return [fields.Street, fields.HouseNumber, fields.PostalCode, fields.City].filter(value => typeof value === 'string' && value.trim()).join(' ') || null;
   } catch { return address; }
 }
-export const buildingName = (building: Building) => buildingAttribute(building, ['name', 'nimi', 'rakennuksen_nimi']) ?? buildingAddress(building) ?? building.gmlId;
+export const buildingName = (building: Building) => buildingAttribute(building, ['name', 'nimi', 'rakennuksen_nimi']) ?? buildingAddress(building) ?? 'Building';
 export const matchesBuilding = (building: Building, query: string) => searchText([buildingName(building), buildingAddress(building), building.id,
   building.gmlId, building.vtjPrt, building.ratu, building.uuid].filter(Boolean).join(' ')).includes(searchText(query));
 export const matchesVehicle = (vehicle: Vehicle, query: string, routeLabel?: string) => searchText(`${vehicle.mode} ${vehicle.routeId} ${routeLabel ?? ''} ${vehicle.id} ${vehicle.ownerOperatorId}/${vehicle.vehicleId}`).includes(searchText(query));
