@@ -523,9 +523,11 @@
       <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setMobilePanel(null)}>×</button></div>
       {#if selected}
       <section class="panel inspector"><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || selected.station.kind === 'rail' ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
+        {#if selected.kind === 'building'}
+          {#key selected.building.id}<BuildingPhoto building={selected.building} {generation} base={city?.base} cache={city?.cache} />{/key}
+        {/if}
         <div class="panel-content">
           {#if selected?.kind === 'building'}
-            {#key selected.building.id}<BuildingPhoto building={selected.building} {generation} />{/key}
             <h3>{buildingName(selected.building)}</h3>
             {#if selected.unloaded}<p class="notice">Outside the current map view.</p>{/if}
             <nav class="console-inspector-tabs" aria-label="Building information">
