@@ -16,10 +16,11 @@
   let container: HTMLDivElement;
   let controller = $state.raw<CitySceneController | null>(null);
   let scale = $state<SceneScale | null>(null);
+  let compassRotation = $state<number | null>(null);
   onMount(() => {
     try {
       controller = createCityScene(container, manifest, base, { onSelection: onselection, onBuildings: onbuildings,
-        onStats: onstats, onHover: onhover, onError: onerror, onCameraInteraction: oninteraction, onReady: onready, onAppearanceStatus: onappearance, onLoadState: onloadstate, onScale: value => scale = value }, cache, { bus: asset('models/bus.glb'), tram: asset('models/tram.glb'), ferry: asset('models/ferry.glb'), train: asset('models/train.glb') });
+        onStats: onstats, onHover: onhover, onError: onerror, onCameraInteraction: oninteraction, onReady: onready, onAppearanceStatus: onappearance, onLoadState: onloadstate, onScale: value => scale = value, onCompassRotation: value => compassRotation = value }, cache, { bus: asset('models/bus.glb'), tram: asset('models/tram.glb'), ferry: asset('models/ferry.glb'), train: asset('models/train.glb') });
       oncontroller(controller);
     } catch (error) { onerror(error instanceof Error ? error.message : 'The 3D scene could not start.'); }
     return () => { controller?.dispose(); oncontroller(null); };
@@ -40,5 +41,21 @@
   <div class="map-scale" title="Ground distance at view centre" role="img" aria-label={`${scale.metres >= 1000 ? `${scale.metres / 1000} km` : `${scale.metres} m`} at view centre`}>
     <span>{scale.metres >= 1000 ? `${scale.metres / 1000} km` : `${scale.metres} m`}</span>
     <span class="map-scale-bar" style:width={`${scale.pixels}px`} aria-hidden="true"></span>
+  </div>
+{/if}
+
+{#if compassRotation !== null}
+  <div class="map-compass" role="img" aria-label="Map compass: north, east, south and west">
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <circle class="compass-ring" cx="32" cy="32" r="30.5" />
+      <g transform={`rotate(${compassRotation}, 32, 32)`}>
+        <path class="compass-cross" d="M19 32H45M32 19V45" />
+        <path class="compass-north" d="M32 16L35 32L32 29L29 32Z" />
+        <path class="compass-south" d="M32 48L35 32L32 35L29 32Z" />
+        {#each [['N', 32, 8], ['E', 56, 32], ['S', 32, 56], ['W', 8, 32]] as [label, x, y] (label)}
+          <text class:compass-north={label === 'N'} {x} {y} transform={`rotate(${-compassRotation}, ${x}, ${y})`}>{label}</text>
+        {/each}
+      </g>
+    </svg>
   </div>
 {/if}

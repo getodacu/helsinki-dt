@@ -35,9 +35,14 @@ export type SceneStats = { fps: number; drawCalls: number; triangles: number; ge
 type Callbacks = { onSelection: (selection: Selection | null, message?: string) => void;
   onBuildings: (buildings: Building[]) => void; onStats: (stats: SceneStats) => void;
   onHover: (label: string) => void; onError: (message: string) => void;
-  onCameraInteraction: () => void; onReady: () => void; onAppearanceStatus: (message: string) => void; onLoadState: (state: SceneLoadState) => void; onScale?: (scale: SceneScale | null) => void };
+  onCameraInteraction: () => void; onReady: () => void; onAppearanceStatus: (message: string) => void; onLoadState: (state: SceneLoadState) => void; onScale?: (scale: SceneScale | null) => void; onCompassRotation?: (degrees: number) => void };
 export type CitySceneController = ReturnType<typeof createCityScene>;
 export type SceneScale = { metres: number; pixels: number };
+
+/** Scene north is negative Z; positive SVG rotation moves north clockwise. */
+export function measureCompassRotation(camera: THREE.PerspectiveCamera, target: THREE.Vector3): number {
+  return Math.atan2(camera.position.x - target.x, camera.position.z - target.z) * 180 / Math.PI;
+}
 
 /** Perspective ground distance is local to the horizontal row through the view centre. */
 export function measureGroundScale(camera: THREE.PerspectiveCamera, width: number, groundHeight: number): SceneScale | null {
@@ -373,7 +378,10 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   document.addEventListener('focusin', focusChanged);
   const interaction = () => { pointerInteracting = true; followId = null; cache.setInteracting(true); scheduleRetry(); callbacks.onCameraInteraction(); };
   const interactionEnded = () => { pointerInteracting = false; cache.setInteracting(heldKeys.size > 0); };
-  const cameraChanged = () => { scaleDirty = true; appearanceDirty = true; if (followId) followViewDirty = true; else requestViewUpdate(); };
+  const cameraChanged = () => {
+    callbacks.onCompassRotation?.(measureCompassRotation(camera, controls.target));
+    scaleDirty = true; appearanceDirty = true; if (followId) followViewDirty = true; else requestViewUpdate();
+  };
   controls.addEventListener('change', cameraChanged);
   controls.addEventListener('start', interaction);
   controls.addEventListener('end', interactionEnded);

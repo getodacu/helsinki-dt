@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { INITIAL_LAYERS, mapClippingPlanes, measureGroundScale, panKeyboardCamera, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
+import { INITIAL_LAYERS, mapClippingPlanes, measureCompassRotation, measureGroundScale, panKeyboardCamera, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
 import { buildingIdForTriangle } from '../src/lib/data/geometry.ts';
 import type { BuildingChunk } from '../src/lib/types.ts';
 import type { RouteContext } from '../src/lib/route-context.ts';
@@ -135,6 +135,18 @@ test('WASD stays responsive at maximum zoom without slowing down the overview', 
   assert.ok(Math.abs(speed(600) - 240) < 1e-10, 'Overview keeps its existing distance-scaled speed');
 });
 
+
+test('compass follows cardinal views and keeps its orientation through pan, zoom and tilt', () => {
+  const camera = new THREE.PerspectiveCamera(), target = new THREE.Vector3(350, 8, -200);
+  for (const [x, z, rotation] of [[0, 100, 0], [100, 0, 90], [0, -100, 180], [-100, 0, -90], [100, 100, 45]]) {
+    for (const distance of [1, 10]) for (const height of [45, 1000]) {
+      camera.position.copy(target).add(new THREE.Vector3(x * distance, height, z * distance));
+      assert.ok(Math.abs(measureCompassRotation(camera, target) - rotation) < 1e-10);
+      panKeyboardCamera(camera, target, new Set(['KeyW', 'KeyD']), 0.02);
+      assert.ok(Math.abs(measureCompassRotation(camera, target) - rotation) < 1e-10);
+    }
+  }
+});
 
 test('metric scale represents ground metres through perspective zoom, rotation and viewport changes', () => {
   const camera = new THREE.PerspectiveCamera(42, 2, 1, 40000);
