@@ -18,15 +18,21 @@ test('the itinerary renders departure first, visited and next status, cumulative
       stops: ['origin', 'next', 'destination'].map((name, i) => ({ key: String(i), id: String(i), name, sequence: i + 1,
         longitude: null, latitude: null, expectedAt: '2026-10-10T10:00:00Z', actualAt: null, platform: null,
         state: i === 0 ? 'visited' : i === 1 ? 'next' : 'upcoming', minutes: i === 0 ? null : i * 3, estimated: true })) };
-    const html = (value: VehicleItinerary) => render(Component, { props: { itinerary: value } }).body;
+    const html = (value: VehicleItinerary, state = { loading: false, error: '' }) => render(Component, { props: { itinerary: value, ...state } }).body;
     const normal = html(itinerary);
     assert.ok(normal.indexOf('origin') < normal.indexOf('destination'));
     assert.match(normal, /Departure/); assert.match(normal, /Destination/); assert.match(normal, /Visited/);
     assert.match(normal, /Next · 3 min · Estimated/); assert.match(normal, /6 min · Estimated/);
     assert.match(normal, /aria-current="step"/); assert.match(normal, /Minutes from now · Helsinki time/);
     assert.match(normal, /13:00/); assert.doesNotMatch(normal, /<details/);
-    const stale = html({ ...itinerary, stale: true, stops: itinerary.stops.map(stop => ({ ...stop, minutes: null })) });
-    assert.match(stale, /arrival countdowns unavailable/); assert.match(stale, /Time unavailable/); assert.doesNotMatch(stale, /3 min/);
+    for (const mode of ['bus', 'tram', 'train'] as const) {
+      const stale = html({ ...itinerary, mode, stale: true, reason: 'Progress follows the timetable · actual station reports unavailable.',
+        stops: itinerary.stops.map(stop => ({ ...stop, minutes: null })) });
+      assert.doesNotMatch(stale, /Updates stale|arrival countdowns unavailable|Progress follows|actual station reports unavailable/);
+      assert.match(stale, /Time unavailable/); assert.doesNotMatch(stale, /3 min/);
+    }
+    assert.match(html(itinerary, { loading: false, error: 'Network failed' }), /Refresh unavailable · Network failed/);
+    assert.match(html({ ...itinerary, stops: [] }, { loading: true, error: '' }), /Loading itinerary/);
     assert.match(html({ ...itinerary, stops: [], reason: 'No exact journey.' }), /No exact journey/);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

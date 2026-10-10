@@ -10,8 +10,6 @@
   {:else if !itinerary.stops.length}<p class="panel-note">{error || itinerary.reason || 'No stops available.'}</p>{/if}
   {#if itinerary.stops.length}
     <p class="itinerary-note">Minutes from now · Helsinki time</p>
-    {#if itinerary.stale}<p class="notice">Updates stale or paused · arrival countdowns unavailable.</p>{/if}
-    {#if itinerary.reason}<p class="panel-note">{itinerary.reason}</p>{/if}
     {#if error}<p class="panel-note">Refresh unavailable · {error}</p>{/if}
     <ol class="itinerary-stops">
       {#each itinerary.stops as stop, index (stop.key)}

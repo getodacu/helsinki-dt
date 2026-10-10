@@ -1,11 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { Vehicle } from '#lib/types.ts';
-  import { KNOTS_TO_METRES_PER_SECOND, marineHeading, marineTypeLabel, marineNavigationLabel, type MarineStatus } from '#lib/marine.ts';
+  import { KNOTS_TO_METRES_PER_SECOND, marineTypeLabel, marineNavigationLabel, type MarineStatus } from '#lib/marine.ts';
   import { trafficIsStale, trafficShouldRemove } from '#lib/traffic.ts';
-  import { formatDate, label, marineSourceLabel } from '#lib/inspection.ts';
   import { vehicleLabel } from '#lib/rail.ts';
-  let { follow, vehicle, source, connected, now, removed = false }: { follow?: Snippet; vehicle: Vehicle; source?: MarineStatus; connected: boolean; now: number; removed?: boolean } = $props();
+  let { follow, vehicle, source, now, removed = false }: { follow?: Snippet; vehicle: Vehicle; source?: MarineStatus; now: number; removed?: boolean } = $props();
   let marine = $derived(vehicle.marine);
   let expired = $derived(removed || trafficShouldRemove(vehicle, now));
   let positionError = $derived(source && 'positionError' in source ? source.positionError : source?.error);
@@ -29,17 +28,7 @@
   <dl class="properties">
     <div><dt>Course over ground</dt><dd>{degrees(marine?.courseOverGroundDegrees)}</dd></div>
     <div><dt>True heading</dt><dd>{degrees(vehicle.headingDegrees)}</dd></div>
-    <div><dt>Marker orientation</dt><dd>{marineHeading(vehicle) === null ? 'Unknown · no direction cue' : vehicle.headingDegrees !== null ? 'Reported true heading' : 'Course while moving'}</dd></div>
-    <div><dt>Position reported</dt><dd>{formatDate(vehicle.reportedAt)}<small>{age(vehicle.reportedAt)} · {expired ? 'expired / out of coverage' : trafficIsStale(vehicle, now) ? 'stale report' : 'fresh report'}</small></dd></div>
-    <div><dt>Position received</dt><dd>{formatDate(vehicle.receivedAt)}</dd></div>
-    <div><dt>Metadata updated</dt><dd>{formatDate(marine?.metadataReportedAt)}<small>{age(marine?.metadataReportedAt)}</small></dd></div>
-    <div><dt>Metadata received</dt><dd>{formatDate(marine?.metadataReceivedAt)}</dd></div>
-    <div><dt>Marine source</dt><dd>{connected ? '' : 'Browser paused / disconnected · '}{marineSourceLabel(source)}</dd></div>
-    <div><dt>Position accuracy</dt><dd>{marine?.positionAccuracy == null ? 'Unknown' : marine.positionAccuracy ? 'High reported accuracy' : 'Low reported accuracy'}</dd></div>
-    <div><dt>Integrity monitoring</dt><dd>{marine?.raim == null ? 'Unknown' : marine.raim ? 'In use' : 'Not in use'}</dd></div>
-    <div><dt>Position</dt><dd>{vehicle.latitude?.toFixed(5) ?? 'Unknown'}, {vehicle.longitude?.toFixed(5) ?? 'Unknown'}</dd></div>
-    <div><dt>Position quality</dt><dd>{vehicle.quality.filter(flag => !flag.startsWith('metadata-')).map(label).join(', ') || 'No additional flags supplied'}</dd></div>
-    <div><dt>Metadata quality</dt><dd>{vehicle.quality.filter(flag => flag.startsWith('metadata-')).map(label).join(', ') || 'No additional flags supplied'}</dd></div>
+    <div><dt>Position reported</dt><dd>{age(vehicle.reportedAt)}</dd></div>
   </dl>
   {#if positionError}<p class="notice">Position source: {positionError}</p>{/if}
   {#if source?.metadataError}<p class="panel-note">Metadata unavailable: {source.metadataError}</p>{/if}
