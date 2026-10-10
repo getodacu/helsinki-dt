@@ -5,6 +5,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { readRyhtiFile } from './ryhti-catalog.ts';
 import { searchText } from '../inspection.ts';
+import { buildingImageCache, buildingPhotoCache } from './building-photo.ts';
 import type { Building } from '../types.ts';
 import type { EnergyCatalog, EnergyAssociation } from '../energy-types.ts';
 import type { RyhtiBuilding } from '../ryhti-types.ts';
@@ -184,7 +185,7 @@ export class EntityStore {
 }
 export const entityStore = new EntityStore();
 
-export async function entityResponse(request: Request, kind: 'status' | 'search' | 'detail' | 'themes' | 'theme', id = '', store = entityStore): Promise<Response> {
+export async function entityResponse(request: Request, kind: 'status' | 'search' | 'detail' | 'photo' | 'photo-image' | 'themes' | 'theme', id = '', store = entityStore): Promise<Response> {
   try {
     const allowed = kind === 'status' ? [] : kind === 'search' ? ['generation', 'q', 'kind', 'limit', 'cursor', 'theme', 'category']
       : kind === 'theme' ? ['generation', 'chunks'] : ['generation'];
@@ -192,8 +193,19 @@ export async function entityResponse(request: Request, kind: 'status' | 'search'
     const generation = kind === 'status' ? undefined : params.get('generation');
     if (generation === null || generation !== undefined && !/^[a-f0-9-]{36}$/.test(generation)) fail(400, 'A valid dataset generation is required.');
     const { database, catalog } = await store.load(generation);
+    if (kind === 'photo-image') {
+      const photo = await buildingPhotoCache.get(database.detail(id, catalog).building);
+      if (!photo) fail(404, 'No building photo is available.');
+      const image = await buildingImageCache.read(photo);
+      const headers = { 'Content-Type': image.type, 'Cache-Control': 'public, max-age=86400',
+        ETag: image.etag, 'X-Content-Type-Options': 'nosniff' };
+      return request.headers.get('If-None-Match') === image.etag ? new Response(null, { status: 304, headers })
+        : new Response(Uint8Array.from(image.body), { headers });
+    }
     const result = kind === 'status' ? catalog : kind === 'themes' ? { generation: catalog.generation, themes: catalog.themes }
-      : kind === 'search' ? database.search(params, catalog) : kind === 'detail' ? database.detail(id, catalog) : database.theme(id, params, catalog);
+      : kind === 'search' ? database.search(params, catalog) : kind === 'detail' ? database.detail(id, catalog)
+        : kind === 'photo' ? { generation: catalog.generation, buildingId: id, photo: await buildingPhotoCache.get(database.detail(id, catalog).building) }
+          : database.theme(id, params, catalog);
     const body = JSON.stringify(result);
     if (Buffer.byteLength(body) > 2_000_000) fail(413, 'Response exceeds its size limit. Refine the request.');
     const etag = '"' + hash(body) + '"';

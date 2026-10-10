@@ -103,7 +103,7 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 | `static/data/route-index.json` | Prepared route labels, trips, shapes and stop patterns. |
 | `static/data/energy-manifest.json` and `static/data/energy/` | Energy catalog pointer and immutable catalogs. |
 | `server/data/entities/` | Private immutable SQLite generations and their active manifest; rebuilt from prepared data with `entities:prepare`. |
-| `.cache/city-map/` | Persistent municipal imagery, tile indexes and textured model bytes; configurable. |
+| `.cache/city-map/` | Persistent municipal imagery, tile indexes, textured model bytes and building photographs; configurable. |
 | `.cache/energy/runtime/` | Persistent measured-electricity cache; preserve across deployments. |
 | `.cache/task-a/`, `.cache/task-b/`, `.cache/task-d/`, `.cache/task-e/` | Source downloads, preparation/verification diagnostics and release artifacts. |
 | `build/` and `.svelte-kit/` | Generated production output and SvelteKit tooling output. |
@@ -112,7 +112,7 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 
 ## Using the view
 
-City Console groups the controls into **Explore**, **Transport**, **Buildings**, **Energy**, and **Environment**. Choose a tool in the left palette to reveal its controls; **Explore** returns to the map. The header **?** opens Help. On phones, the tools sit in the bottom bar and open a sheet. Tap the active tool again to return to the map. Building inspection has **Overview**, **Energy**, and **Details** views; source identifiers and register records remain available in Details. **Data & sources** opens the source status and attribution drawer.
+City Console groups the controls into **Explore**, **Transport**, **Buildings**, **Energy**, and **Environment**. Choose a tool in the left palette to reveal its controls; **Explore** returns to the map. The header **?** opens Help. On phones, the tools sit in the bottom bar and open a sheet. Tap the active tool again to return to the map. Building inspection shows an optional building photo above its **Overview** and **Details** views; source identifiers and register records remain available in Details. **Data & sources** opens the source status and attribution drawer.
 
 Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Keyboard navigation pauses in form controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow. Turn off **WASD navigation** in the header **?** help panel to disable these shortcuts; it starts enabled on each page load.
 
@@ -381,6 +381,14 @@ Use these references when changing adapters, coordinates or deployment behavior:
 - [Implementation plan](docs/implementation-plan.md) and the milestone specifications in `docs/milestones/` for the original acceptance criteria.
 
 ExcelJS's UUID override is scoped to 11.1.1 for GHSA-w5hq-g745-h8pq; its workbook write/read regression covers the existing CommonJS usage. Keep the lockfile and installed versions aligned when changing dependencies. Capacity, source availability and browser behavior beyond the recorded verification remain workload/device dependent; full-detail municipal cache size is still unmeasured.
+
+## Building photographs
+
+The inspector loads an optional Wikimedia Commons photo independently of building facts. Wikidata's [VTJ-PRT (P3824)](https://www.wikidata.org/wiki/Property:P3824) and [Helsinki RATU (P8355)](https://www.wikidata.org/wiki/Property:P8355) properties provide exact source-ID matches. Conflicting items or identifiers, missing photos, unsupported licenses and missing attribution leave the image absent. No address or proximity guesses are used.
+
+The photo includes its author, license and Commons source link. Supported licenses are CC BY, CC BY-SA and public domain. Photos are shown without cropping; the server downloads and saves Wikimedia image bytes, and the browser loads them from the local building-photo endpoint. Coverage depends on Wikidata and Commons and is strongest for documented landmarks; the photo does not establish a building's current appearance.
+
+`GET /api/entities/building/<id>/photo?generation=<generation>` uses the same building/generation validation as other entity queries. Each process permits two upstream lookups at a time, bounds metadata responses to 256 KiB and ten seconds per request (twelve seconds for the complete lookup), and caches at most 512 ID pairs. Matches and misses last one day and are saved on disk; upstream failures retain an existing photo and retry after five minutes, including after a process restart. `GET /api/entities/building/<id>/photo/image?generation=<generation>` serves checksum-verified JPEG, PNG or WebP bytes with ETags and a one-day browser cache. Image downloads are limited to two at a time, 4 MiB each and fifteen seconds, with redirects disabled. Valid images are reused by their source URL; corrupt cache files are repaired. Image bytes and metadata live under `building-photos/` inside `CITY_MAP_CACHE_DIR` (default `.cache/city-map/building-photos`); preserve this directory across deployments. Only the server requires outbound HTTPS to Wikidata, Commons and Wikimedia image hosts. No dataset preparation or API key is needed.
 
 ## Ryhti building register
 

@@ -117,6 +117,11 @@ test('HTTP validates requests, pins generations, supports ETags, and retains a g
   assert.equal((await get('search', '?generation=' + randomUUID())).status, 409);
   const detail = await (await get('detail', g, 'BID_1')).json() as EntityDetail; assert.equal(detail.building.id, 'BID_1');
   assert.equal((await get('detail', g, 'missing')).status, 404);
+  assert.equal((await get('photo', g, 'missing')).status, 404);
+  assert.equal((await get('photo-image', g, 'missing')).status, 404);
+  assert.equal((await get('photo-image')).status, 400);
+  assert.equal((await get('photo')).status, 400);
+  assert.equal((await get('photo', '?generation=' + randomUUID(), 'BID_1')).status, 409);
   assert.equal((await (await get('theme', g + '&chunks=a', 'ryhti:main_purpose')).json() as EntityThemeValues).values.length, 2);
   await writeFile(join(root, 'manifest.json'), '{}'); now += 1001;
   assert.equal((await (await get('status')).json()).status, 'stale');

@@ -1,10 +1,11 @@
-import type { EntityCatalog, EntityDetail, EntitySearch, EntityThemeValues } from './entity-types.ts';
+import type { EntityCatalog, EntityDetail, EntitySearch, EntityThemeValues, EntityPhoto } from './entity-types.ts';
+import { validBuildingPhoto } from './building-photo.ts';
 
 export class EntityApiError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
-type EntityPayload = EntityCatalog | EntityDetail | EntitySearch | EntityThemeValues;
+type EntityPayload = EntityCatalog | EntityDetail | EntitySearch | EntityThemeValues | EntityPhoto;
 export async function fetchEntity<T extends EntityPayload>(path: string, signal: AbortSignal, generation?: string): Promise<T> {
   const response = await fetch(path, { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) });
   if (!response.ok) {
@@ -29,6 +30,8 @@ export async function fetchEntity<T extends EntityPayload>(path: string, signal:
   if (path.startsWith('/api/catalog/')) {
     if (value.version !== 1 || !Number.isSafeInteger(value.buildingCount) || !Array.isArray(value.themes)
       || !value.energy || !value.ryhti || !Number.isFinite(Date.parse(value.cityGeneratedAt))) throw new Error('Invalid entity catalog.');
+  } else if (/^\/api\/entities\/building\/[^/]+\/photo(?:\?|$)/.test(path)) {
+    if (typeof value.buildingId !== 'string' || !(value.photo === null || validBuildingPhoto(value.photo))) throw new Error('Invalid building photo response.');
   } else if (path.startsWith('/api/entities/building/')) {
     if (!value.building || typeof value.building.id !== 'string' || !Array.isArray(value.members) || !value.energy || !value.ryhti) throw new Error('Invalid building response.');
   } else if (path.startsWith('/api/themes/')) {

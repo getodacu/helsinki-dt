@@ -1,4 +1,5 @@
 import type { Building, SampleManifest } from './types.ts';
+import type { BuildingPhoto } from './building-photo.ts';
 import type { EnergyCatalogState } from './energy-types.ts';
 import type { RyhtiCatalogState } from './ryhti-types.ts';
 import type { EnergyThemeOption } from './energy-display.ts';
@@ -41,4 +42,10 @@ export interface EntityThemeValues {
   generation: string;
   key: string;
   values: [buildingId: string, colour: string, category: string | null][];
+}
+
+export interface EntityPhoto {
+  generation: string;
+  buildingId: string;
+  photo: BuildingPhoto | null;
 }
