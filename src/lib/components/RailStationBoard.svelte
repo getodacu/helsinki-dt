@@ -52,11 +52,11 @@
 </div>
 <p class="panel-note">Checked {formatDate(board?.retrievedAt)} · refreshes every 30 seconds while visible. Timetables and position coverage are independent.</p>
 <style>
-  .rail-board { display: grid; gap: 12px; }
-  article { border: 1px solid var(--border, #35505d); border-left: 3px solid #b29bd8; padding: 12px; border-radius: 5px; }
+  .rail-board { display: grid; gap: 8px; }
+  article { border: 1px solid var(--border, #35505d); border-left: 3px solid #b29bd8; padding: 8px; border-radius: 2px; }
   article.cancelled { border-left-color: #df998e; }
   .departure-heading { display: flex; gap: 10px; align-items: baseline; }
   .departure-heading strong { color: #d2bdf4; white-space: nowrap; }
-  .departure-heading span { font-size: 13px; }
+  .departure-heading span { font-size: 12px; overflow-wrap: anywhere; min-width: 0; }
   article small { color: var(--muted); }
 </style>

@@ -112,13 +112,13 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 
 ## Using the view
 
-City Console groups the controls into **Explore**, **Transport**, **Buildings**, **Energy**, **Environment**, and **Help**. Choose a tool in the left palette to reveal its controls; the location bar moves to a neighborhood. On phones, the tools sit in the bottom bar and open a sheet. Tap the active tool again to return to the map. Building inspection has **Overview**, **Energy**, and **Details** views; source identifiers and register records remain available in Details. **Data & sources** opens the source status and attribution drawer.
+City Console groups the controls into **Explore**, **Transport**, **Buildings**, **Energy**, and **Environment**. Choose a tool in the left palette to reveal its controls; **Explore** returns to the map. The header **?** opens Help. On phones, the tools sit in the bottom bar and open a sheet. Tap the active tool again to return to the map. Building inspection has **Overview**, **Energy**, and **Details** views; source identifiers and register records remain available in Details. **Data & sources** opens the source status and attribution drawer.
 
-Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Keyboard navigation pauses in form controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow. Turn off **WASD navigation** in the scene controls to disable these shortcuts; it starts enabled on each page load.
+Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Keyboard navigation pauses in form controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow. Turn off **WASD navigation** in the header **?** help panel to disable these shortcuts; it starts enabled on each page load.
 
-Choose City Centre, South Harbour, Suomenlinna, the Senate district energy preset, Central Station or Pasila, then use the scene controls to navigate. Toggle buildings, terrain, roads, imagery, transit modes and station layers. Search covers available building metadata/addresses, vehicles and prepared route labels; search and scene picking use the same selection contract. Escape clears selection, and compact layouts expose separate controls and inspection sheets.
+Choose **City Centre**, **Harbour** or **Central Station** in the single preset row. The subtle icon bar at the top of the map toggles imagery, buildings, land and roads. The vertical City tools list opens transport, buildings, energy and environment controls; Explore closes the tool panel. The header live dot opens separate HSL, rail and AIS statuses and report times. Search covers available building metadata/addresses, vehicles and prepared route labels; search and scene picking use the same selection contract. Escape clears selection, and compact layouts expose separate controls and inspection sheets.
 
-Selecting a building opens its source identifiers and compatible energy/solar records. Selection and hover tint the displayed building, with selection taking precedence. Selecting a vehicle shows its real report age, deviation and exact scheduled journey when available; following ends when you interact with the camera. Station inspectors show a recent six-hour history without changing current traffic into historical playback. **Sources & status** explains dates, coverage, attribution and gaps. Search/inspection provide a metadata fallback when WebGL is unavailable.
+Selecting a building opens its source identifiers and compatible energy/solar records. Selection and hover tint the displayed building, with selection taking precedence. Selecting a vehicle shows its real report age, deviation and exact scheduled journey when available, without moving the camera. Verified routes use an outlined line and stop markers with names on hover, keyboard focus or touch focus. A chevron ahead of the selected vehicle shows a reported heading or a bearing from accepted movement; it pulses while moving and stays static with reduced motion. Unknown direction, stale reports and hidden vehicles suppress the cue. AIS ships have no scheduled route mapping. Following ends when you interact with the camera. Station inspectors show a recent six-hour history without changing current traffic into historical playback. **Sources & status** explains dates, coverage, attribution and gaps. Search/inspection provide a metadata fallback when WebGL is unavailable.
 
 ### Map appearance and loading
 
@@ -346,19 +346,26 @@ Do not clear valid caches as a routine restart or source-outage remedy. Use [ope
 
 ## Vehicle models
 
-Bus, articulated tram, double-ended ferry and two-car train exteriors are original Helsinki-inspired Blender models. The editable sources are `assets/blender/helsinki-transit.blend` and `assets/blender/helsinki-train.blend`; enable one collection at a time. Self-contained GLB exports in `static/models/` are checked in and ship with the normal SvelteKit build. No external textures, model downloads or new runtime dependencies are needed.
+Bus, articulated tram, double-ended ferry, two-car train and AIS ship exteriors are original Helsinki-inspired Blender models. The editable sources are `assets/blender/helsinki-transit.blend`, `assets/blender/helsinki-train.blend` and `assets/blender/helsinki-ships.blend`; enable one collection at a time. Self-contained GLB exports in `static/models/` are checked in and ship with the normal SvelteKit build. No external textures, model downloads or new runtime dependencies are needed.
 
 Models use metres, with glTF -Z forward and +Y up. Tyres contact Y=0; the ferry hull extends below its Y=0 waterline. Approximate lengths are 12 m, 27.6 m, 36 m and 44.5 m. These are representative exteriors; Live position reports do not identify the exact physical fleet variant or carriage formation. Opaque tinted windows avoid transparency sorting across instanced vehicles. Each model shares three material batches across the entire fleet. Route banners use prepared GTFS labels, retain route IDs when a label is unavailable, and prioritize selected/hovered vehicles when banners overlap. At most 80 non-overlapping banners are displayed; all vehicles remain available through search.
 
 After updating from an older checkout, run `npm run routes:prepare` to include HSL’s extended bus types in the route labels.
 
-Regenerate both source and exports with Blender 5.2:
+AIS reports select passenger (60–69), cargo (70–79), tanker (80–89), tug (31/32/52), fishing (30), sailing (36), pleasure (37), or generic ship models. Representative lengths are 160, 140, 160, 28, 24, 12, 15 and 40 m respectively. Passenger decks, container stacks, tanker piping, tug fenders, trawling gear, sails and yacht cabins distinguish their silhouettes. These are family exteriors, not individual vessel replicas or measured dimensions. Models are centered on the AIS coordinates; the feed does not establish a hull outline or antenna offset.
+
+Ships use the displayed report heading (or course while moving). An unknown heading retains the neutral round marker; pending or failed model loads also retain a selectable marker, with a direction cue only when heading is known. Metadata changes can switch models without resetting position history or selection. All ship variants share the Ships layer control and existing freshness policy.
+
+Regenerate source and exports with Blender 5.2:
 
 ```sh
 blender --background --python scripts/build-vehicle-models.py
+blender --background --python scripts/build-vehicle-models.py -- ships
 ```
 
-The generator checks geometry and byte budgets and contact/waterline bounds. To inspect the exported assets without live services, run `npx vite --config tests/vehicles.config.ts` and open `http://127.0.0.1:5176/tests/vehicles.html`. It includes a 20 m reference building, individual model views, clickable route banners, stale indicators and an explicit 450-vehicle fixture workload.
+The generator checks geometry and byte budgets and contact/waterline bounds. To inspect the exported assets without live services, run `npx vite --config tests/vehicles.config.ts` and open `http://127.0.0.1:5176/tests/vehicles.html`. It includes a 20 m reference building, individual model views, clickable route banners, stale indicators, individual ship types, an all-types lineup, an unknown-heading marker and an explicit 700-vehicle fixture workload (450 transit vehicles plus the supported 250 ships).
+
+Ship model verification on 10 October 2026 passed type checks, all 317 offline tests, the production build, and side/top visual and selection checks for every variant. The 700-vehicle fixture rendered 5,616,750 triangles in 58 draw calls, with minimum and median 100 FPS across twenty one-second samples at 1440×1000 in Chrome 154 on a Mac Studio M2 Ultra with 64 GiB RAM. This fixture measurement excludes city geometry and does not establish performance on lower-powered devices.
 
 ## Source evidence and development notes
 

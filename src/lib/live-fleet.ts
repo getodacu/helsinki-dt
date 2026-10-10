@@ -1,3 +1,4 @@
+import { SHIP_MODEL_TYPES, shipModelType, type ShipModelType } from './ship-models.ts';
 import type { RailCategory } from './rail.ts';
 import * as THREE from 'three';
 import { wgs84ToScene } from './geo.ts';
@@ -40,8 +41,8 @@ export class ReceivedPositions {
     }
     const [x, , z] = wgs84ToScene(vehicle.longitude, vehicle.latitude);
     const movement = last ? Math.hypot(x - last.x, z - last.z) : 0;
-    const bearing = vehicle.mode === 'train' && last && movement >= 3 ? (Math.atan2(x - last.x, last.z - z) * 180 / Math.PI + 360) % 360 : null;
-    const next = { x, z, heading: ship ? marineHeading(vehicle) : vehicle.headingDegrees ?? bearing ?? last?.heading ?? 0, at };
+    const bearing = last && movement >= 3 && at > last.at ? (Math.atan2(x - last.x, last.z - z) * 180 / Math.PI + 360) % 360 : null;
+    const next = { x, z, heading: ship ? marineHeading(vehicle) : vehicle.headingDegrees ?? bearing ?? last?.heading ?? null, at };
     const distance = last ? Math.hypot(next.x - last.x, next.z - last.z) : 0;
     const gap = last ? at - last.at : 0;
     const train = vehicle.mode === 'train';
@@ -53,8 +54,8 @@ export class ReceivedPositions {
     if (ship && gap > 0 && gap <= MARINE_GAP_MS && !sameSecond && distance / (gap / 1000) > MARINE_MAX_SPEED_METRES_PER_SECOND) {
       vehicle = { ...vehicle, quality: [...new Set([...vehicle.quality, 'position-implausible-motion'])] };
     }
-    if (train && bearing !== null && old?.positions.length === 1 && !snap) old.positions[0].heading = bearing;
-    if (train && snap) next.heading = last?.heading ?? 0;
+    if (!ship && bearing !== null && old?.positions.length === 1 && old.positions[0].heading === null && !snap) old.positions[0].heading = bearing;
+    if (!ship && snap && vehicle.headingDegrees === null) next.heading = null;
     const history = [...(old?.positions ?? []), next];
     this.tracks.set(vehicle.id, { vehicle, positions: snap ? [next] : train || ship
       ? history.filter((point, index) => point.at >= at - (ship ? MARINE_GAP_MS : 25_000) || (history[index + 1]?.at ?? 0) >= at - (ship ? MARINE_GAP_MS : 25_000)).slice(-(ship ? MARINE_MAX_POINTS : 64))
@@ -82,15 +83,17 @@ export class ReceivedPositions {
   }
 }
 
-export type VehiclePlacement = { vehicle: Vehicle; x: number; y: number; z: number; roofHeight: number; stale: boolean };
+export type FleetModelKey = TransitMode | `ship-${ShipModelType}`;
+
+export type VehiclePlacement = { vehicle: Vehicle; x: number; y: number; z: number; roofHeight: number; heading: number | null; frontExtent: number; stale: boolean };
 
 export class LiveFleet {
   root = new THREE.Group();
   motion = new ReceivedPositions();
-  meshes = new Map<TransitMode, THREE.InstancedMesh>();
-  instanceIds = new Map<TransitMode, string[]>();
+  meshes = new Map<FleetModelKey, THREE.InstancedMesh>();
+  instanceIds = new Map<FleetModelKey, string[]>();
   placements = new Map<string, VehiclePlacement>();
-  private models = new Map<TransitMode, VehicleModel>();
+  private models = new Map<FleetModelKey, VehicleModel>();
   private shipDirection: THREE.InstancedMesh | null = null;
   private shipDirectionGeometry = new THREE.ConeGeometry(2.2, 5, 3).rotateX(-Math.PI / 2).translate(0, 2.5, -2);
   private shipDirectionMaterial = new THREE.MeshBasicMaterial({ color: '#ecffff' });
@@ -113,28 +116,33 @@ export class LiveFleet {
       materials: [new THREE.MeshStandardMaterial({ color: MODE_COLOURS.ship, roughness: .65 })], roofHeight: 3 });
   }
   async loadModels(urls: Record<Exclude<TransitMode, 'ship'>, string>, onError: (message: string) => void) {
-    await Promise.all((['tram', 'bus', 'ferry', 'train'] as const).map(async mode => {
-      try {
-        const response = await fetch(urls[mode], { signal: AbortSignal.any([this.loadAbort.signal, AbortSignal.timeout(15_000)]) });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const bytes = await response.arrayBuffer();
-        if (bytes.byteLength > 2 * 1024 ** 2) throw new Error('Model exceeds byte budget');
-        const model = await parseVehicleModel(bytes);
-        this.setModel(mode, model);
-      } catch (error) {
-        if (!this.disposed) onError(`${mode[0].toUpperCase() + mode.slice(1)} model unavailable; showing a simple marker. ${error instanceof Error ? error.message : ''}`);
-      }
-    }));
+    await Promise.all((['tram', 'bus', 'ferry', 'train'] as const).map(mode => this.loadModel(mode, urls[mode], onError)));
   }
-  setModel(mode: TransitMode, model: VehicleModel) {
+  async loadShipModels(onError: (message: string) => void) {
+    await Promise.all(SHIP_MODEL_TYPES.map(type => this.loadModel(`ship-${type}`, `/models/ship-${type}.glb`, onError)));
+  }
+  private async loadModel(key: FleetModelKey, url: string, onError: (message: string) => void) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.any([this.loadAbort.signal, AbortSignal.timeout(15_000)]) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength > 2 * 1024 ** 2) throw new Error('Model exceeds byte budget');
+      const model = await parseVehicleModel(bytes, key.startsWith('ship-') ? 'ship' : 'transit');
+      this.setModel(key, model);
+    } catch (error) {
+      if (!this.disposed) onError(`${key[0].toUpperCase() + key.slice(1).replaceAll('-', ' ')} model unavailable; showing a simple marker. ${error instanceof Error ? error.message : ''}`);
+    }
+  }
+  setModel(mode: FleetModelKey, model: VehicleModel) {
     if (this.disposed) { disposeVehicleModel(model); return; }
     const mesh = this.meshes.get(mode);
     if (mesh) { mesh.removeFromParent(); mesh.dispose(); this.meshes.delete(mode); }
-    disposeVehicleModel(this.models.get(mode)!);
+    const previous = this.models.get(mode);
+    if (previous) disposeVehicleModel(previous);
     this.models.set(mode, model);
   }
   setVehicles(vehicles: Vehicle[]) { this.motion.setSnapshot(vehicles); }
-  private mesh(mode: TransitMode, size: number) {
+  private mesh(mode: FleetModelKey, size: number) {
     let mesh = this.meshes.get(mode);
     if (!mesh || mesh.instanceMatrix.count < size) {
       if (mesh) { mesh.removeFromParent(); mesh.dispose(); }
@@ -143,7 +151,8 @@ export class LiveFleet {
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       // shortcut: moving instances span the release, add spatial batches if fleet drawing becomes a measured bottleneck.
       mesh.frustumCulled = false;
-      mesh.userData.mode = mode;
+      mesh.userData.modelKey = mode;
+      mesh.userData.mode = mode.startsWith('ship-') ? 'ship' : mode;
       this.meshes.set(mode, mesh); this.root.add(mesh);
     }
     return mesh;
@@ -155,26 +164,35 @@ export class LiveFleet {
     if (marinePaused || reducedMotion) for (const track of this.motion.tracks.values()) {
       if (track.vehicle.mode === 'ship' && track.positions.length > 1) track.positions = track.positions.slice(-1);
     }
-    for (const mode of ['tram', 'bus', 'ferry', 'train', 'ship'] as const) {
-      const entries: { id: string; position: Position; height: number; stale: boolean }[] = [];
-      for (const [id, track] of this.motion.tracks) {
-        if (track.vehicle.mode !== mode || !vehicleVisible(track.vehicle, modes, routeId)) continue;
-        const position = this.motion.position(id, now, reducedMotion || (mode === 'ship' && marinePaused));
-        if (!position) continue;
-        const height = mode === 'ferry' || mode === 'ship' ? this.waterHeight : this.groundHeight(position.x, position.z);
-        if (height === null) { this.unplacedCount++; continue; }
-        entries.push({ id, position, height, stale: trafficIsStale(track.vehicle, now) });
-      }
-      const mesh = this.mesh(mode, entries.length);
-      if (mode === 'ship' && (!this.shipDirection || this.shipDirection.instanceMatrix.count < mesh.instanceMatrix.count)) {
+    const groups = new Map<FleetModelKey, { id: string; position: Position; height: number; stale: boolean }[]>();
+    for (const [id, track] of this.motion.tracks) {
+      const mode = track.vehicle.mode;
+      if (!vehicleVisible(track.vehicle, modes, routeId)) continue;
+      const position = this.motion.position(id, now, reducedMotion || (mode === 'ship' && marinePaused));
+      if (!position) continue;
+      const height = mode === 'ferry' || mode === 'ship' ? this.waterHeight : this.groundHeight(position.x, position.z);
+      if (height === null) { this.unplacedCount++; continue; }
+      const variant: FleetModelKey = mode === 'ship' ? `ship-${shipModelType(track.vehicle.marine?.shipType ?? null)}` : mode;
+      const key = mode === 'ship' && (position.heading === null || !this.models.has(variant)) ? 'ship' : variant;
+      let entries = groups.get(key);
+      if (!entries) { entries = []; groups.set(key, entries); }
+      entries.push({ id, position, height, stale: trafficIsStale(track.vehicle, now) });
+    }
+    for (const [key, model] of this.models) {
+      const mode: TransitMode = key.startsWith('ship-') ? 'ship' : key as TransitMode;
+      const entries = groups.get(key) ?? [];
+      const mesh = this.mesh(key, entries.length);
+      if (key === 'ship' && (!this.shipDirection || this.shipDirection.instanceMatrix.count < mesh.instanceMatrix.count)) {
         this.shipDirection?.removeFromParent(); this.shipDirection?.dispose();
         this.shipDirection = new THREE.InstancedMesh(this.shipDirectionGeometry, this.shipDirectionMaterial, mesh.instanceMatrix.count);
         this.shipDirection.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.shipDirection.frustumCulled = false;
         this.root.add(this.shipDirection);
       }
-      if (mode === 'ship' && this.shipDirection) { this.shipDirection.count = entries.length; this.shipDirection.visible = modes.ship; }
+      if (key === 'ship' && this.shipDirection) { this.shipDirection.count = entries.length; this.shipDirection.visible = modes.ship; }
       mesh.count = entries.length; mesh.visible = modes[mode];
-      this.instanceIds.set(mode, entries.map(entry => entry.id));
+      this.instanceIds.set(key, entries.map(entry => entry.id));
+      if (!model.geometry.boundingBox) model.geometry.computeBoundingBox();
+      const frontExtent = Math.max(0, -model.geometry.boundingBox!.min.z) * VEHICLE_DISPLAY_SCALE;
       entries.forEach((entry, index) => {
         const y = entry.height + (mode === 'ferry' || mode === 'ship' ? 0 : .08);
         this.dummy.position.set(entry.position.x, y, entry.position.z);
@@ -182,15 +200,15 @@ export class LiveFleet {
         this.dummy.scale.setScalar(VEHICLE_DISPLAY_SCALE); this.dummy.updateMatrix();
         mesh.setMatrixAt(index, this.dummy.matrix);
         mesh.setColorAt(index, new THREE.Color().setScalar(entry.stale ? .4 : 1));
-        if (mode === 'ship' && this.shipDirection) {
+        if (key === 'ship' && this.shipDirection) {
           this.dummy.scale.setScalar(entry.position.heading === null ? 0 : VEHICLE_DISPLAY_SCALE); this.dummy.updateMatrix();
           this.shipDirection.setMatrixAt(index, this.dummy.matrix);
           this.shipDirection.setColorAt(index, new THREE.Color().setScalar(entry.stale ? .4 : 1));
         }
         this.placements.set(entry.id, { vehicle: this.motion.tracks.get(entry.id)!.vehicle, x: entry.position.x, y,
-          z: entry.position.z, roofHeight: this.models.get(mode)!.roofHeight, stale: entry.stale });
+          z: entry.position.z, roofHeight: model.roofHeight, heading: entry.position.heading, frontExtent, stale: entry.stale });
       });
-      if (mode === 'ship' && this.shipDirection) {
+      if (key === 'ship' && this.shipDirection) {
         this.shipDirection.instanceMatrix.needsUpdate = true;
         if (this.shipDirection.instanceColor) this.shipDirection.instanceColor.needsUpdate = true;
       }
@@ -201,7 +219,7 @@ export class LiveFleet {
     }
   }
   idForHit(hit: Pick<THREE.Intersection, 'object' | 'instanceId'>): string | null {
-    return hit.instanceId == null ? null : this.instanceIds.get(hit.object.userData.mode)?.[hit.instanceId] ?? null;
+    return hit.instanceId == null ? null : this.instanceIds.get(hit.object.userData.modelKey)?.[hit.instanceId] ?? null;
   }
   dispose() {
     if (this.disposed) return;

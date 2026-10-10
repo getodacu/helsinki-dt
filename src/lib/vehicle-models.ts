@@ -9,7 +9,7 @@ export interface VehicleModel {
 }
 
 /** Flatten Blender node transforms once, then instance all material groups together. */
-export async function parseVehicleModel(bytes: ArrayBuffer): Promise<VehicleModel> {
+export async function parseVehicleModel(bytes: ArrayBuffer, profile: 'transit' | 'ship' = 'transit'): Promise<VehicleModel> {
   const gltf = await new GLTFLoader().parseAsync(bytes, '');
   const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [];
   gltf.scene.updateMatrixWorld(true);
@@ -26,8 +26,10 @@ export async function parseVehicleModel(bytes: ArrayBuffer): Promise<VehicleMode
   }
   geometry.computeBoundingBox(); geometry.computeBoundingSphere();
   const box = geometry.boundingBox!, size = box.getSize(new THREE.Vector3());
-  if (![size.x, size.y, size.z, box.min.y].every(Number.isFinite) || size.x < 1 || size.x > 15
-    || size.y < 1 || size.y > 15 || size.z < 5 || size.z > 60 || box.min.y < -5 || box.min.y > .1) {
+  const ship = profile === 'ship';
+  if (![size.x, size.y, size.z, box.min.y].every(Number.isFinite) || size.x < 1 || size.x > (ship ? 60 : 15)
+    || size.y < 1 || size.y > (ship ? 80 : 15) || size.z < 5 || size.z > (ship ? 300 : 60)
+    || box.min.y < (ship ? -12 : -5) || box.min.y > .1 || (ship && (box.min.y >= 0 || box.max.y <= 0))) {
     disposeVehicleModel({ geometry, materials, roofHeight: 0 });
     throw new Error('Vehicle model is outside the metre-sized operating envelope');
   }

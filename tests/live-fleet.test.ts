@@ -1,3 +1,4 @@
+import { SHIP_MODEL_TYPES, shipModelType } from '../src/lib/ship-models.ts';
 import test, { mock } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
@@ -277,4 +278,135 @@ for (const reducedMotion of [false, true]) test(`brief ${reducedMotion ? 'reduce
   assert.ok(fleet.placements.get(first.id)!.x > duringPause);
   assert.ok(fleet.placements.get(first.id)!.x < wgs84ToScene(fourth.longitude!, fourth.latitude!)[0]);
   fleet.dispose();
+});
+
+
+test('AIS ship model families include all hazard subclasses and tug codes', () => {
+  for (const [start, end, expected] of [[60, 69, 'passenger'], [70, 79, 'cargo'], [80, 89, 'tanker']] as const) {
+    for (let code = start; code <= end; code++) assert.equal(shipModelType(code), expected);
+  }
+  for (const code of [31, 32, 52]) assert.equal(shipModelType(code), 'tug');
+  assert.equal(shipModelType(30), 'fishing'); assert.equal(shipModelType(36), 'sailing'); assert.equal(shipModelType(37), 'pleasure');
+  for (const code of [null, 0, 20, 29, 33, 34, 35, 38, 40, 49, 50, 51, 53, 59, 90, 99, -1, 256, 60.5, NaN]) {
+    assert.equal(shipModelType(code), 'generic');
+  }
+});
+
+const shipLengths = { passenger: 160, cargo: 140, tanker: 160, tug: 28, fishing: 24, sailing: 12, pleasure: 15, generic: 40 };
+const shipCodes = [60, 70, 80, 52, 30, 36, 37, null];
+for (const type of SHIP_MODEL_TYPES) test(`${type} ship export has detailed metre-scale geometry and a waterline`, async () => {
+  const bytes = await readFile(new URL(`../static/models/ship-${type}.glb`, import.meta.url));
+  assert.ok(bytes.byteLength < 2 * 1024 ** 2);
+  const model = await parseVehicleModel(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), 'ship');
+  try {
+    const box = model.geometry.boundingBox!, size = box.getSize(new THREE.Vector3());
+    assert.ok(Math.abs(size.z - shipLengths[type]) < .15);
+    assert.ok(size.x >= 1 && size.x <= 60); assert.ok(model.roofHeight > 3 && size.y <= 80);
+    assert.ok(box.min.y < 0 && box.min.y >= -12);
+    assert.equal(model.materials.length, 3); assert.equal(model.geometry.groups.length, 3);
+    assert.ok(model.geometry.getAttribute('color')); assert.ok(model.geometry.getAttribute('normal'));
+    assert.ok(model.geometry.index!.count / 3 < 18_000);
+  } finally { disposeVehicleModel(model); }
+});
+
+test('ship validation permits marine envelopes without widening transit bounds', async () => {
+  const scene = new THREE.Group();
+  const parseMock = mock.method(GLTFLoader.prototype, 'parseAsync', async () => ({ scene } as unknown as GLTF));
+  try {
+    for (const [width, height, length, bottom, accepted] of [
+      [60, 80, 300, -12, true], [61, 10, 50, -2, false], [10, 81, 50, -2, false],
+      [10, 10, 301, -2, false], [10, 20, 50, -13, false], [10, 10, 50, 0, false], [10, 2, 50, -3, false]
+    ] as const) {
+      const geometry = new THREE.BoxGeometry(width, height, length).translate(0, bottom + height / 2, 0);
+      scene.clear(); scene.add(new THREE.Mesh(geometry, new THREE.MeshStandardMaterial()));
+      if (accepted) disposeVehicleModel(await parseVehicleModel(new ArrayBuffer(0), 'ship'));
+      else await assert.rejects(parseVehicleModel(new ArrayBuffer(0), 'ship'), /operating envelope/);
+    }
+    scene.clear(); scene.add(new THREE.Mesh(new THREE.BoxGeometry(23, 20, 140).translate(0, 8, 0), new THREE.MeshStandardMaterial()));
+    await assert.rejects(parseVehicleModel(new ArrayBuffer(0)), /operating envelope/);
+  } finally { parseMock.mock.restore(); }
+});
+
+const shipAssetFetch = async (input: RequestInfo | URL) => new Response(new Uint8Array(
+  await readFile(new URL('../static' + String(input), import.meta.url))));
+
+test('mixed ship variants stay selectable, use the right roof, and switch type without resetting motion', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', shipAssetFetch);
+  const fleet = new LiveFleet(() => 99, 2), errors: string[] = [];
+  try {
+    const ships = SHIP_MODEL_TYPES.map((type, index) => ship({ id: `ais:${230123400 + index}`,
+      longitude: 24.94 + index * .004, headingDegrees: 90,
+      marine: { ...ship().marine!, shipType: shipCodes[index] } }));
+    const unknown = ship({ id: 'ais:230123499', longitude: 24.98 });
+    fleet.setVehicles([...ships, unknown]); fleet.update(at, modes, true);
+    assert.equal(fleet.meshes.get('ship')!.count, 9);
+    await fleet.loadShipModels(message => errors.push(message)); assert.deepEqual(errors, []);
+    fleet.update(at, modes, true); assert.equal(fleet.meshes.get('ship')!.count, 1);
+    assert.equal(fleet.visibleCount, 9);
+    fleet.root.updateMatrixWorld(true);
+    SHIP_MODEL_TYPES.forEach((type, index) => {
+      const mesh = fleet.meshes.get(`ship-${type}`)!, matrix = new THREE.Matrix4();
+      assert.equal(mesh.count, 1); assert.equal(fleet.idForHit({ object: mesh, instanceId: 0 }), ships[index].id);
+      mesh.getMatrixAt(0, matrix); assert.equal(matrix.elements[13], 2); assert.equal(matrix.getMaxScaleOnAxis(), 1);
+      assert.ok(Math.abs(new THREE.Vector3(0, 0, -1).transformDirection(matrix).x - 1) < .001);
+      assert.equal(fleet.placements.get(ships[index].id)!.roofHeight, mesh.geometry.boundingBox!.max.y);
+      const [x, , z] = wgs84ToScene(ships[index].longitude!, ships[index].latitude!);
+      const hits = new THREE.Raycaster(new THREE.Vector3(x, 100, z), new THREE.Vector3(0, -1, 0)).intersectObject(mesh);
+      assert.ok(hits.length); assert.equal(fleet.idForHit(hits[0]), ships[index].id);
+    });
+    const history = fleet.motion.tracks.get(ships[0].id)!.positions;
+    const changed = { ...ships[0], marine: { ...ships[0].marine!, shipType: 80 } };
+    fleet.setVehicles([changed, ...ships.slice(1), unknown]); fleet.update(at, modes, true);
+    assert.equal(fleet.motion.tracks.get(changed.id)!.positions, history);
+    assert.equal(fleet.meshes.get('ship-passenger')!.count, 0); assert.equal(fleet.meshes.get('ship-tanker')!.count, 2);
+    assert.equal(fleet.idForHit({ object: fleet.meshes.get('ship-tanker')!, instanceId: 0 }), changed.id);
+    fleet.setVehicles([{ ...changed, headingDegrees: null }]); fleet.update(at, modes, true);
+    assert.equal(fleet.meshes.get('ship')!.count, 1); assert.equal(fleet.meshes.get('ship-tanker')!.count, 0);
+    fleet.setVehicles([changed]); fleet.update(at, modes, true);
+    assert.equal(fleet.meshes.get('ship-tanker')!.count, 1); assert.equal(fleet.meshes.get('ship')!.count, 0);
+    fleet.update(at + 130_000, modes, true);
+    const colour = new THREE.Color(); fleet.meshes.get('ship-tanker')!.getColorAt(0, colour);
+    assert.ok(Math.abs(colour.r - .4) < .001); assert.equal(fleet.placements.get(changed.id)!.stale, true);
+    fleet.update(at, { ...modes, ship: false }, true); assert.equal(fleet.visibleCount, 0);
+    assert.ok([...fleet.meshes.values()].every(mesh => mesh.count === 0));
+    let disposed = 0;
+    for (const type of SHIP_MODEL_TYPES) fleet.meshes.get(`ship-${type}`)!.geometry.addEventListener('dispose', () => disposed++);
+    fleet.dispose(); fleet.dispose(); assert.equal(disposed, 8);
+  } finally { fleet.dispose(); fetchMock.mock.restore(); }
+});
+
+test('failed, oversized and invalid ship assets retain selectable markers and heading cues', async () => {
+  for (const response of [() => new Response('', { status: 404 }),
+    () => new Response(new ArrayBuffer(2 * 1024 ** 2 + 1)), () => new Response(new ArrayBuffer(1))]) {
+    const fetchMock = mock.method(globalThis, 'fetch', async () => response());
+    const fleet = new LiveFleet(() => 0), errors: string[] = [];
+    try {
+      await fleet.loadShipModels(message => errors.push(message)); assert.equal(errors.length, 8);
+      fleet.setVehicles([ship({ headingDegrees: 90, marine: { ...ship().marine!, shipType: 70 } })]); fleet.update(at, modes, true);
+      const base = fleet.meshes.get('ship')!;
+      assert.equal(base.count, 1); assert.equal(fleet.idForHit({ object: base, instanceId: 0 }), 'ais:230123456');
+      const cue = fleet.root.children.find(mesh => ![...fleet.meshes.values()].includes(mesh as THREE.InstancedMesh)) as THREE.InstancedMesh;
+      const matrix = new THREE.Matrix4(); cue.getMatrixAt(0, matrix); assert.equal(matrix.getMaxScaleOnAxis(), 1);
+    } finally { fleet.dispose(); fetchMock.mock.restore(); }
+  }
+});
+
+test('ship models completing after disposal are released without resurrecting instances', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => new Response(new ArrayBuffer(1)));
+  const pending: ((value: GLTF) => void)[] = [];
+  const parseMock = mock.method(GLTFLoader.prototype, 'parseAsync', () => new Promise<GLTF>(resolve => pending.push(resolve)));
+  const fleet = new LiveFleet(() => 0), errors: string[] = [];
+  try {
+    const loading = fleet.loadShipModels(message => errors.push(message));
+    while (pending.length < 8) await new Promise(resolve => setImmediate(resolve));
+    fleet.dispose(); let disposed = 0;
+    for (const resolve of pending) {
+      const scene = new THREE.Group(), material = new THREE.MeshStandardMaterial();
+      material.addEventListener('dispose', () => disposed++);
+      scene.add(new THREE.Mesh(new THREE.BoxGeometry(4, 4, 12).translate(0, 1, 0), material));
+      resolve({ scene } as unknown as GLTF);
+    }
+    await loading; assert.equal(disposed, 8); assert.equal(fleet.root.children.length, 0);
+    assert.equal(fleet.meshes.size, 0); assert.deepEqual(errors, []);
+  } finally { fleet.dispose(); fetchMock.mock.restore(); parseMock.mock.restore(); }
 });

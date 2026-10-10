@@ -5,7 +5,7 @@ import { projectVehicleFlags } from '../src/lib/vehicle-flags.ts';
 import type { VehiclePlacement } from '../src/lib/live-fleet.ts';
 import type { Vehicle } from '../src/lib/types.ts';
 const placement = (id: string, x = 0, z = 0): VehiclePlacement => ({ vehicle: { id, mode: 'bus' } as Vehicle,
-  x, y: 0, z, roofHeight: 3.3, stale: false });
+  x, y: 0, z, roofHeight: 3.3, heading: null, frontExtent: 6, stale: false });
 const camera = new THREE.PerspectiveCamera(42, 1, 1, 1000);
 camera.position.set(0, 60, 100); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
 

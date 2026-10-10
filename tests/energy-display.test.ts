@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { energyThemeOptions, buildingEnergyTheme, compatibleEnergyHistory, energyChartSegments, propertyIsShared, formatEnergyDate, energyForCity } from '../src/lib/energy-display.ts';
+import { energyThemeOptions, buildingEnergyTheme, compatibleEnergyHistory, energyChartSegments, propertyIsShared, formatEnergyDate, formatEnergyRecord, energyForCity } from '../src/lib/energy-display.ts';
 import type { EnergyCatalog, EnergyCatalogState } from '../src/lib/energy-types.ts';
 import type { DatasetSource, EnergyRecord, SolarRecord } from '../src/lib/types.ts';
 const energy = (overrides: Partial<EnergyRecord> = {}): EnergyRecord => ({ id: 'model-A', scope: 'building', scopeId: 'A', matchedBuildingIds: ['A'], unmatchedSourceIds: [],
@@ -85,4 +85,33 @@ test('catalog and loaded scene must share the prepared generation and original g
   }
   assert.equal(state.catalog?.energy[0].value, 10);
   assert.equal(energyForCity({ ...state, catalog: null }, city).catalog, null);
+});
+
+test('annual energy display converts kWh and computes daily averages using the period day count', () => {
+  assert.deepEqual(formatEnergyRecord(energy({ value: 4_317_983.99, period: { start: '2025-01-01', end: '2026-01-01' } })),
+    { value: '4.32 GWh/year', dailyAverage: '≈11,830 kWh/day average' });
+  assert.deepEqual(formatEnergyRecord(energy({ value: 366_000 })),
+    { value: '0.366 GWh/year', dailyAverage: '≈1,000 kWh/day average' });
+  assert.deepEqual(formatEnergyRecord(solar({ value: 4_317_983.99 })),
+    { value: '4.32 GWh/year', dailyAverage: '≈11,830 kWh/day average' });
+});
+
+test('annual energy display preserves zero, small totals and missing values', () => {
+  assert.deepEqual(formatEnergyRecord(energy({ value: 0 })), { value: '0 GWh/year', dailyAverage: '≈0 kWh/day average' });
+  assert.deepEqual(formatEnergyRecord(solar({ value: 1 })), { value: '0.000001 GWh/year', dailyAverage: '<1 kWh/day average' });
+  for (const value of [null, NaN, Infinity]) {
+    assert.deepEqual(formatEnergyRecord(energy({ value })), { value: 'Unknown', dailyAverage: null });
+    assert.deepEqual(formatEnergyRecord(solar({ value })), { value: 'Unknown', dailyAverage: null });
+  }
+});
+
+test('energy display retains source units and values for unsupported units and nonannual periods', () => {
+  for (const unit of ['kW', 'MWh', 'kWh/m²']) {
+    assert.deepEqual(formatEnergyRecord(energy({ value: 1_234.567, unit })), { value: `1,234.57 ${unit}`, dailyAverage: null });
+    assert.deepEqual(formatEnergyRecord(solar({ value: 1_234.567, unit })), { value: `1,234.57 ${unit}`, dailyAverage: null });
+  }
+  for (const period of [{ start: '2025-01-01', end: '2025-02-01' }, { start: 'invalid', end: '2026-01-01' }, { start: '2026-01-01', end: '2025-01-01' }]) {
+    assert.deepEqual(formatEnergyRecord(energy({ value: 42, period })), { value: '42 kWh', dailyAverage: null });
+  }
+  assert.deepEqual(formatEnergyRecord(solar({ value: 42, calculationPeriod: 'unknown' })), { value: '42 kWh', dailyAverage: null });
 });

@@ -12,6 +12,8 @@ import { wgs84ToScene } from './geo.ts';
 import { LiveFleet, vehicleVisible } from './live-fleet.ts';
 import { VehicleFlags } from './vehicle-flags.ts';
 import { StationFlags } from './station-flags.ts';
+import { RouteHighlight } from './route-highlight.ts';
+export { routeGeometry } from './route-highlight.ts';
 import { vehicleLabel } from './rail.ts';
 import { buildingName } from './inspection.ts';
 import type { RouteCatalog, RouteContext } from './route-context.ts';
@@ -121,18 +123,6 @@ function terrainGeometry(terrain: CityBase['terrain']) {
   geometry.computeVertexNormals(); return geometry;
 }
 
-export function routeGeometry(route: RouteContext, base: CityBase, ferry = false): THREE.BufferGeometry {
-  const positions: number[] = [];
-  for (const path of route.status === 'exact' ? route.shape : []) for (let i = 1; i < path.length; i++) {
-    const pair = [path[i - 1], path[i]].map(point => {
-      const [x, , z] = wgs84ToScene(...point), height = ferry ? base.waterLevel : sampleTerrainHeight(base.terrain, x, z);
-      return height === null ? null : [x, height + 1.5, z];
-    });
-    if (pair.every(point => point !== null)) positions.push(...pair[0]!, ...pair[1]!);
-  }
-  const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  return geometry;
-}
 
 /** Official land stays dry even below the sea display datum; unknown coverage is omitted. */
 export function waterGeometry(base: CityBase) {
@@ -198,7 +188,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const land = new THREE.Group(), context = new THREE.Group(), buildings = new THREE.Group();
   scene.add(land, context, buildings);
   let stations: SceneStation[] = [];
-  const routeHighlight = new THREE.Group(); scene.add(routeHighlight);
+  const routeHighlight = new RouteHighlight(container, base); scene.add(routeHighlight.root);
   land.add(new THREE.Mesh(terrainGeometry(base.terrain), new THREE.MeshStandardMaterial({ color: '#697c72', roughness: 1, side: THREE.DoubleSide })));
   const water = new THREE.Mesh(waterGeometry(base), new THREE.MeshStandardMaterial({ color: '#234d61', roughness: 0.78 }));
   scene.add(water);
@@ -215,6 +205,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     (id, label) => { hoveredVehicleId = id; callbacks.onHover(label); });
   const stationFlags = new StationFlags(container, base, station => { if (initiallyReady) select({ kind: 'station', station }); }, callbacks.onHover);
   void fleet.loadModels(modelUrls, callbacks.onError);
+  void fleet.loadShipModels(callbacks.onError);
   const vehicleRing = new THREE.Mesh(new THREE.RingGeometry(12, 16, 40), new THREE.MeshBasicMaterial({ color: '#d5f6e6', side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.95 }));
   vehicleRing.rotation.x = -Math.PI / 2; vehicleRing.renderOrder = 4; vehicleRing.visible = false; scene.add(vehicleRing);
   const viewLoading = new ViewLoading();
@@ -240,8 +231,8 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const pending = new Map<string, AbortController>(), failedUntil = new AssetRetries();
   let wanted = new Set<string>();
   const refreshContext = () => {
-    routeHighlight.visible = Boolean(route?.status === 'exact' && selected?.kind === 'vehicle'
-      && route.vehicleId === selected.vehicle.id && route.routeId === selected.vehicle.routeId && !selected.removed && vehicleVisible(selected.vehicle, layers, routeFilter));
+    routeHighlight.setVisible(Boolean(route?.status === 'exact' && selected?.kind === 'vehicle'
+      && route.vehicleId === selected.vehicle.id && route.routeId === selected.vehicle.routeId && !selected.removed && vehicleVisible(selected.vehicle, layers, routeFilter)));
   };
   const refreshHighlights = () => {
     refreshContext();
@@ -406,7 +397,12 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     }
     return null;
   }
-  const select = (selection: Selection | null, message?: string) => { if (selection?.kind === 'vehicle' && selection.vehicle.mode === 'ship') { route = null; disposeTree(routeHighlight); } selected = selection; followId = null; refreshHighlights(); callbacks.onSelection(selection, message); };
+  const select = (selection: Selection | null, message?: string) => {
+    if (selection?.kind !== 'vehicle' || selected?.kind !== 'vehicle' || selection.vehicle.id !== selected.vehicle.id) {
+      route = null; routeHighlight.setRoute(null, 'bus');
+    }
+    selected = selection; followId = null; refreshHighlights(); callbacks.onSelection(selection, message);
+  };
   let down: { x: number; y: number } | null = null, hoverAt = 0;
   const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; };
   const pointerUp = (event: PointerEvent) => { if (down && initiallyReady && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) select(pick(event)); down = null; };
@@ -442,6 +438,9 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       }
     } else vehicleRing.visible = false;
     refreshContext(); controls.update();
+    const selectedPlacement = selected?.kind === 'vehicle' && !selected.removed
+      && !(selected.vehicle.mode === 'ship' && (marinePaused || marineSourcePaused)) ? fleet.placements.get(selected.vehicle.id) ?? null : null;
+    routeHighlight.update(selectedPlacement, camera, container.clientWidth, container.clientHeight, now, reducedMotion);
     if (appearanceDirty) { appearanceDirty = false; updateAppearance(); }
     camera.updateMatrixWorld();
     if (scaleDirty && callbacks.onScale) {
@@ -490,17 +489,8 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       refreshContext();
     },
     setRoute(next: RouteContext | null) {
-      route = next; disposeTree(routeHighlight);
-      if (next?.status === 'exact') {
-        const ferry = selected?.kind === 'vehicle' && selected.vehicle.mode === 'ferry';
-        routeHighlight.add(new THREE.LineSegments(routeGeometry(next, base, ferry), new THREE.LineBasicMaterial({ color: next.sourceId === 'digitraffic-gtfs' ? '#d2bdf4' : '#9cf4cf', transparent: true, opacity: 0.9 })));
-        for (const stop of next.stops) {
-          const [x, , z] = wgs84ToScene(stop.longitude, stop.latitude), height = sampleTerrainHeight(base.terrain, x, z);
-          if (height === null && !ferry) continue;
-          const marker = new THREE.Mesh(new THREE.SphereGeometry(5, 8, 6), new THREE.MeshBasicMaterial({ color: '#e1ffee' }));
-          marker.position.set(x, (height ?? base.waterLevel) + 5, z); routeHighlight.add(marker);
-        }
-      }
+      route = next;
+      routeHighlight.setRoute(next, selected?.kind === 'vehicle' ? selected.vehicle.mode : 'bus');
       refreshContext();
     },
     setBuildingColours(next: ReadonlyMap<string, string>, themed = false) { buildingColours = next; buildingThemed = themed; for (const { chunk, mesh } of chunks.values()) applyBuildingColours(mesh.geometry, chunk, next); semanticRevision++; refreshAppearance(); requestViewUpdate(); },
@@ -558,7 +548,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       clearTimeout(cachePoll); clearTimeout(retryTimer); backgroundAbort.abort(); cache.dispose();
       for (const controller of pending.values()) controller.abort(); pending.clear(); loader.dispose();
       appearance.aerial.removeFromParent(); appearance.buildings.removeFromParent(); appearance.dispose();
-      stationFlags.dispose(); flags.dispose(); fleet.root.removeFromParent(); fleet.dispose(); disposeTree(scene); chunks.clear(); identities.clear(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
+      routeHighlight.dispose(); routeHighlight.root.removeFromParent(); stationFlags.dispose(); flags.dispose(); fleet.root.removeFromParent(); fleet.dispose(); disposeTree(scene); chunks.clear(); identities.clear(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
     }
   };
 }

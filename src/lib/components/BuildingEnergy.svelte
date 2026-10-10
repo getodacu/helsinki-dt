@@ -1,6 +1,7 @@
 <script lang="ts">
   import EnergyHistory from './EnergyHistory.svelte';
-  import { exactBuildingEnergy, propertyIsShared, formatEnergyDate } from '#lib/energy-display.ts';
+  import ConsoleIcon from './ConsoleIcon.svelte';
+  import { exactBuildingEnergy, propertyIsShared, formatEnergyDate, formatEnergyRecord } from '#lib/energy-display.ts';
   import { buildingName, knownValue, label } from '#lib/inspection.ts';
   import type { Building } from '#lib/types.ts';
   import type { EnergyCatalogState, MeasuredEnergySeries } from '#lib/energy-types.ts';
@@ -50,7 +51,7 @@
   });
 </script>
   <section class="energy-section" aria-label="Building energy and solar records">
-    <h4>Energy & solar</h4>
+    <h4 class="console-section-heading"><ConsoleIcon name="energy" />Energy & solar</h4>
     {#if !loadingCatalog && !showProperty && !model && !solar.length}<p class="panel-note">{error || catalogState.message || 'No verified energy or solar records are available for this building.'}</p>{/if}
     {#if loadingCatalog}<p class="notice" role="status">Loading…</p>{:else if catalogState.status === 'stale'}<p class="notice" role="status">Stale</p>{/if}
     {#if unresolved.length}<p class="notice">Unresolved energy association</p>{/if}
@@ -71,30 +72,33 @@
       </div>
     {/if}
     {#if model && model.value !== null}
+      {@const display = formatEnergyRecord(model)}
       <div class="energy-block" data-modeled-records={modeled.length}>
         <h4>Modeled demand</h4>
         {#if modeled.length > 1}<label class="filter-label">Metric / period<select value={model.id} onchange={event => modelId = event.currentTarget.value}>{#each modeled as record (record.id)}<option value={record.id}>{label(record.metric)} · {record.unit}{knownValue(record.scenario) ? ` · ${record.scenario}` : ''} · {record.period.start.slice(0, 10)}</option>{/each}</select></label>{/if}
-        <p class="energy-value">{value(model.value)} {model.unit}</p>
+        <p class="energy-value">{display.value}{#if display.dailyAverage}<small>{display.dailyAverage}</small>{/if}</p>
         <dl class="properties"><div><dt>Metric</dt><dd>{label(model.metric)} · {model.unit}</dd></div><div><dt>Period</dt><dd>{formatEnergyDate(model.period.start)} – {formatEnergyDate(model.period.end)}</dd></div>{#if knownValue(model.scenario)}<div><dt>Scenario</dt><dd>{model.scenario}</dd></div>{/if}</dl>
       </div>
     {/if}
     {#if solar.length}
       <div class="energy-block" data-solar-records={solar.length}>
-        <h4>Modeled solar potential</h4>
+        <h4 class="console-section-heading"><ConsoleIcon name="solar" />Modeled solar radiation</h4>
         {#each solar as record (record.id)}
-          {#if record.value !== null}<div class="solar-record"><p class="energy-value">{value(record.value)} {record.unit}</p>
-            <dl class="properties"><div><dt>Metric</dt><dd>{label(record.metric)} · {record.unit}</dd></div>{#if knownValue(record.calculationPeriod)}<div><dt>Period</dt><dd>{record.calculationPeriod}</dd></div>{/if}</dl>
-          </div>{/if}
+          {#if record.value !== null}
+            {@const display = formatEnergyRecord(record)}
+            <div class="solar-record"><p class="energy-value">{display.value}{#if display.dailyAverage}<small>{display.dailyAverage}</small>{/if}</p></div>
+          {/if}
         {/each}
       </div>
     {/if}
   </section>
 
 <style>
-  .energy-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .energy-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
   h4 { font-size: 12px; font-weight: 500; margin: 0 0 8px; }
-  .energy-block { margin-top: 17px; border-top: 1px solid var(--border); padding-top: 15px; }
-  .energy-value { color: var(--teal); font-size: 22px; margin: 12px 0; font-variant-numeric: tabular-nums; }
+  .energy-block { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .energy-value { color: var(--teal); font-size: 16px; margin: 8px 0; font-variant-numeric: tabular-nums; }
+  .energy-value small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
   .member-list { padding-left: 18px; margin: 8px 0; }
-  .solar-record + .solar-record { border-top: 1px solid var(--border); padding-top: 12px; }
+  .solar-record + .solar-record { border-top: 1px solid var(--border); padding-top: 8px; }
 </style>

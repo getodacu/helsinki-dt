@@ -1,23 +1,25 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<title>Blender transit models · Helsinki Lens</title>
+<title>Blender vehicle models · Helsinki Lens</title>
 <link rel="stylesheet" href="/src/app.css">
 <style>
 body { font-family: system-ui; background: #10222d; color: #fff; }
 header { position: absolute; z-index: 2; top: 24px; left: 24px; padding: 18px; background: #10222de8; border: 1px solid #536a75; border-radius: 8px; }
-h1 { font-size: 20px; margin-bottom: 8px; } p { font-size: 12px; color: #c8d7dd; max-width: 480px; margin-bottom: 8px; }
-nav button { padding: 8px 14px; background: #244657; margin: 4px; }
+h1 { font-size: 20px; margin-bottom: 8px; } p { font-size: 12px; color: #c8d7dd; max-width: 560px; margin-bottom: 8px; }
+nav { max-width: 580px; } nav button { padding: 8px 14px; background: #244657; margin: 4px; }
 #stage { position: absolute; inset: 0; } #result { font-size: 11px; margin-top: 10px; }
 </style>
 <div id="stage"></div>
-<header><h1>Helsinki transit · Blender → Three.js</h1>
+<header><h1>Helsinki vehicles · Blender → Three.js</h1>
 <p>Representative exteriors in metres. The adjacent building is 20 m tall. Drag to orbit; scroll to zoom.</p>
-<nav><button data-mode="bus">Bus</button><button data-mode="tram">Tram</button><button data-mode="ferry">Ferry</button><button data-mode="train">Train</button><button data-mode="ship">Ship</button><button data-mode="all">All five</button><button id="dense">450 vehicles</button><button id="stale">Stale / current</button></nav>
+<nav><button data-view="bus">Bus</button><button data-view="tram">Tram</button><button data-view="ferry">Ferry</button><button data-view="train">Train</button><button data-view="ships">Ships</button><button data-view="all">All models</button><button id="dense">450 transit + 250 ships</button><button id="stale">Stale / current</button></nav>
+<nav id="ship-views"></nav>
 <p id="selected">Click a route banner or vehicle to select it.</p><pre id="result">Loading GLBs…</pre></header>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { SHIP_MODEL_TYPES } from '/src/lib/ship-models.ts';
 import { LiveFleet } from '/src/lib/live-fleet.ts';
 import { VehicleFlags } from '/src/lib/vehicle-flags.ts';
 import { wgs84ToScene } from '/src/lib/geo.ts';
@@ -27,37 +29,69 @@ const renderer = createCityRenderer(); renderer.setPixelRatio(Math.min(devicePix
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#bccdd7');
 scene.add(new THREE.HemisphereLight('#ffffff', '#5a6b70', 2.4));
 const sun = new THREE.DirectionalLight('#fff5de', 3); sun.position.set(-70, 130, 90); scene.add(sun);
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.MeshStandardMaterial({ color: '#819295', roughness: 1 }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshStandardMaterial({ color: '#819295', roughness: 1 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = -.02; scene.add(ground);
-const grid = new THREE.GridHelper(800, 160, '#61787e', '#91a3a8'); scene.add(grid);
+const grid = new THREE.GridHelper(14000, 70, '#61787e', '#91a3a8'); scene.add(grid);
 const building = new THREE.Mesh(new THREE.BoxGeometry(12, 20, 20), new THREE.MeshStandardMaterial({ color: '#d3c4af', roughness: .8 }));
 building.position.set(-45, 10, -32); scene.add(building);
 for (let floor = 0; floor < 5; floor++) for (let column = 0; column < 4; column++) {
   const window = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.8), new THREE.MeshStandardMaterial({ color: '#364e5c', roughness: .2 }));
   window.position.set(-49.5 + column * 3, 2.5 + floor * 3.5, -21.99); scene.add(window);
 }
-const camera = new THREE.PerspectiveCamera(42, 1, .1, 3000), controls = new OrbitControls(camera, renderer.domElement);
-controls.minDistance = 10; controls.maxDistance = 1400; controls.maxPolarAngle = Math.PI / 2 - .025;
+const camera = new THREE.PerspectiveCamera(42, 1, .1, 40000), controls = new OrbitControls(camera, renderer.domElement);
+controls.minDistance = 10; controls.maxDistance = 20000; controls.maxPolarAngle = Math.PI / 2 - .025;
 const fleet = new LiveFleet(() => 0, 0); scene.add(fleet.root);
-const records = ['bus', 'tram', 'ferry', 'train', 'ship'].map((mode, i) => ({ id: `fixture/${mode}`, mode, routeId: ['10024', '1002', '1019', 'rail:23', null][i],
-  reportedAt: new Date().toISOString(), longitude: 24.952 + (i - 1) * .00055, latitude: 60.1695, headingDegrees: mode === 'ship' ? null : 0, speedMetresPerSecond: 0, vehicleId: mode === 'ship' ? '230123456' : String(i), quality: [],
-  ...(mode === 'ship' ? { marine: { mmsi: '230123456', name: 'Fixture ship', navigationStatus: 5, courseOverGroundDegrees: null } } : {}) }));
+const transitRecords = ['bus', 'tram', 'ferry', 'train'].map((mode, i) => ({ id: `fixture/${mode}`, mode,
+  routeId: ['10024', '1002', '1019', 'rail:23'][i], reportedAt: new Date().toISOString(),
+  longitude: 24.948 + i * .0006, latitude: 60.168, headingDegrees: 0, speedMetresPerSecond: 0,
+  vehicleId: String(i), quality: [], sourceId: 'test-fixture' }));
+const shipCodes = [60, 70, 80, 52, 30, 36, 37, null];
+const shipRecords = [...SHIP_MODEL_TYPES, 'unknown'].map((type, i) => ({ id: `fixture/ship-${type}`, mode: 'ship', routeId: null,
+  reportedAt: new Date().toISOString(), longitude: 24.948 + i % 5 * .0032, latitude: 60.170 + Math.floor(i / 5) * .002,
+  headingDegrees: type === 'unknown' ? null : 0, speedMetresPerSecond: 0, vehicleId: String(230123400 + i),
+  quality: [], sourceId: 'test-fixture', marine: { mmsi: String(230123400 + i), name: `${type[0].toUpperCase() + type.slice(1)} fixture`,
+    shipType: shipCodes[i] ?? null, navigationStatus: 5, courseOverGroundDegrees: null } }));
+const records = [...transitRecords, ...shipRecords];
 let selected = null, hovered = null, stale = false, currentMode = 'all', dense = false;
 const flags = new VehicleFlags(stage, vehicle => select(vehicle.id), (id) => hovered = id);
 flags.setRoutes([{ routeId: '10024', label: '24' }, { routeId: '1002', label: '2' }, { routeId: '1019', label: '19' }]);
 function select(id) { selected = id; document.querySelector('#selected').textContent = `Selected ${id}`; }
-function view(mode) {
-  currentMode = mode;
-  const record = records.find(record => record.mode === mode);
-  const [x, , z] = record ? wgs84ToScene(record.longitude, record.latitude) : [0, 0, 0];
-  controls.target.set(x, mode === 'ferry' || mode === 'ship' ? 3 : 1.7, z);
-  const distance = mode === 'bus' ? 25 : mode === 'tram' ? 42 : mode === 'ferry' ? 55 : mode === 'train' ? 65 : 125;
-  camera.position.set(x + distance * .95, distance * .58, z - distance * .85); controls.update();
-  ground.material.color.set(mode === 'ferry' || mode === 'ship' ? '#476f84' : '#819295'); building.visible = mode === 'all';
+function visibleRecords() {
+  if (dense) return [
+    ...Array.from({ length: 450 }, (_, i) => ({ ...transitRecords[i % 4], id: `fixture/transit/${i}`,
+      longitude: 24.948 + i % 30 * .00022, latitude: 60.168 - Math.floor(i / 30) * .00022 })),
+    ...Array.from({ length: 250 }, (_, i) => ({ ...shipRecords[i % 8], id: `fixture/ship/${i}`,
+      longitude: 24.94 + i % 10 * .004, latitude: 60.174 + Math.floor(i / 10) * .002 }))
+  ];
+  return records.filter(record => currentMode === 'all' || currentMode === 'ships' && record.mode === 'ship'
+    || record.id === `fixture/${currentMode}`);
 }
-for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => { dense = false; view(button.dataset.mode); };
-document.querySelector('#stale').onclick = () => stale = !stale;
-document.querySelector('#dense').onclick = () => { dense = true; view('all'); controls.target.set(0, 0, -100); camera.position.set(230, 300, 280); controls.update(); };
+function updateFleet() {
+  const now = Date.now();
+  fleet.setVehicles(visibleRecords().map(vehicle => ({ ...vehicle,
+    reportedAt: new Date(now - (stale ? vehicle.mode === 'ship' ? 601000 : 31000 : 0)).toISOString() })));
+  fleet.update(now, { bus: true, tram: true, ferry: true, train: true, ship: true }, true);
+}
+function view(mode) {
+  currentMode = mode; updateFleet(); fleet.root.updateMatrixWorld(true);
+  const bounds = new THREE.Box3();
+  for (const mesh of fleet.meshes.values()) if (mesh.count) {
+    mesh.computeBoundingBox(); bounds.union(mesh.boundingBox);
+  }
+  const centre = bounds.getCenter(new THREE.Vector3());
+  const extent = bounds.getSize(new THREE.Vector3()), distance = Math.max(22, extent.x, extent.z, extent.y * 2) * 1.05;
+  controls.target.copy(centre);
+  camera.position.copy(centre).add(new THREE.Vector3(distance * .95, distance * .58, -distance * .85)); controls.update();
+  ground.material.color.set(mode.startsWith('ship') ? '#476f84' : '#819295'); building.visible = mode === 'all' && !dense;
+}
+for (const type of [...SHIP_MODEL_TYPES, 'unknown']) {
+  const button = document.createElement('button'); button.dataset.view = `ship-${type}`;
+  button.textContent = type === 'unknown' ? 'Unknown heading' : type[0].toUpperCase() + type.slice(1);
+  document.querySelector('#ship-views').append(button);
+}
+for (const button of document.querySelectorAll('[data-view]')) button.onclick = () => { dense = false; view(button.dataset.view); };
+document.querySelector('#stale').onclick = () => { stale = !stale; fleet.motion.tracks.clear(); };
+document.querySelector('#dense').onclick = () => { dense = true; view('all'); };
 const raycaster = new THREE.Raycaster(); let down = null;
 renderer.domElement.onpointerdown = event => down = [event.clientX, event.clientY];
 renderer.domElement.onpointerup = event => {
@@ -66,29 +100,28 @@ renderer.domElement.onpointerup = event => {
   const hits = raycaster.intersectObjects([...fleet.meshes.values()]); if (hits.length) select(fleet.idForHit(hits[0]));
 };
 const errors = [];
-await fleet.loadModels({ bus: '/models/bus.glb', tram: '/models/tram.glb', ferry: '/models/ferry.glb', train: '/models/train.glb' }, error => errors.push(error));
+await Promise.all([
+  fleet.loadModels({ bus: '/models/bus.glb', tram: '/models/tram.glb', ferry: '/models/ferry.glb', train: '/models/train.glb' }, error => errors.push(error)),
+  fleet.loadShipModels(error => errors.push(error))
+]);
 if (errors.length) throw new Error(errors.join('; '));
 view('all');
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 let frames = 0, statsAt = performance.now();
 function render(now) {
-  const vehicles = dense ? Array.from({ length: 450 }, (_, i) => ({ ...records[i % 5], id: `fixture/${i}`, longitude: 24.951 + i % 30 * .00008,
-    latitude: 60.169 + Math.floor(i / 30) * .00018 })) : records;
-  const time = new Date().toISOString();
-  fleet.setVehicles(vehicles.map(vehicle => ({ ...vehicle, reportedAt: time })));
-  fleet.update(Date.now() + (stale ? 601_000 : 0), Object.fromEntries(['bus', 'tram', 'ferry', 'train', 'ship'].map(mode => [mode, dense || currentMode === 'all' || currentMode === mode])), true);
+  updateFleet();
   controls.update(); camera.updateMatrixWorld();
   flags.update(fleet.placements, camera, innerWidth, innerHeight, selected, hovered);
   renderer.render(scene, camera); frames++;
   if (now - statsAt > 1000) {
     const fps = Math.round(frames * 1000 / (now - statsAt)); frames = 0; statsAt = now;
     result.textContent = `PASS · ${fleet.visibleCount} vehicles · ${document.querySelectorAll('.vehicle-flag').length} flags · ${renderer.info.render.calls} draw calls · ${fps} fps`;
-    window.vehicleDiagnostics = { vehicles: fleet.visibleCount, flags: document.querySelectorAll('.vehicle-flag').length, drawCalls: renderer.info.render.calls, fps };
+    window.vehicleDiagnostics = { vehicles: fleet.visibleCount, flags: document.querySelectorAll('.vehicle-flag').length, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, fps };
   }
   requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
-window.vehicleFixture = { fleet, flags, scene, camera };
+window.vehicleFixture = { fleet, flags, scene, camera, controls, view, records };
 </script>
 </html>

@@ -73,6 +73,22 @@ function cadence(record: EnergyRecord): 'daily' | 'monthly' | 'annual' | null {
   return null;
 }
 
+export function formatEnergyRecord(record: EnergyRecord | SolarRecord) {
+  if (record.value === null || !Number.isFinite(record.value)) return { value: 'Unknown', dailyAverage: null };
+  const original = { value: `${record.value.toLocaleString('en-GB', { maximumFractionDigits: 2 })} ${record.unit}`, dailyAverage: null };
+  if (record.unit !== 'kWh' || record.value < 0) return original;
+  const days = 'period' in record
+    ? cadence(record) === 'annual' ? (Date.parse(record.period.end) - Date.parse(record.period.start)) / 86_400_000 : null
+    // shortcut: solar has no weather year; use 365 days until the source supplies its calculation year.
+    : /^annual\b/i.test(record.calculationPeriod) ? 365 : null;
+  if (!days) return original;
+  const daily = record.value / days;
+  return {
+    value: `${(record.value / 1_000_000).toLocaleString('en-GB', { maximumSignificantDigits: 3 })} GWh/year`,
+    dailyAverage: `${daily > 0 && daily < 1 ? '<1' : `≈${daily.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`} kWh/day average`
+  };
+}
+
 /** One boundary, metric, unit, scenario and calendar cadence; DST days and variable months stay valid. */
 export function compatibleEnergyHistory(records: EnergyRecord[]): EnergyRecord[] {
   const first = records[0];

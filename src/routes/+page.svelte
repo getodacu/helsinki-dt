@@ -32,11 +32,15 @@
   const consoleTools = [
     { id: 'explore', label: 'Explore' }, { id: 'transport', label: 'Transport' },
     { id: 'buildings', label: 'Buildings' }, { id: 'energy', label: 'Energy' },
-    { id: 'environment', label: 'Environment' }, { id: 'help', label: 'Help' }
+    { id: 'environment', label: 'Environment' }
   ] as const;
-  type ConsoleTool = typeof consoleTools[number]['id'];
+  type ConsoleTool = typeof consoleTools[number]['id'] | 'help';
+  const appearanceLayers = [
+    { key: 'imagery', label: 'Aerial imagery' }, { key: 'buildings', label: 'Buildings' },
+    { key: 'terrain', label: 'Land & islands' }, { key: 'roads', label: 'Roads & rail' }
+  ] as const;
   let activeTool = $state<ConsoleTool>('explore');
-  let buildingTab = $state<'overview' | 'energy' | 'details'>('overview');
+  let buildingTab = $state<'overview' | 'details'>('overview');
   let themeKey = $state('');
   let city = $state.raw<{ manifest: CityManifest; base: CityBase; cache: CityAssetCache } | null>(null);
   let ryhtiCategoryKey = $state('');
@@ -187,6 +191,11 @@
   let marineSource = $derived(traffic.sources?.marine);
   let marineLive = $derived(browserConnected && marineSource?.state === 'live' && !marineSource.stale && !marineSource.periodic);
   let currentFeed = $derived(hslLive || railLive || marineLive);
+  let liveFeeds = $derived([
+    { name: 'HSL', live: hslLive, state: browserConnected ? label(traffic.status.state) : 'Paused / disconnected', lastAt: traffic.status.lastPositionAt, error: traffic.status.error },
+    { name: 'Rail', live: railLive, state: browserConnected ? label(traffic.sources?.rail?.state ?? 'connecting') : 'Paused / disconnected', lastAt: traffic.sources?.rail?.lastPositionAt, error: traffic.sources?.rail?.error },
+    { name: 'AIS', live: marineLive, state: browserConnected ? marineSourceLabel(marineSource) : 'Paused / disconnected', lastAt: marineSource?.lastPositionAt, error: [...new Set([marineSource?.error, marineSource?.positionError, marineSource?.metadataError].filter(Boolean))].join(' · ') }
+  ]);
   let marineVehicles = $derived(availableVehicles.filter(vehicle => vehicle.mode === 'ship'));
   let freshMarine = $derived(marineVehicles.filter(vehicle => !trafficIsStale(vehicle, now)));
   let marineState = $derived(`${browserConnected ? '' : 'Browser paused / disconnected · '}${marineSourceLabel(marineSource)}`);
@@ -216,7 +225,7 @@
     if (changed) {
       buildingTab = 'overview';
       if (selection) { mobilePanel = 'inspect'; searchOpen = false; focusInspector(); }
-      else closeSearch();
+      else { if (mobilePanel === 'inspect') mobilePanel = null; closeSearch(); }
     }
     if (selection?.kind === 'vehicle' && selection.vehicle.mode === 'ship') { route = null; railJourney = null; routeError = ''; }
     selected = selection; selectionMessage = message;
@@ -238,6 +247,7 @@
   };
   const chooseTool = (tool: ConsoleTool) => {
     activeTool = tool;
+    if (tool === 'explore') { setMobilePanel(null); return; }
     mobilePanel = 'controls';
     void tick().then(() => {
       document.getElementById('scene-controls')?.scrollTo({ top: 0 });
@@ -366,7 +376,7 @@
 </script>
 
 <svelte:head><title>Helsinki Lens · City Console</title><meta name="description" content="Inspect central Helsinki buildings, live HSL, rail and AIS ship reports and dated environmental station observations." /></svelte:head>
-<svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !sourceOpen) { if (searchOpen) { event.preventDefault(); closeSearch(); } else { clearSelection(); if (mobilePanel) setMobilePanel(null); } } }} onpointerdown={event => { if (searchOpen && event.target instanceof Element && !event.target.closest('.navbar-search')) searchOpen = false; }} />
+<svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !sourceOpen && !document.getElementById('live-feed-status')?.matches(':popover-open')) { if (searchOpen) { event.preventDefault(); closeSearch(); } else { clearSelection(); if (mobilePanel) setMobilePanel(null); } } }} onpointerdown={event => { if (searchOpen && event.target instanceof Element && !event.target.closest('.navbar-search')) searchOpen = false; }} />
 <a class="skip-link" href="#city-search">Skip to city search</a>
 <div class="app-shell city-console">
   <header class="masthead">
@@ -385,7 +395,12 @@
         </div>
       {/if}
     </search>
-    <div class="header-status"><span class:connected={currentFeed} class="status-dot"></span><span>{hslLive && railLive ? 'HSL + rail connected' : hslLive ? 'HSL connected · rail unavailable' : railLive ? 'Rail connected · HSL unavailable' : 'Traffic connecting'} · AIS {marineSourceLabel(marineSource)}</span></div>
+    <button class="live-feed-button" popovertarget="live-feed-status" aria-label="Show live feed status" aria-haspopup="dialog" title={currentFeed ? 'Live feeds connected' : 'Live feeds connecting or paused'}><span class:connected={currentFeed} class="status-dot" aria-hidden="true"></span></button>
+    <div class="live-feed-popover" id="live-feed-status" popover="auto" role="dialog" aria-labelledby="live-feed-heading">
+      <h2 id="live-feed-heading">Live feeds</h2>
+      {#each liveFeeds as feed (feed.name)}<div class="live-feed-row"><strong><span class:connected={feed.live} class="status-dot" aria-hidden="true"></span>{feed.name}</strong><span>{feed.state}</span><small>Last report: {feed.lastAt ? formatDate(feed.lastAt) : 'No report yet'}</small>{#if feed.error}<p>{feed.error}</p>{/if}</div>{/each}
+      {#if trafficError}<p class="panel-note">{trafficError}</p>{/if}
+    </div>
     <button class="console-help" aria-label="Help using the city" onclick={() => chooseTool('help')}>?</button>
     <button class="source-button" onclick={() => sourceOpen = !sourceOpen} aria-expanded={sourceOpen} aria-controls="sources">Data & sources ↗</button>
   </header>
@@ -421,8 +436,11 @@
           : `Caching area on the server: ${mapLoad.background.completed.toLocaleString()} / ${mapLoad.background.total.toLocaleString()}`}
       </div>
     {/if}
-    <div class="scene-title"><span class="eyebrow">HELSINKI / FINLAND</span><h1>{preset === 'central' ? 'Central Station' : preset === 'pasila' ? 'Pasila' : preset === 'city' ? 'City Centre' : preset === 'harbour' ? 'South Harbour' : preset === 'energy' ? 'Senate district' : 'Suomenlinna'}</h1><p>A closer look at your city.</p></div>
     {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={openSources}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
+    <nav class="map-appearance" aria-label="Map appearance">
+      {#each appearanceLayers as layer (layer.key)}<button aria-label={layer.label} title={layer.label} aria-pressed={layers[layer.key]} onclick={() => layers[layer.key] = !layers[layer.key]}><ConsoleIcon name={layer.key} /></button>{/each}
+    </nav>
+    {#if layers.imagery && appearanceStatus}<div class="appearance-status" role="status">{appearanceStatus}</div>{/if}
     <nav class="console-toolbox panel" aria-label="City tools">
       <div class="panel-heading"><h2>City tools</h2><span aria-hidden="true">▥</span></div>
       <div class="console-tool-grid">{#each consoleTools as tool (tool.id)}
@@ -430,20 +448,13 @@
       {/each}</div>
     </nav>
     <aside class="left-stack" class:mobile-active={mobilePanel === 'controls'} id="scene-controls" aria-label="Scene controls and conditions">
-      <div class="mobile-sheet-heading"><strong>{consoleTools.find(tool => tool.id === activeTool)?.label}</strong><button class="icon-button" aria-label="Close controls sheet" onclick={() => setMobilePanel(null)}>×</button></div>
+      <div class="mobile-sheet-heading"><strong>{activeTool === 'help' ? 'Help' : consoleTools.find(tool => tool.id === activeTool)?.label}</strong><button class="icon-button" aria-label="Close controls sheet" onclick={() => setMobilePanel(null)}>×</button></div>
       {#if activeTheme || activeRyhtiTheme}<button class="console-active-theme" onclick={() => chooseTool(activeTheme ? 'energy' : 'buildings')}>Building colors on <span>↗</span></button>{/if}
+      {#if activeTool !== 'explore'}
       <section class="panel layers-panel">
-        <div class="panel-heading"><h2 id="tool-heading" tabindex="-1">{activeTool === 'explore' ? 'Map appearance' : activeTool === 'transport' ? 'Transport' : activeTool === 'buildings' ? 'Buildings' : activeTool === 'energy' ? 'Energy & solar' : activeTool === 'environment' ? 'Environment' : 'Getting around'}</h2><span aria-hidden="true">▤</span></div>
+        <div class="panel-heading"><h2 id="tool-heading" tabindex="-1"><ConsoleIcon name={activeTool} />{activeTool === 'transport' ? 'Transport' : activeTool === 'buildings' ? 'Buildings' : activeTool === 'energy' ? 'Energy & solar' : activeTool === 'environment' ? 'Environment' : 'Getting around'}</h2><span aria-hidden="true">▤</span></div>
         <div class="layer-list">
-          {#if activeTool === 'explore'}
-          <label class="layer-control"><input type="checkbox" bind:checked={layers.imagery} /><span class="layer-symbol" aria-hidden="true">▧</span><span>Aerial imagery</span></label>
-          {#if layers.imagery && appearanceStatus}<p class="panel-note" role="status">{appearanceStatus}</p>{/if}
-          {#each [['buildings', 'Buildings'], ['terrain', 'Land & islands'], ['roads', 'Roads & rail']] as [key, name] (key)}
-            <label class="layer-control"><input type="checkbox" bind:checked={layers[key as keyof Layers]} /><span class="layer-symbol" aria-hidden="true">{key === 'buildings' ? '▥' : key === 'terrain' ? '△' : '≋'}</span><span>{name}</span></label>
-          {/each}
-
-            <p class="panel-note console-intro">Choose a location below, then select something on the map to learn more.</p>
-          {:else if activeTool === 'transport'}
+          {#if activeTool === 'transport'}
           {#each modes as mode (mode)}<label class="layer-control"><input type="checkbox" aria-label={modeNames[mode]} bind:checked={layers[mode]} /><span class="mode-swatch" style:background={MODE_COLOURS[mode]}></span><span class="mode-label">{modeNames[mode]}</span><small aria-label={`${availableVehicles.filter(vehicle => vehicle.mode === mode).length} reports`}>{availableVehicles.filter(vehicle => vehicle.mode === mode).length}</small></label>{/each}
           <label class="layer-control"><input type="checkbox" bind:checked={layers.railStations} /><span class="station-swatch rail" aria-hidden="true">▣</span><span>Rail stations</span></label>
           {#if layers.train}<details class="rail-filters"><summary>Train categories</summary>{#each RAIL_CATEGORIES as category (category)}<label class="layer-control"><input type="checkbox" bind:checked={layers[category]} /><span>{label(category)}</span></label>{/each}</details>{/if}
@@ -492,6 +503,7 @@
           {/if}
         </div>
       </section>
+      {/if}
       {#if activeTool === 'environment'}
       <section class="panel conditions"><div class="panel-heading"><h2>Nearby conditions</h2><span>STATION CONTEXT</span></div>
         <div class="condition-source-states">{#each observationSnapshot?.sources ?? [] as source (source.id)}<button onclick={openSources}><span>{source.id === 'fmi-weather' ? 'Weather' : 'Air quality'}</span><span class="badge {source.state}">{source.state}</span></button>{/each}</div>
@@ -506,16 +518,16 @@
       </section>
       {/if}
     </aside>
-    <aside class="right-stack" class:mobile-active={mobilePanel === 'inspect'} id="identity-inspector" aria-label="Inspector">
+    <aside class="right-stack" class:mobile-active={!!selected && mobilePanel === 'inspect'} id="identity-inspector" aria-label="Inspector">
       <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setMobilePanel(null)}>×</button></div>
       {#if selected}
-      <section class="panel inspector"><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1">{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
+      <section class="panel inspector"><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || selected.station.kind === 'rail' ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
         <div class="panel-content">
           {#if selected?.kind === 'building'}
             <h3>{buildingName(selected.building)}</h3>
             {#if selected.unloaded}<p class="notice">Outside the current map view.</p>{/if}
             <nav class="console-inspector-tabs" aria-label="Building information">
-              {#each ['overview', 'energy', 'details'] as tab (tab)}<button aria-pressed={buildingTab === tab} onclick={() => buildingTab = tab as typeof buildingTab}>{tab === 'overview' ? 'Overview' : tab === 'energy' ? 'Energy' : 'Details'}</button>{/each}
+              {#each ['overview', 'details'] as tab (tab)}<button aria-pressed={buildingTab === tab} onclick={() => buildingTab = tab as typeof buildingTab}>{tab === 'overview' ? 'Overview' : 'Details'}</button>{/each}
             </nav>
             <div hidden={buildingTab !== 'overview'}>
             <dl class="properties">
@@ -528,7 +540,7 @@
                 <div><dt>{name}</dt><dd>{value}</dd></div>
               {/each}
             </dl>
-            <p class="panel-note">Open Energy for available readings and estimates, or Details for register records and permits.</p>
+            {#key selected.building.id}<BuildingEnergy building={selected.building} catalogState={detailEnergy} loadingCatalog={detailQuery.isFetching} buildings={indexedBuildings} onmember={id => { const member = indexedBuildings.find(building => building.id === id); if (member) selectObject({ kind: 'building', building: member }); }} />{/key}
             </div>
             <div hidden={buildingTab !== 'details'}>
               <BuildingRyhti entry={detailRyhti.catalog?.buildings[0]} state={detailRyhti} loading={detailQuery.isFetching} />
@@ -536,9 +548,6 @@
                 {#each [['Building ID', selected.building.id], ['CityGML ID', selected.building.gmlId], ['VTJ-PRT', selected.building.vtjPrt], ['RATU', selected.building.ratu], ['Source', selected.building.sourceId]].filter(([, value]) => knownValue(value)) as [name, value] (name)}<div><dt>{name}</dt><dd>{value}</dd></div>{/each}
               </dl></details>
               <button class="text-button" onclick={openSources}>Data coverage & sources ↗</button>
-            </div>
-            <div hidden={buildingTab !== 'energy'}>
-            {#key selected.building.id}<BuildingEnergy building={selected.building} catalogState={detailEnergy} loadingCatalog={detailQuery.isFetching} buildings={indexedBuildings} onmember={id => { const member = indexedBuildings.find(building => building.id === id); if (member) selectObject({ kind: 'building', building: member }); }} />{/key}
             </div>
           {:else if selected?.kind === 'vehicle'}
             {#if selected.vehicle.mode === 'ship'}
@@ -570,18 +579,12 @@
           {#if selectionMessage}<p class="notice" role="status">{selectionMessage}</p>{/if}
         </div>
       </section>
-      {:else}
-      <section class="panel console-welcome"><div class="panel-heading"><h2>Welcome to Helsinki</h2><span aria-hidden="true">▥</span></div><div class="panel-content">
-        <span class="eyebrow">YOUR CITY, UP CLOSE</span><h3>Every place has a story.</h3><p class="panel-note">Select a building, vehicle or station to see what is happening there.</p>
-        <div class="console-welcome-actions"><button onclick={() => { document.getElementById('city-search')?.focus(); searchOpen = true; }}><ConsoleIcon name="inspect" /><span>Find a place<small>Search buildings, routes & stations</small></span><span aria-hidden="true">→</span></button><button onclick={() => chooseTool('transport')}><ConsoleIcon name="transport" /><span>Explore transport<small>Trams, buses, trains, ferries & ships</small></span><span aria-hidden="true">→</span></button><button onclick={() => chooseTool('environment')}><ConsoleIcon name="environment" /><span>Nearby conditions<small>Weather & air-quality readings</small></span><span aria-hidden="true">→</span></button></div>
-        <p class="panel-note console-welcome-note">Real source records. Missing or out-of-date readings stay clearly marked.</p>
-      </div></section>
       {/if}
     </aside>
-    <nav class="camera-presets" aria-label="Camera presets"><span>GO TO</span>{#each [['city', 'City Centre'], ['harbour', 'Harbour'], ['suomenlinna', 'Suomenlinna'], ['energy', 'Energy'], ['central', 'Central Station'], ['pasila', 'Pasila']] as [id, name] (id)}<button class:active={preset === id} aria-pressed={preset === id} disabled={!scene} onclick={() => choosePreset(id as CameraPreset)}>{name}</button>{/each}</nav>
+    <nav class="camera-presets" aria-label="Camera presets"><span>GO TO</span>{#each [['city', 'City Centre'], ['harbour', 'Harbour'], ['central', 'Central Station']] as [id, name] (id)}<button class:active={preset === id} aria-pressed={preset === id} disabled={!scene} onclick={() => choosePreset(id as CameraPreset)}>{name}</button>{/each}</nav>
     <div class="scene-footer"><span>{hovered || (keyboardNavigation ? 'WASD to pan · drag to orbit · scroll to zoom' : 'Drag to orbit · scroll to zoom')}</span>{#if stats}<span class="performance" aria-label="Scene performance" data-fps={stats.fps} data-draw-calls={stats.drawCalls} data-geometries={stats.geometries} data-triangles={stats.triangles} data-loaded-chunks={stats.loadedChunks} data-placed-vehicles={stats.vehicles} data-unplaced-vehicles={stats.unplacedVehicles} data-receipt-latency-ms={stats.lastReceiptLatencyMs ?? ''}>{stats.fps} FPS · {stats.drawCalls} draws · {stats.loadedChunks} chunks</span>{/if}</div>
     {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
-    <nav class="mobile-panel-nav" aria-label="Mobile city tools">{#each consoleTools.filter(tool => tool.id !== 'help') as tool (tool.id)}<button aria-controls="scene-controls" aria-expanded={mobilePanel === 'controls' && activeTool === tool.id} onclick={() => mobilePanel === 'controls' && activeTool === tool.id ? setMobilePanel(null) : chooseTool(tool.id)}><ConsoleIcon name={tool.id} /><span>{tool.label === 'Environment' ? 'Weather' : tool.label}</span></button>{/each}<button aria-controls="identity-inspector" aria-expanded={mobilePanel === 'inspect'} onclick={() => setMobilePanel(mobilePanel === 'inspect' ? null : 'inspect')}><ConsoleIcon name="inspect" /><span>Inspect{selected ? ' •' : ''}</span></button></nav>
+    <nav class="mobile-panel-nav" aria-label="Mobile city tools">{#each consoleTools as tool (tool.id)}<button aria-controls="scene-controls" aria-expanded={mobilePanel === 'controls' && activeTool === tool.id} onclick={() => mobilePanel === 'controls' && activeTool === tool.id ? setMobilePanel(null) : chooseTool(tool.id)}><ConsoleIcon name={tool.id} /><span>{tool.label === 'Environment' ? 'Weather' : tool.label}</span></button>{/each}<button disabled={!selected} aria-controls="identity-inspector" aria-expanded={mobilePanel === 'inspect'} onclick={() => setMobilePanel(mobilePanel === 'inspect' ? null : 'inspect')}><ConsoleIcon name="inspect" /><span>Inspect{selected ? ' •' : ''}</span></button></nav>
   </main>
 </div>
 {#if sourceOpen}

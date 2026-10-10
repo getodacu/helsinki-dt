@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Selected route fixture · Helsinki Lens</title>
+<link rel="stylesheet" href="/src/app.css">
+<link rel="stylesheet" href="/src/lib/city-console.css">
+<style>
+body { font-family: system-ui; color: #e1ffee; }
+#stage { position: absolute; inset: 0; }
+header { position: absolute; z-index: 3; top: 12px; left: 12px; max-width: 270px; padding: 12px; background: #102732ee; border: 1px solid #49636c; }
+h1 { font-size: 16px; } p { font-size: 12px; margin: 6px 0; }
+button { background: #244657; padding: 7px; margin: 3px; }
+#result { font-size: 11px; white-space: pre-wrap; }
+</style>
+<div id="stage"></div>
+<header><h1>Selected route · test fixture</h1><p>Synthetic journey and stops. Drag to orbit; scroll to zoom.</p>
+<nav><button data-mode="bus">Bus</button><button data-mode="train">Train</button><button data-mode="ferry">Ferry</button></nav>
+<nav><button id="missing">Missing route</button><button id="reduced">Reduced motion</button><button id="moving">Stopped / moving</button><button id="unknown">Unknown direction</button><button id="stale">Stale report</button><button id="hidden">Hide vehicle</button><button id="dispose">Dispose overlays</button></nav>
+<pre id="result">Loading models…</pre></header>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { LiveFleet } from '/src/lib/live-fleet.ts';
+import { RouteHighlight } from '/src/lib/route-highlight.ts';
+import { createCityRenderer } from '/src/lib/scene.ts';
+const stage = document.querySelector('#stage'), result = document.querySelector('#result');
+const renderer = createCityRenderer(); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75)); stage.append(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#253b47');
+scene.add(new THREE.HemisphereLight('#edf9ff', '#697463', 2.2));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000,2000), new THREE.MeshStandardMaterial({ color: '#697c72', side: THREE.DoubleSide }));
+ground.rotation.x = -Math.PI/2; ground.position.y = 12; scene.add(ground);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(2000,2000), new THREE.MeshStandardMaterial({ color: '#234d61', side: THREE.DoubleSide }));
+water.rotation.x = -Math.PI/2; water.position.y = 2; scene.add(water);
+const building = new THREE.Mesh(new THREE.BoxGeometry(22,36,22), new THREE.MeshStandardMaterial({ color: '#84968e' })); building.position.set(0,30,-70); scene.add(building);
+const camera = new THREE.PerspectiveCamera(42,1,1,40000); camera.position.set(260,270,340);
+const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0,12,-70); controls.update();
+const base = { terrain: { width: 2, height: 2, origin: [-1000,-1000], step: [2000,2000], elevations: [12,12,12,12] }, bounds: [-1000,-1000,1000,1000], waterLevel: 2 };
+const fleet = new LiveFleet(() => 12,2); scene.add(fleet.root);
+const highlight = new RouteHighlight(stage,base); scene.add(highlight.root);
+const shape = [[[24.952,60.1687],[24.952,60.1695],[24.952,60.171],[24.953,60.1717]],[[24.9536,60.1717],[24.9543,60.1717]]];
+const names = ['South stop','Vehicle stop','Central stop','Harbour stop','Separated segment'];
+const stops = [...shape[0], shape[1][1]].map(([longitude,latitude],i) => ({ id: `fixture/${i}`, name: names[i], sequence: i+1, longitude, latitude }));
+let mode = 'bus', missing = false, reduced = false, moving = true, unknown = false, stale = false, hidden = false, disposed = false;
+const route = () => ({ status: missing ? 'missing' : 'exact', vehicleId: 'fixture/vehicle', routeId: 'fixture/route', sourceId: mode === 'train' ? 'digitraffic-gtfs' : 'hsl-gtfs', shape, stops });
+function setRoute() { if (!disposed) highlight.setRoute(route(),mode); }
+for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => { mode = button.dataset.mode; fleet.motion.tracks.clear(); setRoute(); };
+for (const [id,toggle] of Object.entries({ missing: () => { missing=!missing;setRoute(); }, reduced: () => reduced=!reduced,
+  moving: () => moving=!moving, unknown: () => { unknown=!unknown;fleet.motion.tracks.clear(); }, stale: () => { stale=!stale;fleet.motion.tracks.clear(); }, hidden: () => hidden=!hidden,
+  dispose: () => { if (!disposed) { highlight.root.removeFromParent(); highlight.dispose(); disposed=true; } } })) document.querySelector(`#${id}`).onclick = toggle;
+await fleet.loadModels({ bus: '/models/bus.glb', train: '/models/train.glb', ferry: '/models/ferry.glb', tram: '/models/tram.glb' }, error => { throw new Error(error); });
+setRoute();
+function resize() { renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix(); }
+addEventListener('resize',resize);resize();
+function render(now) {
+  const time=Date.now(); const record = { id:'fixture/vehicle', mode, routeId:'fixture/route', vehicleId:'1', reportedAt:new Date(time-(stale?31000:0)).toISOString(),
+    longitude:24.952,latitude:60.1695,headingDegrees:unknown?null:0,speedMetresPerSecond:moving?4:0,quality:[],sourceId:'test-fixture' };
+  fleet.setVehicles([record]);fleet.update(time,{ bus:!hidden,train:!hidden,ferry:!hidden,tram:false,ship:false },false);
+  ground.visible=mode!=='ferry';water.visible=mode==='ferry';building.visible=mode!=='ferry';
+  controls.update();camera.updateMatrixWorld();
+  if (!disposed) { highlight.setVisible(!missing&&!hidden);highlight.update(fleet.placements.get(record.id)??null,camera,innerWidth,innerHeight,now,reduced); }
+  renderer.render(scene,camera);
+  result.textContent=`${mode} · ${missing?'missing':'exact'} route\n${reduced?'Reduced motion':'Animation enabled'} · ${moving?'Moving':'Stopped'}\n${unknown?'Unknown direction':stale?'Stale report':hidden?'Vehicle hidden':'Fresh direction'}\n${disposed?'Overlays disposed':`${stage.querySelectorAll('.route-stop-marker').length} stop markers`}\n${renderer.info.render.calls} draw calls · ${renderer.info.memory.geometries} geometries`;
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</html>

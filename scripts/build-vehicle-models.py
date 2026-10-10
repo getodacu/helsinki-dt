@@ -113,12 +113,12 @@ def coach_end(name, centre, length, width, bottom, top, colour, end, rake, bevel
     return mesh(name, vertices, faces, colour, bevel=bevel)
 
 
-def side_windows(length, centre=0, width=2.5, bottom=1.55, top=2.8, spacing=1.18):
+def side_windows(length, centre=0, width=2.5, bottom=1.55, top=2.8, spacing=1.18, bevel=.025):
     count = int(length / spacing)
     for side in (-1, 1):
         for i in range(count):
             y = centre - (count - 1) * spacing / 2 + i * spacing
-            box("Tinted side window", (side * (width / 2 + .012), y, (bottom + top) / 2), (.024, spacing - .1, top - bottom), "glass", .025, "glass")
+            box("Tinted side window", (side * (width / 2 + .012), y, (bottom + top) / 2), (.024, spacing - .1, top - bottom), "glass", bevel, "glass")
 
 
 def wheel(y, radius=.47, width=2.5, z=None):
@@ -274,6 +274,164 @@ def train():
     rod("Pantograph strip", (-.9, 9.1, 4.3), (.9, 9.1, 4.3), .04)
 
 
+def ship_hull(length, width, deck, draft, colour="hull"):
+    # A broad stern and fine bow stay recognizable from a harbor camera.
+    outline = [(-.36, -.5), (.36, -.5), (.5, -.38), (.5, .2), (.37, .38),
+               (0, .5), (-.37, .38), (-.5, .2), (-.5, -.38)]
+    rings = [[(x * width * scale, y * length, z) for x, y in outline]
+             for z, scale in [(-draft, .65), (0, 1), (deck, .98)]]
+    n = len(outline)
+    faces = [tuple(reversed(range(n))), tuple(range(2 * n, 3 * n))]
+    for ring in range(2):
+        for i in range(n):
+            faces.append((ring * n + i, ring * n + (i + 1) % n,
+                          (ring + 1) * n + (i + 1) % n, (ring + 1) * n + i))
+    mesh("Displacement hull", sum(rings, []), faces, colour)
+    box("Working deck", (0, -length * .04, deck + .06), (width * .87, length * .67, .12), "deck", .025)
+
+
+def ship_cabin(name, centre, length, width, bottom, height, colour="white"):
+    box(name, (0, centre, bottom + height / 2), (width, length, height), colour, .08)
+    box("Cabin roof", (0, centre, bottom + height + .1), (width + .3, length + .3, .2), colour, .06)
+    side_windows(length - .5, centre, width + .03, bottom + height * .42,
+                 bottom + height * .84, max(1.1, length / 15), bevel=0)
+    box("Bridge windshield", (0, centre + length / 2 + .012, bottom + height * .64),
+        (width * .84, .025, height * .42), "glass", .025, "glass")
+
+
+def ship_mast(y, bottom, height):
+    rod("Radio mast", (0, y, bottom), (0, y, bottom + height), .055)
+    rod("Radar scanner", (-.8, y, bottom + height * .8), (.8, y, bottom + height * .8), .07)
+    rod("Antenna", (.35, y, bottom + height * .7), (.35, y, bottom + height + .4), .018)
+
+
+def ship_rails(length, width, deck):
+    for side in (-1, 1):
+        x = side * width * .44
+        for i in range(9):
+            y = -length * .34 + i * length * .075
+            rod("Rail stanchion", (x, y, deck), (x, y, deck + 1), .025)
+        for z in (.5, 1):
+            rod("Guardrail", (x, -length * .34, deck + z), (x, length * .26, deck + z), .025)
+        for y in (-length * .32, length * .26):
+            cylinder("Mooring bollard", (side * width * .36, y, deck + .22), .14, .44, "metal", kind="metal")
+
+
+def passenger_ship():
+    ship_hull(160, 27, 5, 5)
+    for level, length in enumerate((112, 106, 98, 82)):
+        ship_cabin("Passenger accommodation", -3, length, 24 - level * 1.3, 5.2 + level * 3, 2.8)
+    ship_cabin("Forward navigation bridge", 35, 12, 23, 17.3, 3)
+    for y in (-17, -29):
+        box("Blue funnel", (0, y, 20), (6, 6, 7), "blue", .3)
+        box("Funnel exhaust cap", (0, y, 23.6), (6.2, 6.2, .3), "dark", .08)
+    for side in (-1, 1):
+        for y in (-30, -15, 0, 15):
+            box("Orange lifeboat", (side * 12.5, y, 11.5), (2, 6.5, 1.5), "red", .3)
+    ship_rails(160, 27, 5.2)
+    ship_mast(35, 20.5, 5)
+
+
+def cargo_ship():
+    ship_hull(140, 23, 4, 5)
+    ship_cabin("Aft accommodation", -48, 16, 18, 4.2, 9)
+    ship_cabin("Raised bridge", -46, 11, 20, 13.4, 3)
+    for row in range(7):
+        for column in range(4):
+            for level in range(3 if row < 5 else 2):
+                x, y, z = (column - 1.5) * 4.6, -25 + row * 11.6, 5.6 + level * 2.8
+                colour = ("red", "blue", "green", "cream")[(row + column + level) % 4]
+                box("Freight container", (x, y, z), (4.35, 11.1, 2.6), colour, .035)
+                for side in (-1, 1):
+                    box("Container corner rail", (x + side * 2.1, y, z + 1.32), (.1, 11.1, .06), "metal", 0, "metal")
+    cylinder("Cargo funnel", (0, -52, 17), 1.4, 4, "blue")
+    ship_mast(-46, 16.6, 5)
+    ship_rails(140, 23, 4.2)
+
+
+def tanker_ship():
+    ship_hull(160, 27, 4, 6, "red")
+    ship_cabin("Aft accommodation", -57, 17, 21, 4.2, 10)
+    ship_cabin("Tanker bridge", -55, 12, 24, 14.4, 3)
+    for y in range(-34, 55, 14):
+        for side in (-1, 1):
+            cylinder("Tank access hatch", (side * 6, y, 4.6), 2.1, .55, "metal", kind="metal")
+            rod("Tank branch pipe", (0, y, 5.3), (side * 6, y, 5.3), .22)
+        cylinder("Valve wheel", (0, y, 5.8), .45, .12, "red")
+    for x in (-1.1, 0, 1.1):
+        rod("Deck cargo pipe", (x, -40, 5.1), (x, 57, 5.1), .23)
+    box("Raised service walkway", (0, 9, 6.1), (2.5, 95, .25), "metal", .02, "metal")
+    cylinder("Tanker funnel", (0, -61, 18.6), 1.7, 4, "dark")
+    ship_mast(-55, 17.6, 5)
+    ship_rails(160, 27, 4.2)
+
+
+def tug_ship():
+    ship_hull(28, 9.5, 1.6, 2.4)
+    ship_cabin("Tug wheelhouse", 3, 8, 6.3, 1.8, 3.5, "cream")
+    ship_cabin("Raised tug bridge", 3.8, 5.2, 5.8, 5.5, 2)
+    for side in (-1, 1):
+        box("Heavy rubber fender", (side * 4.65, -1, .8), (.45, 18, .8), "tyre", .12)
+        for y in (-7, -3, 1, 5):
+            cylinder("Circular side fender", (side * 4.92, y, 1.2), .6, .3, "tyre", "X")
+        cylinder("Tug exhaust", (side * 2.4, -1.5, 5.7), .35, 3, "dark")
+    cylinder("Towing winch", (0, -7, 2.7), .9, 3.2, "metal", "X", "metal")
+    rod("Towing hook support", (0, -6.2, 1.8), (0, -6.2, 3.5), .25)
+    ship_mast(3.8, 7.8, 3.2)
+    ship_rails(28, 9.5, 1.8)
+
+
+def fishing_ship():
+    ship_hull(24, 6.8, 1.8, 2, "green")
+    ship_cabin("Forward trawler cabin", 4, 7, 4.8, 2, 3)
+    ship_mast(4, 5.3, 4)
+    for side in (-1, 1):
+        rod("Stern gantry upright", (side * 2.3, -7, 2), (side * 2.3, -7, 7.5), .13)
+        rod("Trawl outrigger", (side * 1.8, 2, 6), (side * 4.5, -3, 5), .08)
+        rod("Outrigger cable", (0, 4, 8), (side * 4.5, -3, 5), .02)
+    rod("Gantry crossbeam", (-2.3, -7, 7.5), (2.3, -7, 7.5), .16)
+    cylinder("Net drum", (0, -5.7, 3), 1, 3, "metal", "X", "metal")
+    for y in (-3, -1):
+        box("Fish crates", (0, y, 2.4), (2.5, 1.5, .8), "blue", .04)
+    ship_rails(24, 6.8, 2)
+
+
+def sailing_ship():
+    ship_hull(12, 3.5, .65, 1.4, "white")
+    ship_cabin("Sailboat cabin", 1, 3.2, 2.4, .8, .9)
+    box("Open cockpit", (0, -3, .88), (2.4, 2.4, .25), "dark", .08)
+    rod("Sailing mast", (0, 1, .8), (0, 1, 16), .065)
+    rod("Boom", (0, 1, 2.3), (0, -4.5, 2.3), .045)
+    mesh("Mainsail", [(0, .9, 15.4), (0, .9, 2.5), (0, -4.5, 2.5),
+                      (.04, .9, 15.4), (.04, .9, 2.5), (.04, -4.5, 2.5)],
+         [(0, 1, 2), (5, 4, 3), (0, 3, 4, 1), (1, 4, 5, 2), (2, 5, 3, 0)], "cream")
+    mesh("Headsail", [(0, 1.1, 14.7), (0, 5.3, 1), (0, 1.1, 2.5),
+                      (.04, 1.1, 14.7), (.04, 5.3, 1), (.04, 1.1, 2.5)],
+         [(0, 1, 2), (5, 4, 3), (0, 3, 4, 1), (1, 4, 5, 2), (2, 5, 3, 0)], "white")
+    for side in (-1, 1):
+        rod("Standing rigging", (0, 1, 14), (side * 1.5, 1, .9), .013)
+    ship_rails(12, 3.5, .8)
+
+
+def pleasure_ship():
+    ship_hull(15, 4.5, .8, 1, "white")
+    ship_cabin("Yacht salon", 1, 6.5, 3.7, 1, 2.1)
+    ship_cabin("Flybridge", 1.3, 3.2, 3, 3.3, 1.3)
+    box("Cockpit seating", (0, -4.1, 1.25), (3.5, 1.6, .6), "cream", .15)
+    box("Swim platform", (0, -7, .3), (3.5, .9, .2), "deck", .05)
+    ship_mast(.5, 4.8, 1.7)
+    ship_rails(15, 4.5, 1)
+
+
+def generic_ship():
+    ship_hull(40, 9, 2, 2.8)
+    ship_cabin("Utility accommodation", -5, 13, 6.8, 2.2, 3.3)
+    ship_cabin("Raised wheelhouse", -2, 5, 6, 5.7, 2)
+    cylinder("Utility funnel", (0, -9, 5.8), .5, 2.3, "blue")
+    ship_mast(-2, 8, 3)
+    ship_rails(40, 9, 2.2)
+
+
 def batch_materials():
     # Vertex colours keep livery details while needing only three GPU material batches.
     for kind in ("body", "glass", "metal"):
@@ -308,9 +466,16 @@ def batch_materials():
 
 
 selected_modes = set(sys.argv[sys.argv.index("--") + 1:]) if "--" in sys.argv else set()
+ships = selected_modes == {"ships"}
+if "ships" in selected_modes and not ships:
+    raise ValueError("Generate ships separately with -- ships")
+builders = [("ship-passenger", passenger_ship), ("ship-cargo", cargo_ship), ("ship-tanker", tanker_ship),
+            ("ship-tug", tug_ship), ("ship-fishing", fishing_ship), ("ship-sailing", sailing_ship),
+            ("ship-pleasure", pleasure_ship), ("ship-generic", generic_ship)] if ships else [
+            ("bus", bus), ("tram", tram), ("ferry", ferry), ("train", train)]
 inventory = {}
-for mode, build in [("bus", bus), ("tram", tram), ("ferry", ferry), ("train", train)]:
-    if selected_modes and mode not in selected_modes:
+for mode, build in builders:
+    if selected_modes and not ships and mode not in selected_modes:
         continue
     collection = bpy.data.collections.new(mode)
     bpy.context.scene.collection.children.link(collection)
@@ -327,16 +492,16 @@ for mode, build in [("bus", bus), ("tram", tram), ("ferry", ferry), ("train", tr
     high = [max(p[i] for p in points) for i in range(3)]
     triangles = sum(sum(len(p.vertices) - 2 for p in obj.data.polygons) for obj in collection.objects)
     assert len(collection.objects) <= 3, "Too many material batches"
-    assert triangles < 18000, "Model exceeds triangle budget"
+    assert triangles < 18000, f"{mode} exceeds triangle budget: {triangles}"
     assert path.stat().st_size < 2 * 1024 ** 2, "Model exceeds byte budget"
-    assert abs(low[2]) < .01 if mode != "ferry" else low[2] < 0 < high[2], "Invalid contact/water datum"
+    assert abs(low[2]) < .01 if mode != "ferry" and not ships else low[2] < 0 < high[2], "Invalid contact/water datum"
     inventory[mode] = {"length": round(high[1] - low[1], 3), "width": round(high[0] - low[0], 3),
                        "heightAboveDatum": round(high[2], 3), "triangles": triangles, "bytes": path.stat().st_size}
 
 # Keep the source immediately editable, with one mode visible at a time.
 for c in bpy.context.scene.collection.children:
-    c.hide_viewport = c.name != (next(iter(selected_modes)) if selected_modes else "bus")
-    c.hide_render = c.name != (next(iter(selected_modes)) if selected_modes else "bus")
+    c.hide_viewport = c.name != ("ship-passenger" if ships else next(iter(selected_modes)) if selected_modes else "bus")
+    c.hide_render = c.name != ("ship-passenger" if ships else next(iter(selected_modes)) if selected_modes else "bus")
 bpy.context.preferences.filepaths.save_version = 0
-bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / ("helsinki-train.blend" if selected_modes == {"train"} else "helsinki-transit.blend")))
+bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / ("helsinki-ships.blend" if ships else "helsinki-train.blend" if selected_modes == {"train"} else "helsinki-transit.blend")))
 print(json.dumps(inventory, indent=2))
