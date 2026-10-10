@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { energyThemeOptions, buildingEnergyTheme, compatibleEnergyHistory, monthlyEnergyUsage, energyChartSegments, modeledDemandSegments, latestCompletedModeledDemand, propertyIsShared, formatEnergyDate, formatEnergyRecord, humanizeEnergyUsage, energyForCity } from '../src/lib/energy-display.ts';
+import { energyThemeOptions, closestHeatDemandTheme, buildingEnergyTheme, compatibleEnergyHistory, monthlyEnergyUsage, energyChartSegments, modeledDemandSegments, latestCompletedModeledDemand, propertyIsShared, formatEnergyDate, formatEnergyRecord, humanizeEnergyUsage, energyForCity } from '../src/lib/energy-display.ts';
 import type { EnergyCatalog, EnergyCatalogState } from '../src/lib/energy-types.ts';
 import type { DatasetSource, EnergyRecord, SolarRecord } from '../src/lib/types.ts';
 const energy = (overrides: Partial<EnergyRecord> = {}): EnergyRecord => ({ id: 'model-A', scope: 'building', scopeId: 'A', matchedBuildingIds: ['A'], unmatchedSourceIds: [],
@@ -244,4 +244,28 @@ test('modeled demand defaults to the latest available completed year without sel
     projection(2025, 1, { period: { start: '2025-01-01', end: '2025-02-01' } })]) {
     assert.equal(latestCompletedModeledDemand([record], 2026), null);
   }
+});
+
+
+test('heat-demand shortcut selects the closest supplied annual year and keeps its scenario', () => {
+  const choices = energyThemeOptions(catalog([2020, 2025, 2030].map(year => energy({
+    id: String(year), metric: 'heat_dhw_demand', period: { start: `${year}-01-01`, end: `${year + 1}-01-01` },
+    scenario: year === 2020 ? '2020 baseline (SQ)' : 'Climate change (CC)'
+  }))));
+  assert.equal(closestHeatDemandTheme(choices, 2026)?.period, '2025-01-01 – 2026-01-01');
+  assert.equal(closestHeatDemandTheme(choices, 2026)?.scenario, 'Climate change (CC)');
+  assert.equal(closestHeatDemandTheme(choices, 2022.5)?.period, '2020-01-01 – 2021-01-01');
+  assert.equal(closestHeatDemandTheme([...choices].reverse(), 2022.5)?.period, '2020-01-01 – 2021-01-01');
+  assert.equal(closestHeatDemandTheme(choices, 2035)?.period, '2030-01-01 – 2031-01-01');
+});
+
+test('heat-demand shortcut rejects missing, malformed and unrelated themes', () => {
+  const choice = energyThemeOptions(catalog([energy({ metric: 'heat_dhw_demand' })]))[0];
+  assert.equal(closestHeatDemandTheme([], 2026), null);
+  assert.equal(closestHeatDemandTheme([choice], NaN), null);
+  for (const period of ['invalid', '2025-13-01 – 2026-01-01', '2025-01-01 – 2027-01-01', '2025-02-01 – 2026-02-01']) {
+    assert.equal(closestHeatDemandTheme([{ ...choice, period }], 2026), null);
+  }
+  assert.equal(closestHeatDemandTheme([{ ...choice, kind: 'solar' }], 2026), null);
+  assert.equal(closestHeatDemandTheme([{ ...choice, metric: 'electricity_consumption' }], 2026), null);
 });
