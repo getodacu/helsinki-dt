@@ -7,6 +7,7 @@ import { LiveFleet, MODE_COLOURS, type VehiclePlacement } from '../src/lib/live-
 import type { CityBase } from '../src/lib/city-assets.ts';
 import type { RouteContext } from '../src/lib/route-context.ts';
 import type { Vehicle } from '../src/lib/types.ts';
+import { buildItinerary } from '../src/lib/itinerary.ts';
 
 const base: CityBase = { terrain: { width: 2, height: 2, origin: [-100,-100], step: [200,200], elevations: [12,12,12,12] },
   shorelines: [], roads: [], rails: [], waterLevel: 2, bounds: [-100,-100,100,100] };
@@ -109,6 +110,33 @@ test('route replacement clears markers; hiding and disposal remove overlays and 
     highlight.setRoute({ ...route, status: 'missing' }, 'bus'); assert.equal(disposed,1); assert.equal(markers.children.length,0);
     highlight.setRoute({ ...route, vehicleId: 'fixture/ferry' }, 'ferry'); assert.equal(markers.children.length,1);
     highlight.dispose(); assert.equal(container.children.length,0); assert.equal(highlight.root.children.length,0);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'document', previous); else Reflect.deleteProperty(globalThis, 'document');
+  }
+});
+
+
+test('itinerary map colors and labels follow the shared stop state without rebuilding markers or route lines', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => new ElementFixture() } });
+  try {
+    const container = new ElementFixture(), highlight = new RouteHighlight(container as unknown as HTMLElement, base);
+    highlight.setRoute(route, 'bus'); highlight.setVisible(true);
+    const source = vehicle({ nextStopId: route.stops[0].id, delaySeconds: 0 });
+    const context = { ...route, stops: [{ ...route.stops[0], arrivalAt: new Date(at + 120_000).toISOString() }] };
+    const itinerary = buildItinerary(source, context, null, [], at);
+    highlight.setItinerary(itinerary);
+    const marker = container.children[0].children[0], geometry = (highlight.root.children[0].children[0] as LineSegments2).geometry;
+    assert.equal(marker.className, 'route-stop-marker next');
+    assert.match(marker.attributes.get('aria-label')!, /Next · 2 min · Estimated/);
+    highlight.setItinerary(buildItinerary({ ...source, reportedAt: new Date(at + 60_000).toISOString() }, context, null, [], at + 60_000));
+    assert.equal(container.children[0].children[0], marker);
+    assert.match(marker.title, /1 min/); assert.equal((highlight.root.children[0].children[0] as LineSegments2).geometry, geometry);
+    highlight.setRoute({ ...context }, 'bus'); assert.equal(container.children[0].children[0], marker);
+    highlight.setItinerary(buildItinerary({ ...source, nextStopId: 'EOL' }, context, null, [], at));
+    assert.equal(marker.className, 'route-stop-marker visited'); assert.match(marker.title, /Visited/);
+    highlight.setItinerary(null); assert.equal(container.children[0].children.length, 0);
+    highlight.dispose();
   } finally {
     if (previous) Object.defineProperty(globalThis, 'document', previous); else Reflect.deleteProperty(globalThis, 'document');
   }

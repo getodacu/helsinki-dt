@@ -1,20 +1,27 @@
 <script lang="ts">
   import '#lib/city-console.css';
   import ConsoleIcon from '#lib/components/ConsoleIcon.svelte';
+  import VehicleModelPreview from '#lib/components/VehicleModelPreview.svelte';
   import MarineVesselDetails from '#lib/components/MarineVesselDetails.svelte';
   import RailTrainDetails from '#lib/components/RailTrainDetails.svelte';
+  import VehicleItinerary from '#lib/components/VehicleItinerary.svelte';
+  import { buildItinerary } from '#lib/itinerary.ts';
   import RailStationBoard from '#lib/components/RailStationBoard.svelte';
   import { RAIL_CATEGORIES, vehicleLabel, railJourneyUrl, type RailStation, type RailJourney, type RailResult } from '#lib/rail.ts';
   import { vehicleVisible } from '#lib/live-fleet.ts';
+  import { stationVisible } from '#lib/station-flags.ts';
   import { onMount, tick } from 'svelte';
   import { browser } from '$app/env';
   import { createQuery, createQueries } from '@tanstack/svelte-query';
   import { fetchEntity } from '#lib/entity-query.ts';
   import type { EntityCatalog, EntityDetail, EntitySearch, EntityThemeValues } from '#lib/entity-types.ts';
   import CityScene from '#lib/components/CityScene.svelte';
-  import NearbyConditions from '#lib/components/NearbyConditions.svelte';
   import BuildingRyhti from '#lib/components/BuildingRyhti.svelte';
   import BuildingPhoto from '#lib/components/BuildingPhoto.svelte';
+  import WebcamModal from '#lib/components/WebcamModal.svelte';
+  import PortCameraModal from '#lib/components/PortCameraModal.svelte';
+  import type { PortHarbour } from '#lib/port-cameras.ts';
+  import type { Webcam } from '#lib/webcams.ts';
   import { RYHTI_THEMES, RYHTI_DIM_COLOUR } from '#lib/ryhti-display.ts';
   import type { RyhtiCatalogState } from '#lib/ryhti-types.ts';
   import BuildingEnergy from '#lib/components/BuildingEnergy.svelte';
@@ -28,7 +35,7 @@
   import { trafficAge, trafficIsStale, trafficShouldRemove, type TrafficSnapshot, type TrafficEvent } from '#lib/traffic.ts';
   import { groupObservationStations, observationHistory, OBSERVATION_PARAMETERS, type ObservationSnapshot } from '#lib/observations.ts';
   import { loadRouteCatalog, routeRequestUrl, type RouteCatalog, type RouteContext } from '#lib/route-context.ts';
-  import { buildingName, buildingAddress, buildingAttribute, knownValue, matchesVehicle, searchText, delayLabel, signedSeconds, formatDate, label, vehicleSourceLabel, marineSourceLabel } from '#lib/inspection.ts';
+  import { buildingName, buildingAddress, buildingAttribute, knownValue, matchesVehicle, searchText, hslSchedule, signedSeconds, formatDate, label, vehicleSourceLabel, marineSourceLabel } from '#lib/inspection.ts';
   import type { Building, TransitMode, Vehicle } from '#lib/types.ts';
   const appearanceLayers = [
     { key: 'imagery', label: 'Aerial imagery' }, { key: 'buildings', label: '3D buildings' },
@@ -36,15 +43,17 @@
   ] as const;
   let transportOpen = $state(false);
   let helpOpen = $state(false);
-  let buildingsOpen = $state(false);
+  let layersOpen = $state(false);
   let controlsHeight = $state(0);
-  let statisticsHeight = $state(0);
   let buildingTab = $state<'overview' | 'details'>('overview');
   let themeKey = $state('');
   let city = $state.raw<{ manifest: CityManifest; base: CityBase; cache: CityAssetCache } | null>(null);
   let selectedRyhtiCategories = $state<string[]>([]);
+  let legendExpanded = $state(false);
   const changeTheme = (key: string) => {
     themeKey = key;
+    legendExpanded = false;
+    layersOpen = false;
     selectedRyhtiCategories = catalog?.themes.find(theme => theme.key === key)?.categories.map(category => category.key) ?? [];
   };
   let scene = $state.raw<CitySceneController | null>(null);
@@ -52,6 +61,8 @@
   let keyboardNavigation = $state(true);
   let buildings = $state.raw<Building[]>([]);
   let selected = $state.raw<Selection | null>(null);
+  let activeWebcam = $state.raw<Webcam | null>(null);
+  let activePortHarbour = $state.raw<PortHarbour | null>(null);
   let selectionMessage = $state('');
   let hovered = $state('');
   let sceneError = $state('');
@@ -70,8 +81,6 @@
   let observationSnapshot = $state.raw<ObservationSnapshot | null>(null);
   let observationLoading = $state(true);
   let observationError = $state('');
-  let enabledParameters = $state<string[]>(OBSERVATION_PARAMETERS.filter(parameter => parameter.id !== 't2m').map(parameter => parameter.id));
-  let stationParameter = $state('t2m');
   let route = $state.raw<RouteContext | null>(null);
   let routeLoading = $state(false);
   let routeError = $state('');
@@ -121,6 +130,8 @@
   let activeTheme = $derived(themeOptions.find(option => option.key === themeKey) ?? null);
   let activeRyhtiTheme = $derived(ryhti.catalog ? RYHTI_THEMES.find(option => option.key === themeKey) ?? null : null);
   let activeThemeSummary = $derived(catalog?.themes.find(theme => theme.key === themeKey));
+  let legendVisible = $derived(layers.buildings && (!!activeTheme || !!activeRyhtiTheme));
+  let legendLabel = $derived(buildingLayers.find(layer => layer.key === themeKey)?.label ?? '');
   let debouncedQuery = $state('');
   $effect(() => {
     const value = query.trim();
@@ -182,7 +193,6 @@
   const modes: TransitMode[] = ['tram', 'bus', 'ferry', 'train', 'ship'];
   const modeNames: Record<TransitMode, string> = { tram: 'Trams', bus: 'Buses', ferry: 'HSL Ferries', train: 'Trains', ship: 'Ships' };
   const age = (vehicle: { reportedAt: string }) => `${Math.max(0, Math.floor(trafficAge(vehicle, now) / 1000))} s ago`;
-  let releaseBuildingCount = $derived(catalog?.buildingCount ?? null);
   let routes = $derived(routeCatalog?.routes ?? []);
   const routeName = (id: string | null) => traffic.vehicles.find(vehicle => vehicle.routeId === id && vehicle.rail)?.rail?.label ?? routes.find(item => item.routeId === id)?.label ?? id ?? '';
   let availableVehicles = $derived(traffic.vehicles.filter(vehicle => !trafficShouldRemove(vehicle, now)));
@@ -195,7 +205,7 @@
   let stations = $derived<SceneStation[]>([...observationStations.map(station => ({ id: station.id, name: station.name,
     longitude: station.longitude, latitude: station.latitude, kind: (station.sourceId === 'fmi-air-quality' ? 'air-quality' : 'weather') as SceneStation['kind'], sourceIds: [station.sourceId] })),
     ...(railStations?.data ?? []).map(station => ({ id: `rail:${station.code}`, name: station.name, longitude: station.longitude, latitude: station.latitude, kind: 'rail' as const, sourceIds: ['digitraffic'] }))]);
-  let matchingStations = $derived(stations.filter(station => (station.kind !== 'rail' || layers.railStations)
+  let matchingStations = $derived(stations.filter(station => stationVisible(station, layers)
     && (!query || searchText(`${station.id} ${station.name} ${station.id === 'rail:HKI' ? 'Helsinki Central' : ''}`).includes(searchText(query)))));
   let staleCount = $derived(visibleVehicles.filter(vehicle => trafficIsStale(vehicle, now)).length);
   let hslLive = $derived(browserConnected && traffic.status.state === 'live');
@@ -219,14 +229,9 @@
   let railUnknown = $derived(freshRail.filter(vehicle => currentRailDelay(vehicle) === null).length);
   let selectedStation = $derived.by(() => { const selection = selected; return selection?.kind === 'station' ? observationStations.find(station => station.id === selection.station.id) : null; });
   let selectedStationParameters = $derived(OBSERVATION_PARAMETERS.filter(parameter => selectedStation?.parameters.includes(parameter.id)));
-  let displayedStationParameter = $derived(selectedStationParameters.some(parameter => parameter.id === stationParameter) ? stationParameter : selectedStationParameters[0]?.id ?? stationParameter);
-  let stationHistory = $derived(selected?.kind === 'station' && observationSnapshot ? observationHistory(observationSnapshot.observations, selected.station.id, displayedStationParameter) : []);
-  let stationLatest = $derived(stationHistory.at(-1));
-  let contextPosition = $derived(selected?.kind === 'vehicle' ? { longitude: selected.vehicle.longitude, latitude: selected.vehicle.latitude }
-    : selected?.kind === 'building' ? selected.building : selected?.kind === 'station' ? selected.station : { longitude: 24.952, latitude: 60.1695 });
-  let contextScope = $derived(selected?.kind === 'vehicle' ? 'Near the last reported vehicle position' : selected?.kind === 'building' ? 'Near this building' : selected?.kind === 'station' ? 'Near this station' : 'Near the city-centre view origin');
+  let itinerary = $derived(selected?.kind === 'vehicle' && ['train', 'tram', 'bus'].includes(selected.vehicle.mode)
+    ? buildItinerary(selected.vehicle, route, railJourney, railStations?.data ?? [], now, selected.removed || !browserConnected) : null);
   let journeyUrl = $derived(selected?.kind === 'vehicle' ? selected.vehicle.mode === 'ship' ? null : selected.vehicle.rail ? railJourneyUrl(selected.vehicle.rail) : routeRequestUrl(selected.vehicle) : null);
-  let selectedStationSources = $derived.by(() => { const selection = selected; return selection?.kind === 'station' ? observationSnapshot?.sources.filter(source => selection.station.sourceIds.includes(source.id)) ?? [] : []; });
   const identity = (value: Selection | null) => !value ? null : value.kind === 'vehicle' ? `v:${value.vehicle.id}` : value.kind === 'building' ? `b:${value.building.id}` : `s:${value.station.id}`;
   const focusInspector = () => void tick().then(() => {
     document.getElementById('identity-inspector')?.scrollTo({ top: 0 });
@@ -237,7 +242,7 @@
     if (changed || (selection?.kind === 'vehicle' && selection.removed)) following = false;
     if (changed) {
       buildingTab = 'overview';
-      if (selection) { mobilePanel = 'inspect'; buildingsOpen = false; searchOpen = false; focusInspector(); }
+      if (selection) { mobilePanel = 'inspect'; layersOpen = false; searchOpen = false; focusInspector(); }
       else { if (mobilePanel === 'inspect') mobilePanel = null; closeSearch(); }
     }
     if (selection?.kind === 'vehicle' && selection.vehicle.mode === 'ship') { route = null; railJourney = null; routeError = ''; }
@@ -256,18 +261,12 @@
       else document.querySelector<HTMLButtonElement>('.mobile-panel-nav [aria-controls="identity-inspector"]')?.focus();
     });
   };
-  const toggleBuildings = () => {
-    buildingsOpen = !buildingsOpen;
-    if (buildingsOpen) mobilePanel = null;
-    void tick().then(() => document.getElementById(buildingsOpen ? 'buildings-heading' : 'buildings-trigger')?.focus({ preventScroll: true }));
-  };
   function showDialog(dialog: HTMLDialogElement) {
     const trigger = document.activeElement as HTMLElement | null;
     dialog.showModal();
     return { destroy() { dialog.close(); if (trigger?.isConnected) trigger.focus({ preventScroll: true }); } };
   }
   const choosePreset = (value: CameraPreset) => { preset = value; following = false; scene?.preset(value); };
-  const selectStation = (id: string) => { const station = stations.find(station => station.id === id); if (station) selectObject({ kind: 'station', station }); };
   const chooseRoute = (id: string) => {
     searchOpen = false;
     routeFilter = id;
@@ -383,7 +382,7 @@
 </script>
 
 <svelte:head><title>Helsinki Lens · Digital Twin</title><meta name="description" content="Inspect central Helsinki buildings, live HSL, rail and AIS ship reports and dated environmental station observations." /></svelte:head>
-<svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !document.querySelector('dialog[open]') && !document.getElementById('live-feed-status')?.matches(':popover-open')) { if (searchOpen) { event.preventDefault(); closeSearch(); } else if (buildingsOpen) { event.preventDefault(); toggleBuildings(); } else { clearSelection(); if (mobilePanel) setMobilePanel(null); } } }} onpointerdown={event => { if (searchOpen && event.target instanceof Element && !event.target.closest('.navbar-search')) searchOpen = false; }} />
+<svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !document.querySelector('dialog[open]') && !document.getElementById('live-feed-status')?.matches(':popover-open')) { if (searchOpen) { event.preventDefault(); closeSearch(); } else { clearSelection(); if (mobilePanel) setMobilePanel(null); } } }} onpointerdown={event => { if (searchOpen && event.target instanceof Element && !event.target.closest('.navbar-search')) searchOpen = false; }} />
 <a class="skip-link" href="#city-search">Skip to city search</a>
 <div class="app-shell city-console">
   <header class="masthead">
@@ -411,9 +410,9 @@
     <button class="console-help" aria-label="Help using the city" onclick={() => helpOpen = true}>?</button>
     <button class="source-button" onclick={() => sourceOpen = !sourceOpen} aria-expanded={sourceOpen} aria-controls="sources">Data & sources ↗</button>
   </header>
-  <main class="city-workspace" class:buildings-open={buildingsOpen} class:inspecting={!!selected && mobilePanel === 'inspect'} style:--controls-height={`${controlsHeight}px`} style:--statistics-height={`${statisticsHeight}px`} data-scene-ready={!mapCovered} aria-busy={mapCovered}>
+  <main class="city-workspace" style:--controls-height={`${controlsHeight}px`} data-scene-ready={!mapCovered} aria-busy={mapCovered}>
     {#if city}
-      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} marinePaused={!browserConnected} {keyboardNavigation} {stations} {route} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection}
+      <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} marinePaused={!browserConnected} {keyboardNavigation} {stations} {route} {itinerary} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection} onwebcamselect={camera => activeWebcam = camera} onportcameraselect={harbour => activePortHarbour = harbour}
         onbuildings={(value) => buildings = value} onstats={(value) => stats = value} onhover={(value) => hovered = value}
         onerror={(value) => sceneError = value} oninteraction={() => following = false} onready={() => { ready = true; if (selected) scene?.select(selected); }}
         oncontroller={(value) => scene = value} />
@@ -446,68 +445,15 @@
     <div class="map-controls" bind:clientHeight={controlsHeight}>
       <nav class="map-appearance" aria-label="Map appearance and tools">
         {#each appearanceLayers as layer (layer.key)}<button aria-label={layer.label} title={layer.label} aria-pressed={layers[layer.key]} onclick={() => layers[layer.key] = !layers[layer.key]}><ConsoleIcon name={layer.key} /></button>{/each}
-        <button class="map-tool" aria-haspopup="dialog" aria-controls="transport-dialog" onclick={() => transportOpen = true}><ConsoleIcon name="transport" /><span>Transport</span></button>
-        <button class="map-tool" id="buildings-trigger" aria-expanded={buildingsOpen} aria-controls="building-controls" onclick={toggleBuildings}><ConsoleIcon name="buildings" /><span>Buildings</span>{#if themeKey}<span class="theme-indicator" aria-hidden="true">●</span>{/if}</button>
+        <button aria-label="Transport" title="Transport" aria-haspopup="dialog" aria-expanded={transportOpen} aria-controls="transport-dialog" onclick={() => transportOpen = true}><ConsoleIcon name="transport" /></button>
+        <button id="layers-trigger" aria-label="Layers" title="Layers" aria-haspopup="dialog" aria-expanded={layersOpen} aria-controls="layers-dialog" onclick={() => layersOpen = true}><ConsoleIcon name="layers" />{#if themeKey}<span class="theme-indicator" aria-hidden="true">●</span>{/if}</button>
       </nav>
-      {#if buildingsOpen}
-        <div class="building-controls" id="building-controls">
-          <section class="panel building-layer-panel">
-            <div class="panel-heading"><h2 id="buildings-heading" tabindex="-1">Building layers</h2><button class="icon-button" aria-label="Close building layers" onclick={toggleBuildings}>×</button></div>
-            <div class="layer-list building-theme" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind ?? 'neutral'}>
-              <div class="building-layer-choices" role="group" aria-label="Color buildings by">
-                {#each buildingLayers as layer (layer.key)}<button aria-pressed={themeKey === layer.key} disabled={!layer.available} onclick={() => changeTheme(layer.key)}>{layer.label}</button>{/each}
-              </div>
-              {#if !layers.buildings}<p class="notice">3D buildings are hidden. Enable them above to see this layer.</p>{/if}
-              {#if themeQueries.pending}<p class="notice" role="status">Loading colors for the current view…</p>{/if}
-              {#if themeQueries.error}<p class="notice" role="status">{themeQueries.error.message}</p>{/if}
-            {#if activeTheme}
-              <p class="panel-note">{label(activeTheme.metric)} · {activeTheme.unit}<br />{activeTheme.kind === 'solar' ? 'Modeled solar radiation' : 'Modeled heat & hot-water demand'} · {activeTheme.period}{activeTheme.scenario ? ` · ${activeTheme.scenario}` : ''}<br />Source: {activeTheme.sourceId}</p>
-              {#if theme.minimum !== null && theme.maximum !== null}{@const minimum = humanizeEnergyUsage(theme.minimum, activeTheme.unit)}{@const maximum = humanizeEnergyUsage(theme.maximum, activeTheme.unit)}<div class="theme-gradient" style:background={`linear-gradient(to right, ${ENERGY_COLOURS[0]} 0% 33.333%, ${ENERGY_COLOURS[1]} 33.333% 66.666%, ${ENERGY_COLOURS[2]} 66.666% 100%)`} aria-hidden="true"></div><div class="theme-limits"><span>{minimum.value} {minimum.unit}</span><span>{maximum.value} {maximum.unit}</span></div><p class="panel-note">{theme.minimum === theme.maximum ? 'One value; middle color.' : 'Three equal ranges from the displayed minimum to maximum.'}</p>{/if}
-              <p class="panel-note" data-theme-covered={theme.count} data-theme-denominator={releaseBuildingCount ?? ''}>{theme.count.toLocaleString()} colored / {releaseBuildingCount?.toLocaleString() ?? 'unknown'} prepared release buildings. Shared property totals and ambiguous associations excluded.</p>
-              <p class="panel-note"><span class="no-data-swatch" style:background={NO_ENERGY_COLOUR}></span> Neutral = no comparable record.</p>
-              {#if activeTheme.kind === 'solar'}<p class="panel-note">Incoming solar radiation, not generated electricity.</p>{/if}
-            {/if}
-              {#if activeRyhtiTheme}<p class="panel-note">{activeRyhtiTheme.label} · Syke / Ryhti · prepared {formatDate(ryhti.catalog?.generatedAt)}. Unchecked categories are dimmed; all buildings remain selectable.</p>{/if}
-              {#if !themeKey}<p class="panel-note">{layers.imagery ? 'Textured buildings' : 'Neutral buildings'}. Select a building to inspect its records.</p>{/if}
-              {#if energyLoading}<p class="notice" role="status">Loading available energy themes…</p>{:else if energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
-              <p class="panel-note" role="status">Ryhti: {ryhtiLoading ? 'loading coverage' : ryhti.status}. {ryhti.message ?? ''}</p>
-            </div>
-          </section>
-          {#if activeRyhtiTheme}
-            <section class="panel ryhti-category-panel" aria-label="Ryhti categories">
-              <div class="panel-heading"><h2>Ryhti · {activeRyhtiTheme.label}</h2></div>
-              <div class="layer-list">
-                <div class="category-actions"><button class="text-button" onclick={() => selectedRyhtiCategories = ryhtiColors.categories.map(category => category.key)}>Select all</button><button class="text-button" onclick={() => selectedRyhtiCategories = []}>Clear all</button></div>
-                <fieldset class="ryhti-legend"><legend>{selectedRyhtiCategories.length} of {ryhtiColors.categories.length} categories highlighted</legend>
-                  {#each ryhtiColors.categories as category (category.key)}<label class="layer-control"><input type="checkbox" value={category.key} bind:group={selectedRyhtiCategories} /><span class="no-data-swatch" style:background={category.colour}></span><span>{category.label}</span><small>{category.count.toLocaleString()}</small></label>{/each}
-                </fieldset>
-                {#if activeRyhtiTheme.key === 'ryhti:permits'}<p class="panel-note">All linked records, including historical permits. Multiple statuses means records report different statuses; this is not a live construction map.</p>{/if}
-              </div>
-            </section>
-          {/if}
-        </div>
-      {/if}
     </div>
     {#if layers.imagery && appearanceStatus}<div class="appearance-status" role="status">{appearanceStatus}</div>{/if}
-    <aside class="statistics-stack" aria-label="Statistics">
-      <section class="panel conditions" bind:clientHeight={statisticsHeight}>
-        <div class="panel-heading"><h2>Statistics</h2><span>NEARBY</span></div>
-        <NearbyConditions snapshot={observationSnapshot} longitude={contextPosition.longitude} latitude={contextPosition.latitude} parameters={['t2m']} {now} loading={observationLoading} error={observationError} scope={contextScope} onsources={openSources} onstation={selectStation} compact />
-        <details class="environment-details"><summary>More conditions & stations</summary>
-          <div class="layer-list">
-            <label class="layer-control"><input type="checkbox" bind:checked={layers.weather} /><span>Weather stations</span></label>
-            <label class="layer-control"><input type="checkbox" bind:checked={layers.airQuality} /><span>Air-quality stations</span></label>
-            <fieldset class="parameter-controls"><legend>Show nearby readings</legend>{#each OBSERVATION_PARAMETERS.filter(parameter => parameter.id !== 't2m') as parameter (parameter.id)}<label><input type="checkbox" value={parameter.id} bind:group={enabledParameters} />{parameter.label}</label>{/each}</fieldset>
-          </div>
-          <div class="condition-source-states">{#each observationSnapshot?.sources ?? [] as source (source.id)}<button onclick={openSources}><span>{source.id === 'fmi-weather' ? 'Weather' : 'Air quality'}</span><span class="badge {source.state}">{source.state}</span></button>{/each}</div>
-          <NearbyConditions snapshot={observationSnapshot} longitude={contextPosition.longitude} latitude={contextPosition.latitude} parameters={enabledParameters} {now} loading={observationLoading} error={observationError} scope={contextScope} onsources={openSources} onstation={selectStation} />
-        </details>
-      </section>
-    </aside>
-    <aside class="right-stack" class:mobile-active={!!selected && mobilePanel === 'inspect'} id="identity-inspector" aria-label="Inspector">
-      <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setMobilePanel(null)}>×</button></div>
+    <aside class="right-stack" class:mobile-active={!!selected && mobilePanel === 'inspect'} class:has-layer-legend={legendVisible} aria-label="Map information">
       {#if selected}
-      <section class="panel inspector"><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || selected.station.kind === 'rail' ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
+      <section class="panel inspector" id="identity-inspector" aria-label="Inspector">
+        <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setMobilePanel(null)}>×</button></div><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || selected.station.kind === 'rail' ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
         {#if selected.kind === 'building'}
           {#key selected.building.id}<BuildingPhoto building={selected.building} {generation} base={city?.base} cache={city?.cache} />{/key}
         {/if}
@@ -539,47 +485,101 @@
               <button class="text-button" onclick={openSources}>Data coverage & sources ↗</button>
             </div>
           {:else if selected?.kind === 'vehicle'}
+            {#snippet vehicleFollow()}
+              {#if selected?.kind === 'vehicle'}
+                <button type="button" class="vehicle-follow" aria-pressed={following} disabled={!scene || (!following && (selected.removed || trafficIsStale(selected.vehicle, now)))} onclick={() => { following = scene?.followVehicle(!following && selected?.kind === 'vehicle' ? selected.vehicle.id : null) ?? false; }}>{following ? 'Stop following' : selected.vehicle.mode === 'ship' ? 'Follow ship' : selected.vehicle.mode === 'train' ? 'Follow train' : 'Follow vehicle'} <span aria-hidden="true">↗</span></button>
+              {/if}
+            {/snippet}
             {#if selected.vehicle.mode === 'ship'}
-              <MarineVesselDetails vehicle={selected.vehicle} source={marineSource} connected={browserConnected} {now} removed={selected.removed} />
+              <MarineVesselDetails follow={vehicleFollow} vehicle={selected.vehicle} source={marineSource} connected={browserConnected} {now} removed={selected.removed} />
             {:else if selected.vehicle.rail}
-              <RailTrainDetails vehicle={selected.vehicle} journey={railJourney} {now} removed={selected.removed} loading={routeLoading} error={routeError} />
+              <RailTrainDetails follow={vehicleFollow} vehicle={selected.vehicle} journey={railJourney} {now} removed={selected.removed} loading={routeLoading} error={routeError} />
             {:else}
+            {@const schedule = hslSchedule(selected.vehicle.delaySeconds)}
             <span class="eyebrow">HSL / {selected.vehicle.mode.toUpperCase()}</span><h3>Route {route?.status === 'exact' ? route.routeLabel ?? routeName(selected.vehicle.routeId) : routeName(selected.vehicle.routeId)}</h3>
+            {#key selected.vehicle.mode}<VehicleModelPreview mode={selected.vehicle.mode} />{/key}
             {#if selected.removed || trafficShouldRemove(selected.vehicle, now)}<p class="notice">This vehicle has left the current feed or its position expired. Its last reported identity remains here.</p>{:else if trafficIsStale(selected.vehicle, now)}<p class="notice">Stale position. Held at its last received coordinates.</p>{/if}
-            <dl class="properties"><div><dt>Mode</dt><dd>{label(selected.vehicle.mode)}</dd></div><div><dt>Route ID</dt><dd>{selected.vehicle.routeId}</dd></div><div><dt>Direction</dt><dd>{selected.vehicle.directionId === null ? 'Unknown' : `HFP ${selected.vehicle.directionId}`}</dd></div><div><dt>Destination</dt><dd>{route?.status === 'exact' ? route.destination ?? 'Unknown — not supplied' : 'Unknown — journey not verified'}</dd></div><div><dt>Owner / vehicle</dt><dd>{selected.vehicle.ownerOperatorId} / {selected.vehicle.vehicleId}</dd></div><div><dt>Schedule</dt><dd class:late={(selected.vehicle.delaySeconds ?? 0) > 60} class:early={(selected.vehicle.delaySeconds ?? 0) < -60}>{delayLabel(selected.vehicle.delaySeconds)}</dd></div><div><dt>Speed</dt><dd>{selected.vehicle.speedMetresPerSecond === null ? 'Unknown' : `${(selected.vehicle.speedMetresPerSecond * 3.6).toFixed(1)} km/h`}</dd></div><div><dt>Reported</dt><dd>{formatDate(selected.vehicle.reportedAt)}<small>{age(selected.vehicle)}</small></dd></div><div><dt>Received</dt><dd>{formatDate(selected.vehicle.receivedAt)}</dd></div><div><dt>Feed / position</dt><dd>{currentFeed ? 'Browser connected' : 'Browser paused / disconnected'} · {selected.removed ? 'expired' : trafficIsStale(selected.vehicle, now) ? 'stale' : 'current'}</dd></div></dl>
-            <p class="panel-note">±60 seconds is an application display convention for “on time”. Exact signed deviation remains below.</p>
-            <details class="vehicle-details"><summary>Exact report & journey details</summary><dl class="properties"><div><dt>Raw HFP deviation</dt><dd>{signedSeconds(selected.vehicle.rawDeviationSeconds)}<small>Negative means late in HFP.</small></dd></div><div><dt>Normalized delay</dt><dd>{signedSeconds(selected.vehicle.delaySeconds)}<small>{selected.vehicle.delaySeconds === null ? 'Unknown' : selected.vehicle.delaySeconds > 0 ? 'Positive = late' : selected.vehicle.delaySeconds < 0 ? 'Negative = early' : 'Exact zero'}</small></dd></div><div><dt>Journey</dt><dd>{selected.vehicle.journeyReference ?? 'Unknown'}</dd></div><div><dt>Service date</dt><dd>{selected.vehicle.serviceDate ?? 'Unknown'}</dd></div><div><dt>Start time</dt><dd>{selected.vehicle.startTime ?? 'Unknown'}</dd></div><div><dt>Operating operator</dt><dd>{selected.vehicle.operatingOperatorId ?? 'Unknown'}</dd></div><div><dt>Quality flags</dt><dd>{selected.vehicle.quality.join(', ') || 'No flags supplied'}</dd></div><div><dt>Position</dt><dd>{selected.vehicle.latitude?.toFixed(5) ?? 'Unknown'}, {selected.vehicle.longitude?.toFixed(5) ?? 'Unknown'}</dd></div></dl></details>
+            <p class="vehicle-schedule {schedule.state}"><ConsoleIcon name={`schedule-${schedule.state}`} /><span>{schedule.label}</span>{#if schedule.state !== 'unknown'}<strong title="Signed delay: positive is late, negative is early">{signedSeconds(selected.vehicle.delaySeconds)}</strong>{/if}</p>
+            <dl class="properties"><div><dt>Mode</dt><dd>{label(selected.vehicle.mode)}</dd></div><div><dt>Direction</dt><dd>{selected.vehicle.directionId === null ? 'Unknown' : `HFP ${selected.vehicle.directionId}`}</dd></div><div><dt>Speed</dt><dd>{selected.vehicle.speedMetresPerSecond === null ? 'Unknown' : `${(selected.vehicle.speedMetresPerSecond * 3.6).toFixed(1)} km/h`}</dd></div></dl>
+            {@render vehicleFollow()}
             {/if}
-            <button class="follow-button" disabled={!scene || selected.removed || trafficIsStale(selected.vehicle, now)} onclick={() => { following = !following; scene?.followVehicle(following && selected?.kind === 'vehicle' ? selected.vehicle.id : null); }}>{following ? 'Stop following' : selected.vehicle.mode === 'ship' ? 'Follow ship' : selected.vehicle.mode === 'train' ? 'Follow train' : 'Follow vehicle'} <span>↗</span></button>
-            <p class="panel-note">{!scene ? 'Follow requires the 3D scene. ' : ''}Moving the camera cancels follow. Positions stop when reports stop.</p>
-            {#if selected.vehicle.mode !== 'ship'}<div class="route-context" data-route-status={routeLoading ? 'loading' : route?.status ?? 'unavailable'}><h4>Scheduled route context</h4><p class="panel-note">{routeLoading ? 'Checking the exact reported journey…' : routeError || route?.reason || (route?.status === 'exact' ? 'Verified journey shape and stops. The raw vehicle position is not snapped to this path.' : 'Journey mapping unavailable. No guessed path is drawn.')}</p>
+            {#if itinerary}<VehicleItinerary {itinerary} loading={routeLoading} error={routeError} />{/if}
+            {#if selected.vehicle.rail}<div class="route-context" data-route-status={routeLoading ? 'loading' : route?.status ?? 'unavailable'}><h4>Scheduled route context</h4>{#if routeLoading || routeError || route?.reason || route?.status !== 'exact'}<p class="panel-note">{routeLoading ? 'Checking the exact reported journey…' : routeError || route?.reason || (route?.status === 'exact' ? '' : 'Journey mapping unavailable.')}</p>{/if}
               {#if route}<p class="route-match">Match: {route.status}</p>{/if}
-              {#if route?.status === 'exact'}<dl class="properties"><div><dt>Trip</dt><dd>{route.tripId}</dd></div><div><dt>Departure</dt><dd>{formatDate(route.departureAt)}</dd></div><div><dt>Index prepared</dt><dd>{formatDate(route.generatedAt)}</dd></div><div><dt>GTFS retrieved</dt><dd>{formatDate(route.source?.retrievedAt)}</dd></div></dl><details><summary>{route.stops.length} scheduled stops in this area</summary><ol class="route-stop-list">{#each route.stops as stop (stop.sequence)}<li><strong>{stop.name}</strong><span>{formatDate(stop.arrivalAt ?? stop.departureAt)}</span></li>{/each}</ol></details>{/if}
+              {#if route?.status === 'exact'}<dl class="properties"><div><dt>Trip</dt><dd>{route.tripId}</dd></div><div><dt>Departure</dt><dd>{formatDate(route.departureAt)}</dd></div><div><dt>Index prepared</dt><dd>{formatDate(route.generatedAt)}</dd></div><div><dt>GTFS retrieved</dt><dd>{formatDate(route.source?.retrievedAt)}</dd></div></dl>{/if}
             </div>{/if}
           {:else if selected?.kind === 'station' && selected.station.kind === 'rail'}
             <RailStationBoard station={selected.station} vehicles={availableVehicles} ontrain={(vehicle: Vehicle) => { layers.train = true; layers[vehicle.rail?.category ?? 'other'] = true; routeFilter = ''; selectObject({ kind: 'vehicle', vehicle }); }} />
           {:else if selected?.kind === 'station'}
             <span class="eyebrow">{selected.station.kind === 'weather' ? 'WEATHER' : 'AIR QUALITY'} / STATION</span><h3>{selected.station.name}</h3>
-            <label class="filter-label">Station parameter<select value={displayedStationParameter} onchange={event => stationParameter = event.currentTarget.value}>{#each selectedStationParameters as parameter (parameter.id)}<option value={parameter.id}>{parameter.label}</option>{/each}</select></label>
-            <dl class="properties"><div><dt>Station ID</dt><dd>{selected.station.id}</dd></div><div><dt>Latest value</dt><dd>{stationLatest?.value ?? 'Unknown'} {stationLatest?.value !== null ? stationLatest?.unit ?? '' : ''}</dd></div><div><dt>Observed</dt><dd>{formatDate(stationLatest?.observedAt)}</dd></div><div><dt>Received</dt><dd>{formatDate(stationLatest?.receivedAt)}</dd></div><div><dt>Quality</dt><dd>{stationLatest?.quality ?? 'Unknown — not supplied'}</dd></div><div><dt>Aggregation</dt><dd>{stationLatest?.aggregation ?? 'Unknown — not supplied'}</dd></div><div><dt>Scope</dt><dd>Station observation</dd></div><div><dt>Coordinates</dt><dd>{selected.station.latitude.toFixed(5)}, {selected.station.longitude.toFixed(5)}</dd></div></dl>
-            {#each selectedStationSources as source (source.id)}<p class="notice">{label(source.state)} · {source.message}</p><a class="source-link" href={source.url} target="_blank" rel="noreferrer">{source.provider} source reference ↗</a>{/each}
-            {#key `${selected.station.id}/${displayedStationParameter}`}<StationHistory history={stationHistory} parameter={selectedStationParameters.find(parameter => parameter.id === displayedStationParameter)?.label ?? displayedStationParameter} hours={observationSnapshot?.historyHours ?? 6} />{/key}
+            <dl class="properties"><div><dt>Station ID</dt><dd>{selected.station.id}</dd></div></dl>
+            {#key selected.station.id}
+              {#each selectedStationParameters as parameter (parameter.id)}
+                <StationHistory history={observationSnapshot ? observationHistory(observationSnapshot.observations, selected.station.id, parameter.id) : []} parameter={parameter.label} hours={observationSnapshot?.historyHours ?? 6} />
+              {/each}
+            {/key}
           {/if}
           {#if selectionMessage}<p class="notice" role="status">{selectionMessage}</p>{/if}
         </div>
       </section>
       {/if}
+      {#if legendVisible}
+        <section class="panel building-layer-legend" aria-labelledby="building-legend-heading" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind}>
+          <div class="panel-heading"><h2 id="building-legend-heading"><span class="legend-title">{legendLabel}</span><button class="legend-toggle" aria-label={`${legendExpanded ? 'Collapse' : 'Expand'} ${legendLabel} legend`} aria-expanded={legendExpanded} aria-controls="building-legend-body" onclick={() => legendExpanded = !legendExpanded}>{legendLabel}<span aria-hidden="true">{legendExpanded ? '−' : '+'}</span></button></h2></div>
+          <div class="building-legend-body" id="building-legend-body" class:expanded={legendExpanded} data-theme-covered={theme.count}>
+            {#if themeQueries.pending}<p class="notice" role="status">Loading colors for the current view…</p>{/if}
+            {#if themeQueries.error}<p class="notice" role="status">{themeQueries.error.message}</p>{/if}
+            {#if activeRyhtiTheme}
+              <div class="category-actions"><button class="text-button" onclick={() => selectedRyhtiCategories = ryhtiColors.categories.map(category => category.key)}>Select all</button><button class="text-button" onclick={() => selectedRyhtiCategories = []}>Clear all</button></div>
+              <fieldset class="ryhti-legend"><legend>{selectedRyhtiCategories.length} of {ryhtiColors.categories.length} highlighted</legend>
+                {#each ryhtiColors.categories as category (category.key)}<label class="layer-control"><input type="checkbox" value={category.key} bind:group={selectedRyhtiCategories} /><span class="no-data-swatch" style:background={category.colour}></span><span>{category.label}</span><small>{category.count.toLocaleString()}</small></label>{:else}<p class="notice" role="status">No categories available.</p>{/each}
+              </fieldset>
+              {#if ryhti.status !== 'ready'}<p class="notice" role="status">{ryhti.status === 'stale' ? 'Dated catalog retained' : 'Ryhti catalog unavailable'} · {ryhti.message}</p>{/if}
+            {:else if activeTheme}
+              {#if theme.minimum !== null && theme.maximum !== null}
+                {@const minimum = humanizeEnergyUsage(theme.minimum, activeTheme.unit)}{@const maximum = humanizeEnergyUsage(theme.maximum, activeTheme.unit)}
+                <div class="theme-gradient" style:background={theme.minimum === theme.maximum ? ENERGY_COLOURS[1] : `linear-gradient(to right, ${ENERGY_COLOURS[0]} 0% 33.333%, ${ENERGY_COLOURS[1]} 33.333% 66.666%, ${ENERGY_COLOURS[2]} 66.666% 100%)`} aria-hidden="true"></div>
+                <div class="theme-limits"><span>{minimum.value} {minimum.unit}</span>{#if theme.minimum !== theme.maximum}<span>{maximum.value} {maximum.unit}</span>{/if}</div>
+              {:else}<p class="notice" role="status">No values available.</p>{/if}
+              <div class="legend-no-data"><span class="no-data-swatch" style:background={NO_ENERGY_COLOUR}></span>No data</div>
+              {#if energy.status !== 'ready'}<p class="notice" role="status">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
+            {/if}
+          </div>
+        </section>
+      {/if}
     </aside>
-    <nav class="camera-presets" aria-label="Camera presets"><span>GO TO</span>{#each [['city', 'City Centre'], ['harbour', 'Harbour'], ['central', 'Central Station']] as [id, name] (id)}<button class:active={preset === id} aria-pressed={preset === id} disabled={!scene} onclick={() => choosePreset(id as CameraPreset)}>{name}</button>{/each}</nav>
+    <nav class="camera-presets" aria-label="Camera presets">{#each [['city', 'City Centre'], ['harbour', 'Harbour'], ['central', 'Central Station']] as [id, name] (id)}<button class:active={preset === id} aria-pressed={preset === id} disabled={!scene} onclick={() => choosePreset(id as CameraPreset)}>{name}</button>{/each}</nav>
     <div class="scene-footer"><span>{hovered || (keyboardNavigation ? 'WASD to pan · drag to orbit · scroll to zoom' : 'Drag to orbit · scroll to zoom')}</span>{#if stats}<span class="performance" aria-label="Scene performance" data-fps={stats.fps} data-draw-calls={stats.drawCalls} data-geometries={stats.geometries} data-triangles={stats.triangles} data-loaded-chunks={stats.loadedChunks} data-placed-vehicles={stats.vehicles} data-unplaced-vehicles={stats.unplacedVehicles} data-receipt-latency-ms={stats.lastReceiptLatencyMs ?? ''}>{stats.fps} FPS · {stats.drawCalls} draws · {stats.loadedChunks} chunks</span>{/if}</div>
     {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
     <nav class="mobile-panel-nav" aria-label="Mobile city tools">
       <button aria-haspopup="dialog" aria-controls="transport-dialog" onclick={() => transportOpen = true}><ConsoleIcon name="transport" /><span>Transport</span></button>
-      <button aria-controls="building-controls" aria-expanded={buildingsOpen} onclick={toggleBuildings}><ConsoleIcon name="buildings" /><span>Buildings</span></button>
+      <button aria-haspopup="dialog" aria-controls="layers-dialog" aria-expanded={layersOpen} onclick={() => layersOpen = true}><ConsoleIcon name="layers" /><span>Layers</span></button>
       <button disabled={!selected} aria-controls="identity-inspector" aria-expanded={mobilePanel === 'inspect'} onclick={() => setMobilePanel(mobilePanel === 'inspect' ? null : 'inspect')}><ConsoleIcon name="inspect" /><span>Inspect{selected ? ' •' : ''}</span></button>
     </nav>
   </main>
 </div>
+{#if activeWebcam}
+  <WebcamModal camera={activeWebcam} onclose={() => activeWebcam = null} />
+{/if}
+{#if activePortHarbour}
+  <PortCameraModal harbour={activePortHarbour} onclose={() => activePortHarbour = null} />
+{/if}
+{#if layersOpen}
+  <dialog class="tool-dialog city-console" id="layers-dialog" aria-labelledby="layers-heading" use:showDialog onclose={() => layersOpen = false}>
+    <div class="panel-heading"><h2 id="layers-heading"><ConsoleIcon name="layers" />Layers</h2><button class="icon-button" aria-label="Close layers" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
+    <section class="building-layer-panel">
+      <div class="panel-heading"><h2>Building layers</h2></div>
+      <div class="layer-list building-theme" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind ?? 'neutral'}>
+        <div class="building-layer-choices" role="group" aria-label="Color buildings by">
+          {#each buildingLayers as layer (layer.key)}<button aria-pressed={themeKey === layer.key} disabled={!layer.available} onclick={() => changeTheme(layer.key)}>{layer.label}</button>{/each}
+        </div>
+        {#if !layers.buildings}<p class="notice">3D buildings are hidden. Enable them in the map toolbar to see this layer.</p>{/if}
+        {#if energyLoading}<p class="notice" role="status">Loading available energy themes…</p>{:else if energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
+      </div>
+    </section>
+
+  </dialog>
+{/if}
 {#if transportOpen}
   <dialog class="tool-dialog city-console" id="transport-dialog" aria-labelledby="transport-heading" use:showDialog onclose={() => transportOpen = false}>
     <div class="panel-heading"><h2 id="transport-heading"><ConsoleIcon name="transport" />Transport</h2><button class="icon-button" aria-label="Close transport" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
@@ -589,11 +589,11 @@
           <div class="rail-summary"><strong>Rail · {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'}</strong><span>{freshRail.length} fresh · {railVehicles.length - freshRail.length} stale</span><span>{railDelayed} delayed · {railUnknown} delay unknown</span></div>
           {#if traffic.sources?.rail?.error}<p class="notice">{traffic.sources.rail.error}</p>{/if}
           {#if railStationsError}<p class="panel-note">{railStationsError}</p>{/if}
-          <div class="rail-summary marine-summary"><strong>Ships · {marineState}</strong><span>{freshMarine.length} fresh reports · {marineVehicles.length - freshMarine.length} stale reports</span>{#if !marineVehicles.length}<span>No retained reports in this coverage; this does not establish that no ships are present.</span>{/if}</div>
+          <div class="rail-summary marine-summary"><strong>Ships · {marineState}</strong><span>{freshMarine.length} fresh reports · {marineVehicles.length - freshMarine.length} stale reports</span>{#if !marineVehicles.length}<span>No retained reports in this coverage.</span>{/if}</div>
           {#if marineSource?.error}<p class="notice">{marineSource.error}</p>{/if}
           <label class="filter-label">Transit route filter<select bind:value={routeFilter}><option value="">All received routes</option>{#each [...new Set(availableVehicles.flatMap(vehicle => vehicle.routeId === null ? [] : [vehicle.routeId]))].sort() as id (id)}<option value={id}>{routeName(id)} · {id}</option>{/each}</select></label>
           {#if routeFilter}<button class="text-button" onclick={() => routeFilter = ''}>Clear route filter</button>{/if}
-          <p class="panel-note">Transit models use real-world scale. Ship markers are schematic; banners identify their sources. Counts are reports, with possible HSL / AIS overlap.</p></div>
+          </div>
     <section class="panel feed-panel" aria-label="Traffic status"><div class="panel-heading"><h2>Reported traffic</h2><span class:connected={currentFeed} class="status-dot"></span></div>
         <div class="feed-summary"><strong>{visibleVehicles.length}</strong><span>reports in visible modes / transit route<br />{staleCount ? `${staleCount} stale · held at last position` : 'Latest received positions'}</span></div>
         <p class="panel-note">{trafficError || (traffic.status.lastPositionAt ? `Last report ${formatDate(traffic.status.lastPositionAt)}` : 'Waiting for real position reports.')}</p>
@@ -613,24 +613,24 @@
 {/if}
 {#if sourceOpen}
   <dialog class="source-drawer" id="sources" aria-labelledby="sources-heading" use:showDialog onclose={() => sourceOpen = false}><div class="drawer-heading"><div><span class="eyebrow">EVIDENCE & PROVENANCE</span><h2 id="sources-heading">Sources & status</h2></div><button class="icon-button" aria-label="Close sources" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
-    <div class="drawer-content"><p class="panel-note">HSL and Fintraffic positions are live reports. FMI weather and HSY air-quality values are dated station observations. Static building and terrain vintages are independent.</p><p class="panel-note">Juxtaposed weather and vehicle delay do not establish causation. A historical observation cursor does not replay traffic.</p>
+    <div class="drawer-content">
       <h3>Environmental freshness & outages</h3>
       {#if observationLoading && !observationSnapshot}<p class="notice">Loading observations…</p>{/if}{#if observationError}<p class="notice">Unavailable refresh · {observationError}</p>{/if}
-      {#each observationSnapshot?.sources ?? [] as source (source.id)}<details class="source-record" open><summary>{source.provider} · <span class="badge {source.state}">{source.state}</span></summary><p class="panel-note">{source.message}</p>{#if source.lastError}<p class="notice">Outage: {source.lastError}</p>{/if}<p class="panel-note">{source.attribution}</p><a href={source.url} target="_blank" rel="noreferrer">Source query reference ↗</a><dl class="properties"><div><dt>Observed</dt><dd>{formatDate(source.observedAt)}</dd></div><div><dt>Retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>Metadata retrieved</dt><dd>{formatDate(source.metadataRetrievedAt)}</dd></div><div><dt>Last check</dt><dd>{formatDate(source.lastAttemptAt)}</dd></div><div><dt>Next eligible check</dt><dd>{formatDate(source.nextRefreshAt)}</dd></div><div><dt>Refresh check</dt><dd>{source.refreshMs / 60_000} min</dd></div><div><dt>Vintage / window</dt><dd>{source.vintage ?? 'Unknown'}</dd></div><div><dt>License</dt><dd>{source.license}</dd></div><div><dt>Coverage</dt><dd>{source.coverage}</dd></div><div><dt>Resolution</dt><dd>{source.resolution}</dd></div><div><dt>Units</dt><dd>{source.units.join(', ') || 'Unknown'}</dd></div><div><dt>Parameters</dt><dd>{source.parameters.join(', ')}</dd></div></dl><p class="panel-note">{source.method}</p>{#if source.requests?.length}<details><summary>Actual bounded source requests</summary>{#each source.requests as request, index (index)}<a href={request.url} target="_blank" rel="noreferrer">Request {index + 1} ↗</a><p class="panel-note">Retrieved {formatDate(request.retrievedAt)} · received {formatDate(request.receivedAt)}</p>{/each}</details>{/if}</details>{/each}
-      <p class="panel-note">Weather refresh checks start at five minutes; air-quality checks at fifteen minutes. Provider publication cadence and per-parameter freshness differ. Refreshing never changes an observation time.</p>
-      <h3>Rail traffic · Fintraffic Digitraffic</h3><p class="panel-note">Positions: {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'} · last report {formatDate(traffic.sources?.rail?.lastPositionAt)}. {traffic.sources?.rail?.error ?? ''}</p><p class="panel-note">Position checks every five seconds; timetables every 30 seconds. Train display buffers 12 seconds of received reports. Stale at 30 seconds; removed at 120 seconds. Representative two-car model; approximate terrain height. GPS coverage is incomplete, including freight and yard operations.</p><p class="panel-note">Station catalog: {railStations?.state ?? 'loading'} · checked {formatDate(railStations?.retrievedAt)}. {railStationsError}</p><a href="https://www.digitraffic.fi/en/railway-traffic/" target="_blank" rel="noreferrer">Fintraffic railway data · CC BY 4.0 ↗</a>
-      <h3>Ships · Fintraffic Digitraffic</h3><p class="panel-note">{marineState} · last local position report {formatDate(marineSource?.lastPositionAt)}. Last source update {formatDate(marineSource?.feedUpdatedAt)}. {marineSource?.positionError ?? marineSource?.error ?? ''}</p><p class="panel-note">Ship display delays received reports by 10 seconds to smooth movement. Reduced motion and interrupted feeds show the latest accepted position. Positions stop when reports stop. Moving or unknown-status reports become stale after 2 minutes and leave the scene after 10 minutes. At anchor or moored with low reported speed: stale after 10 minutes, removed after 30 minutes.</p><p class="panel-note">Partial Class A AIS coverage; fishing vessels are filtered upstream. Helsinki coverage excludes Vuosaari. An empty list is not evidence of an empty harbour. HSL ferries and AIS identities remain separate and can overlap; counts describe reports. Markers are schematic at the sea display datum.</p><p class="panel-note">Marine data: Fintraffic / Digitraffic, CC BY 4.0. Filtered to Helsinki; positions interpolated for display.</p><a href="https://www.digitraffic.fi/en/marine-traffic/" target="_blank" rel="noreferrer">Fintraffic marine data ↗</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a>
-      <h3>HSL traffic</h3><p class="panel-note">Browser stream: {hslLive ? 'connected' : 'paused / disconnected'} · last upstream state: {traffic.status.state}. Last provider report {formatDate(traffic.status.lastPositionAt)}. {trafficError}</p><p class="panel-note">Motion buffer: 1.2 seconds of received reports. Stale after 30 seconds; removed after 120 seconds. Representative Blender models use real-world scale. Exact fleet variants are not supplied by HSL; route flags use prepared line labels.</p>
-      <h3>Scheduled route data</h3><p class="panel-note">{routeCatalogLoading ? 'Loading route metadata…' : routeCatalog?.status === 'ready' ? `${routes.length} prepared routes available.` : routeCatalog?.reason ?? 'Route metadata unavailable.'}</p>{#if routeCatalog?.source}<a class="source-link" href={routeCatalog.source.url} target="_blank" rel="noreferrer">HSL GTFS source ↗</a><dl class="properties"><div><dt>Provider</dt><dd>Helsinki Region Transport (HSL)</dd></div><div><dt>Index prepared</dt><dd>{formatDate(routeCatalog.generatedAt)}</dd></div><div><dt>GTFS retrieved</dt><dd>{formatDate(routeCatalog.source.retrievedAt)}</dd></div><div><dt>Feed version</dt><dd>{routeCatalog.source.feedVersion ?? 'Unknown'}</dd></div><div><dt>Validity</dt><dd>{routeCatalog.source.validFrom}–{routeCatalog.source.validTo}</dd></div><div><dt>Archive SHA256</dt><dd>{routeCatalog.source.archiveSha256}</dd></div></dl><p class="panel-note">Only an exact active journey match supplies shape and stops. Missing or ambiguous matches show an explicit reason.</p>{/if}
+      {#each observationSnapshot?.sources ?? [] as source (source.id)}<details class="source-record" open><summary>{source.provider} · <span class="badge {source.state}">{source.state}</span></summary><p class="panel-note">{source.message}</p>{#if source.lastError}<p class="notice">Outage: {source.lastError}</p>{/if}<p class="panel-note">{source.attribution}</p><a href={source.url} target="_blank" rel="noreferrer">Source query reference ↗</a><dl class="properties"><div><dt>Observed</dt><dd>{formatDate(source.observedAt)}</dd></div><div><dt>Retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>Metadata retrieved</dt><dd>{formatDate(source.metadataRetrievedAt)}</dd></div><div><dt>Last check</dt><dd>{formatDate(source.lastAttemptAt)}</dd></div><div><dt>Next eligible check</dt><dd>{formatDate(source.nextRefreshAt)}</dd></div><div><dt>Refresh check</dt><dd>{source.refreshMs / 60_000} min</dd></div><div><dt>Vintage / window</dt><dd>{source.vintage ?? 'Unknown'}</dd></div><div><dt>License</dt><dd>{source.license}</dd></div><div><dt>Coverage</dt><dd>{source.coverage}</dd></div><div><dt>Resolution</dt><dd>{source.resolution}</dd></div><div><dt>Units</dt><dd>{source.units.join(', ') || 'Unknown'}</dd></div><div><dt>Parameters</dt><dd>{source.parameters.join(', ')}</dd></div></dl>{#if source.requests?.length}<details><summary>Actual bounded source requests</summary>{#each source.requests as request, index (index)}<a href={request.url} target="_blank" rel="noreferrer">Request {index + 1} ↗</a><p class="panel-note">Retrieved {formatDate(request.retrievedAt)} · received {formatDate(request.receivedAt)}</p>{/each}</details>{/if}</details>{/each}
+      
+      <h3>Rail traffic · Fintraffic Digitraffic</h3><p class="panel-note">Positions: {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'} · last report {formatDate(traffic.sources?.rail?.lastPositionAt)}. {traffic.sources?.rail?.error ?? ''}</p><p class="panel-note">Station catalog: {railStations?.state ?? 'loading'} · checked {formatDate(railStations?.retrievedAt)}. {railStationsError}</p><a href="https://www.digitraffic.fi/en/railway-traffic/" target="_blank" rel="noreferrer">Fintraffic railway data · CC BY 4.0 ↗</a>
+      <h3>Ships · Fintraffic Digitraffic</h3><p class="panel-note">{marineState} · last local position report {formatDate(marineSource?.lastPositionAt)}. Last source update {formatDate(marineSource?.feedUpdatedAt)}. {marineSource?.positionError ?? marineSource?.error ?? ''}</p><p class="panel-note">Marine data: Fintraffic / Digitraffic, CC BY 4.0.</p><a href="https://www.digitraffic.fi/en/marine-traffic/" target="_blank" rel="noreferrer">Fintraffic marine data ↗</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a>
+      <h3>HSL traffic</h3><p class="panel-note">Browser stream: {hslLive ? 'connected' : 'paused / disconnected'} · last upstream state: {traffic.status.state}. Last provider report {formatDate(traffic.status.lastPositionAt)}. {trafficError}</p>
+      <h3>Scheduled route data</h3><p class="panel-note">{routeCatalogLoading ? 'Loading route metadata…' : routeCatalog?.status === 'ready' ? `${routes.length} prepared routes available.` : routeCatalog?.reason ?? 'Route metadata unavailable.'}</p>{#if routeCatalog?.source}<a class="source-link" href={routeCatalog.source.url} target="_blank" rel="noreferrer">HSL GTFS source ↗</a><dl class="properties"><div><dt>Provider</dt><dd>Helsinki Region Transport (HSL)</dd></div><div><dt>Index prepared</dt><dd>{formatDate(routeCatalog.generatedAt)}</dd></div><div><dt>GTFS retrieved</dt><dd>{formatDate(routeCatalog.source.retrievedAt)}</dd></div><div><dt>Feed version</dt><dd>{routeCatalog.source.feedVersion ?? 'Unknown'}</dd></div><div><dt>Validity</dt><dd>{routeCatalog.source.validFrom}–{routeCatalog.source.validTo}</dd></div><div><dt>Archive SHA256</dt><dd>{routeCatalog.source.archiveSha256}</dd></div></dl>{/if}
       {#if sample.sampleError}<p class="notice">{sample.sampleError}</p>{/if}
-      {#if city}<h3>City coverage</h3><p class="panel-note">{city.manifest.chunks.length} chunks · prepared {formatDate(city.manifest.generatedAt)}. {indexMessage} Buildings retain source dimensions. Sea surface is the N2000 0 m display datum, separate from live sea height.</p><p class="panel-note">Local origin: {city.manifest.origin.longitude}° E, {city.manifest.origin.latitude}° N. ETRS-GK25 / N2000 metres; scene axes east, elevation, −north.</p>{#each city.manifest.gaps as gap (gap)}<p class="notice">{gap}</p>{/each}{/if}
+      {#if city}<h3>City coverage</h3><p class="panel-note">{city.manifest.chunks.length} chunks · prepared {formatDate(city.manifest.generatedAt)}. {indexMessage}</p><p class="panel-note">Local origin: {city.manifest.origin.longitude}° E, {city.manifest.origin.latitude}° N. ETRS-GK25 / N2000 metres.</p>{#each city.manifest.gaps as gap (gap)}<p class="notice">{gap}</p>{/each}{/if}
       <h3>City imagery & textures</h3><p class="panel-note">Helsinki orthophoto 2025 · textured LoD2 buildings. © City of Helsinki · CC BY 4.0.</p><a class="source-link" href="https://kartta.hel.fi/3d/" target="_blank" rel="noreferrer">Helsinki 3D source reference ↗</a>
-      <h3>Prepared source records</h3>{#each [...new Map([...(sample.manifest?.sources ?? []), ...(city?.manifest.sources ?? []), ...(energy.catalog?.sources ?? []), ...(ryhti.catalog?.sources ?? [])].filter(source => !source.id.startsWith('fmi-')).map(source => [source.id, source])).values()] as source (source.id)}<details class="source-record"><summary>{source.provider} · {label(source.id)}</summary><p class="panel-note">{source.attribution}</p>{#if /^https?:\/\//.test(source.url)}<a href={source.url} target="_blank" rel="noreferrer">Source reference ↗</a>{:else}<p class="panel-note">{source.url}</p>{/if}<dl class="properties"><div><dt>Retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>Vintage</dt><dd>{source.vintage ?? 'Unknown'}</dd></div><div><dt>License</dt><dd>{source.license ?? 'Unverified'}</dd></div><div><dt>Checksum</dt><dd>{source.checksum ?? 'Unknown — not supplied'}</dd></div><div><dt>Coordinates</dt><dd>{source.coordinateReference ?? 'Not applicable / unknown'}<small>{source.axisOrder ?? 'Axis order unknown'} · {source.verticalReference ?? 'Vertical reference unknown'}</small></dd></div><div><dt>Coverage</dt><dd>{source.coverage}</dd></div><div><dt>Units</dt><dd>{source.units.join(', ') || 'Unknown'}</dd></div></dl><p class="panel-note">{source.method}</p></details>{/each}
+      <h3>Prepared source records</h3>{#each [...new Map([...(sample.manifest?.sources ?? []), ...(city?.manifest.sources ?? []), ...(energy.catalog?.sources ?? []), ...(ryhti.catalog?.sources ?? [])].filter(source => !source.id.startsWith('fmi-')).map(source => [source.id, source])).values()] as source (source.id)}<details class="source-record"><summary>{source.provider} · {label(source.id)}</summary><p class="panel-note">{source.attribution}</p>{#if /^https?:\/\//.test(source.url)}<a href={source.url} target="_blank" rel="noreferrer">Source reference ↗</a>{:else}<p class="panel-note">{source.url}</p>{/if}<dl class="properties"><div><dt>Retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>Vintage</dt><dd>{source.vintage ?? 'Unknown'}</dd></div><div><dt>License</dt><dd>{source.license ?? 'Unverified'}</dd></div><div><dt>Checksum</dt><dd>{source.checksum ?? 'Unknown — not supplied'}</dd></div><div><dt>Coordinates</dt><dd>{source.coordinateReference ?? 'Not applicable / unknown'}<small>{source.axisOrder ?? 'Axis order unknown'} · {source.verticalReference ?? 'Vertical reference unknown'}</small></dd></div><div><dt>Coverage</dt><dd>{source.coverage}</dd></div><div><dt>Units</dt><dd>{source.units.join(', ') || 'Unknown'}</dd></div></dl></details>{/each}
       <h3>Ryhti register & join coverage</h3><p class="panel-note">{ryhtiLoading ? 'Loading prepared catalog' : ryhti.status} · snapshot prepared {formatDate(ryhti.catalog?.generatedAt)} · last attempt {formatDate(ryhti.attemptedAt)}. {ryhti.message ?? ''}</p>
-      {#if ryhti.catalog}<dl class="properties">{#each Object.entries(ryhti.catalog.coverage) as [key, value] (key)}<div><dt>{label(key)}</dt><dd>{value.toLocaleString()}</dd></div>{/each}</dl><p class="panel-note">Exact identifier joins only. Missing values and unresolved identities remain unclassified. Permit records include historical work. Source retrieval and modification dates describe this prepared snapshot, not live activity.</p>{/if}
-      <h3>Energy catalog & join coverage</h3><p class="panel-note">{energyLoading ? 'Loading prepared catalog' : energy.status} · catalog prepared {formatDate(energy.catalog?.generatedAt)} · last refresh attempt {formatDate(energy.attemptedAt)}. {energy.message}</p><p class="panel-note">Energy months are historical property measurements. Demand and solar are source models, independent from live transit. Solar radiation is incident energy, not generated electricity; kW, kWh and kWh/m² are separate metrics.</p>
-      {#each energy.catalog?.reports ?? [] as report (report.sourceId)}<details class="source-record"><summary>{report.sourceId} · {report.buildingsCovered.toLocaleString()} buildings covered</summary><p class="panel-note">{report.denominator} · vintage {report.sourceVintage ?? 'Unknown'}</p><dl class="properties"><div><dt>Source records</dt><dd>{report.totalSourceRecords.toLocaleString()}</dd></div><div><dt>Within scope</dt><dd>{report.recordsWithinScope.toLocaleString()}</dd></div><div><dt>Exact / reviewed</dt><dd>{report.exactMatches} / {report.reviewedMatches}</dd></div><div><dt>Unmatched</dt><dd>{report.unmatchedRecords}</dd></div><div><dt>Ambiguous / conflict</dt><dd>{report.ambiguousRecords} / {report.conflictingRecords}</dd></div></dl>{#each report.notes as note, index (index)}<p class="panel-note">{note}</p>{/each}</details>{/each}
-      <h3>Foundation source probes · historical</h3><p class="panel-note">These probe gates were recorded {formatDate(sample.manifest?.generatedAt)}. Current modeled demand and solar coverage are the validated energy catalog and join reports above.</p>{#each Object.entries(sample.manifest?.gates ?? {}) as [name, gate] (name)}<details class="gate-row"><summary><span>{label(name)}</span><span class="badge {gate.status}">historical {gate.status}</span></summary>{#each gate.evidence as evidence, index (index)}<p class="panel-note">{evidence}</p>{/each}{#if gate.nextAction}<p class="notice">Next: {gate.nextAction}</p>{/if}</details>{/each}
+      {#if ryhti.catalog}<dl class="properties">{#each Object.entries(ryhti.catalog.coverage) as [key, value] (key)}<div><dt>{label(key)}</dt><dd>{value.toLocaleString()}</dd></div>{/each}</dl>{/if}
+      <h3>Energy catalog & join coverage</h3><p class="panel-note">{energyLoading ? 'Loading prepared catalog' : energy.status} · catalog prepared {formatDate(energy.catalog?.generatedAt)} · last refresh attempt {formatDate(energy.attemptedAt)}. {energy.message}</p>
+      {#each energy.catalog?.reports ?? [] as report (report.sourceId)}<details class="source-record"><summary>{report.sourceId} · {report.buildingsCovered.toLocaleString()} buildings covered</summary><p class="panel-note">{report.denominator} · vintage {report.sourceVintage ?? 'Unknown'}</p><dl class="properties"><div><dt>Source records</dt><dd>{report.totalSourceRecords.toLocaleString()}</dd></div><div><dt>Within scope</dt><dd>{report.recordsWithinScope.toLocaleString()}</dd></div><div><dt>Exact / reviewed</dt><dd>{report.exactMatches} / {report.reviewedMatches}</dd></div><div><dt>Unmatched</dt><dd>{report.unmatchedRecords}</dd></div><div><dt>Ambiguous / conflict</dt><dd>{report.ambiguousRecords} / {report.conflictingRecords}</dd></div></dl></details>{/each}
+      <h3>Foundation source probes · historical</h3>{#each Object.entries(sample.manifest?.gates ?? {}) as [name, gate] (name)}<details class="gate-row"><summary><span>{label(name)}</span><span class="badge {gate.status}">historical {gate.status}</span></summary>{#each gate.evidence as evidence, index (index)}<p class="panel-note">{evidence}</p>{/each}{#if gate.nextAction}<p class="notice">Next: {gate.nextAction}</p>{/if}</details>{/each}
       {#if stats}<p class="panel-note">Renderer: {stats.geometries} geometries · {stats.triangles.toLocaleString()} triangles · {stats.vehicles} placed vehicles.</p>{/if}
     </div>
   </dialog>

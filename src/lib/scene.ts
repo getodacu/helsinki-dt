@@ -1,3 +1,4 @@
+import type { VehicleItinerary } from './itinerary.ts';
 import type { RailCategory } from './rail.ts';
 import * as THREE from 'three';
 import { BuildingHighlight } from './building-highlight.ts';
@@ -11,19 +12,21 @@ import { buildingIdForTriangle } from './data/geometry.ts';
 import { wgs84ToScene } from './geo.ts';
 import { LiveFleet, vehicleVisible } from './live-fleet.ts';
 import { VehicleFlags } from './vehicle-flags.ts';
-import { StationFlags } from './station-flags.ts';
+import { StationFlags, stationVisible } from './station-flags.ts';
+import { WEBCAMS, type Webcam } from './webcams.ts';
+import { PORT_HARBOURS, type PortHarbour } from './port-cameras.ts';
 import { RouteHighlight } from './route-highlight.ts';
 export { routeGeometry } from './route-highlight.ts';
 import { vehicleLabel } from './rail.ts';
 import { buildingName } from './inspection.ts';
 import type { RouteCatalog, RouteContext } from './route-context.ts';
-import { trafficShouldRemove, type TrafficSnapshot } from './traffic.ts';
+import { trafficIsStale, trafficShouldRemove, type TrafficSnapshot } from './traffic.ts';
 import type { Building, BuildingChunk, TransitMode, Vehicle } from './types.ts';
 import { NO_ENERGY_COLOUR } from './energy-display.ts';
 
 export type CameraPreset = 'city' | 'harbour' | 'suomenlinna' | 'energy' | 'central' | 'pasila';
 export interface SceneStation {
-  id: string; name: string; longitude: number; latitude: number; kind: 'weather' | 'air-quality' | 'rail'; sourceIds: string[];
+  id: string; name: string; longitude: number; latitude: number; kind: 'weather' | 'air-quality' | 'rail' | 'camera' | 'port-camera'; sourceIds: string[];
 }
 export type Selection = { kind: 'building'; building: Building; unloaded?: boolean }
   | { kind: 'vehicle'; vehicle: Vehicle; removed?: boolean }
@@ -32,7 +35,7 @@ export type Layers = Record<TransitMode | 'buildings' | 'roads' | 'terrain' | 'w
 export const INITIAL_LAYERS: Layers = { imagery: true, buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, train: true, ship: true, railStations: true, commuter: true, 'long-distance': true, freight: true, other: true, weather: true, airQuality: true };
 export type SceneStats = { fps: number; drawCalls: number; triangles: number; geometries: number;
   loadedChunks: number; vehicles: number; unplacedVehicles: number; lastReceiptLatencyMs: number | null };
-type Callbacks = { onSelection: (selection: Selection | null, message?: string) => void;
+type Callbacks = { onWebcamSelect?: (camera: Webcam) => void; onPortCameraSelect?: (harbour: PortHarbour) => void; onSelection: (selection: Selection | null, message?: string) => void;
   onBuildings: (buildings: Building[]) => void; onStats: (stats: SceneStats) => void;
   onHover: (label: string) => void; onError: (message: string) => void;
   onCameraInteraction: () => void; onReady: () => void; onAppearanceStatus: (message: string) => void; onLoadState: (state: SceneLoadState) => void; onScale?: (scale: SceneScale | null) => void; onCompassRotation?: (degrees: number) => void };
@@ -155,6 +158,31 @@ export function panKeyboardCamera(camera: THREE.PerspectiveCamera, target: THREE
   camera.position.add(shift); target.add(shift);
 }
 
+export type VehicleFollowCamera = {
+  heading: number; startedAt: number; cameraFrom: THREE.Vector3; targetFrom: THREE.Vector3;
+};
+
+/** Orbit behind the accepted vehicle heading while keeping several blocks in view. */
+export function frameVehicleFollow(camera: THREE.PerspectiveCamera, target: THREE.Vector3,
+  position: { x: number; y: number; z: number; heading: number | null }, follow: VehicleFollowCamera,
+  now: number, elapsedSeconds: number, reducedMotion = false) {
+  if (position.heading !== null) {
+    const turn = THREE.MathUtils.euclideanModulo(position.heading - follow.heading + 180, 360) - 180;
+    const amount = reducedMotion ? 1 : 1 - Math.exp(-Math.max(0, Math.min(elapsedSeconds, .05)) / .3);
+    follow.heading = THREE.MathUtils.euclideanModulo(follow.heading + turn * amount, 360);
+  }
+  const point = new THREE.Vector3(position.x, position.y + .5, position.z);
+  // shortcut: 350m clears the validated 300m city roofs; revisit if taller assets are accepted.
+  const altitude = Math.max(350, point.y + 400), behind = altitude - point.y;
+  const radians = follow.heading * Math.PI / 180;
+  const destination = new THREE.Vector3(point.x - Math.sin(radians) * behind, altitude, point.z + Math.cos(radians) * behind);
+  const progress = reducedMotion ? 1 : THREE.MathUtils.clamp((now - follow.startedAt) / 800, 0, 1);
+  const eased = progress * progress * (3 - 2 * progress);
+  target.lerpVectors(follow.targetFrom, point, eased);
+  camera.position.lerpVectors(follow.cameraFrom, destination, eased);
+  camera.position.y = Math.max(350, camera.position.y);
+}
+
 /** Keep source tiles that straddle the edge inside the rendered ground rectangle. */
 export function mapClippingPlanes([west, south, east, north]: CityBase['bounds']) {
   return [new THREE.Plane(new THREE.Vector3(1, 0, 0), -west), new THREE.Plane(new THREE.Vector3(-1, 0, 0), east),
@@ -168,7 +196,7 @@ export function createCityRenderer() {
 
 export function createCityScene(container: HTMLElement, manifest: CityManifest, base: CityBase, callbacks: Callbacks, cache: CityAssetCache = new CityAssetCache(), modelUrls: Record<Exclude<TransitMode, 'ship'>, string> = { bus: '/models/bus.glb', tram: '/models/tram.glb', ferry: '/models/ferry.glb', train: '/models/train.glb' }) {
   let disposed = false, frame = 0, layers = { ...INITIAL_LAYERS }, selected: Selection | null = null, hoverId: string | null = null;
-  let followId: string | null = null, lastReceiptLatencyMs: number | null = null;
+  let followId: string | null = null, followCamera: VehicleFollowCamera | null = null, lastReceiptLatencyMs: number | null = null;
   let routeFilter: string | null = null, route: RouteContext | null = null, marinePaused = false, marineSourcePaused = false;
   let buildingColours: ReadonlyMap<string, string> = new Map(), buildingThemed = false;
   const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -208,7 +236,16 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   let hoveredVehicleId: string | null = null;
   const flags = new VehicleFlags(container, vehicle => { if (initiallyReady) select({ kind: 'vehicle', vehicle }); },
     (id, label) => { hoveredVehicleId = id; callbacks.onHover(label); });
-  const stationFlags = new StationFlags(container, base, station => { if (initiallyReady) select({ kind: 'station', station }); }, callbacks.onHover);
+  const stationFlags = new StationFlags(container, base, station => {
+    if (!initiallyReady) return;
+    if (station.kind === 'camera') { const camera = WEBCAMS.find(camera => camera.id === station.id); if (camera) callbacks.onWebcamSelect?.(camera); }
+    else if (station.kind === 'port-camera') { const harbour = PORT_HARBOURS.find(harbour => harbour.id === station.id); if (harbour) callbacks.onPortCameraSelect?.(harbour); }
+    else select({ kind: 'station', station });
+  }, callbacks.onHover);
+  const cameraPois: SceneStation[] = [...WEBCAMS.map(camera => ({ ...camera, kind: 'camera' as const, sourceIds: ['digitraffic-weathercam'] })),
+    ...PORT_HARBOURS.map(harbour => ({ ...harbour, kind: 'port-camera' as const, sourceIds: ['port-of-helsinki'] }))];
+  const updateStationFlags = () => stationFlags.setStations([...stations.filter(station => stationVisible(station, layers)), ...cameraPois]);
+  updateStationFlags();
   void fleet.loadModels(modelUrls, callbacks.onError);
   void fleet.loadShipModels(callbacks.onError);
   const vehicleRing = new THREE.Mesh(new THREE.RingGeometry(12, 16, 40), new THREE.MeshBasicMaterial({ color: '#d5f6e6', side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.95 }));
@@ -235,9 +272,12 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   scene.add(appearance.aerial, appearance.buildings);
   const pending = new Map<string, AbortController>(), failedUntil = new AssetRetries();
   let wanted = new Set<string>();
+  let itinerary: VehicleItinerary | null = null;
   const refreshContext = () => {
-    routeHighlight.setVisible(Boolean(route?.status === 'exact' && selected?.kind === 'vehicle'
-      && route.vehicleId === selected.vehicle.id && route.routeId === selected.vehicle.routeId && !selected.removed && vehicleVisible(selected.vehicle, layers, routeFilter)));
+    const vehicle = selected?.kind === 'vehicle' ? selected : null;
+    const mapped = route?.status === 'exact' && route.vehicleId === vehicle?.vehicle.id && route.routeId === vehicle.vehicle.routeId;
+    const stops = itinerary?.vehicleId === vehicle?.vehicle.id && !!itinerary?.stops.length;
+    routeHighlight.setVisible(Boolean(vehicle && (mapped || stops) && !vehicle.removed && vehicleVisible(vehicle.vehicle, layers, routeFilter)));
   };
   const refreshHighlights = () => {
     refreshContext();
@@ -407,8 +447,9 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   }
   const select = (selection: Selection | null, message?: string) => {
     if (selection?.kind !== 'vehicle' || selected?.kind !== 'vehicle' || selection.vehicle.id !== selected.vehicle.id) {
-      route = null; routeHighlight.setRoute(null, 'bus');
+      route = null; itinerary = null; routeHighlight.setRoute(null, 'bus');
     }
+    if (followId) callbacks.onCameraInteraction();
     selected = selection; followId = null; refreshHighlights(); callbacks.onSelection(selection, message);
   };
   let down: { x: number; y: number } | null = null, hoverAt = 0;
@@ -442,7 +483,14 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       if (position) {
         if (height !== null) vehicleRing.position.set(position.x, height + 0.5, position.z);
         vehicleRing.scale.setScalar(Math.max(1, camera.position.distanceTo(controls.target) / 1800));
-        if (followId) { const shift = new THREE.Vector3(position.x, controls.target.y, position.z).sub(controls.target); camera.position.add(shift); controls.target.add(shift); }
+        if (followId === selected.vehicle.id && followCamera) {
+          if (height === null || selected.removed || !vehicleVisible(selected.vehicle, layers, routeFilter)) {
+            followId = null; callbacks.onCameraInteraction();
+          } else {
+            const stationary = latest?.speedMetresPerSecond != null && latest.speedMetresPerSecond <= .5;
+            frameVehicleFollow(camera, controls.target, { ...position, y: height, heading: stationary ? null : position.heading }, followCamera, now, elapsedSeconds, reducedMotion);
+          }
+        }
       }
     } else vehicleRing.visible = false;
     refreshContext(); controls.update();
@@ -485,10 +533,10 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
       if (!backgroundRunning && background.phase === 'partial') background = { ...background, phase: 'idle' };
       requestViewUpdate(); },
     openAvailableMap() { appearance.openAvailable(); viewLoading.openAvailable(); reportLoad(); },
-    setLayers(next: Layers) { layers = { ...next }; stationFlags.setStations(stations.filter(station => station.kind !== 'rail' || layers.railStations)); if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); requestViewUpdate(); },
+    setLayers(next: Layers) { layers = { ...next }; updateStationFlags(); if (!layers.buildings) { hoverId = null; callbacks.onHover(''); } buildings.visible = layers.buildings; context.visible = layers.roads; land.visible = layers.terrain; water.visible = layers.terrain; refreshAppearance(); refreshHighlights(); requestViewUpdate(); },
     setMarinePaused(paused: boolean) { marinePaused = paused; },
     setStations(next: SceneStation[]) {
-      stations = next; stationFlags.setStations(next.filter(station => station.kind !== 'rail' || layers.railStations));
+      stations = next; updateStationFlags();
       if (selected?.kind === 'station') {
         const previous = selected.station;
         const station = next.find(station => station.id === previous.id && station.kind === previous.kind);
@@ -499,6 +547,11 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     setRoute(next: RouteContext | null) {
       route = next;
       routeHighlight.setRoute(next, selected?.kind === 'vehicle' ? selected.vehicle.mode : 'bus');
+      refreshContext();
+    },
+    setItinerary(next: VehicleItinerary | null) {
+      itinerary = next;
+      if (selected?.kind === 'vehicle' && ['train', 'tram', 'bus'].includes(selected.vehicle.mode)) routeHighlight.setItinerary(next);
       refreshContext();
     },
     setBuildingColours(next: ReadonlyMap<string, string>, themed = false) { buildingColours = next; buildingThemed = themed; for (const { chunk, mesh } of chunks.values()) applyBuildingColours(mesh.geometry, chunk, next); semanticRevision++; refreshAppearance(); requestViewUpdate(); },
@@ -543,7 +596,23 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     selectVehicle(id: string) { if (!initiallyReady) return; const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) select({ kind: 'vehicle', vehicle }); },
     setRoutes(routes: RouteCatalog['routes']) { flags.setRoutes(routes); },
     setKeyboardNavigation(enabled: boolean) { keyboardNavigation = enabled; if (!enabled) stopKeyboard(); },
-    followVehicle(id: string | null) { followId = id; },
+    followVehicle(id: string | null) {
+      followId = null; followCamera = null;
+      if (!id || !initiallyReady || selected?.kind !== 'vehicle' || selected.vehicle.id !== id || selected.removed) return false;
+      const now = Date.now(), vehicle = fleet.motion.tracks.get(id)?.vehicle;
+      if (!vehicle || trafficIsStale(vehicle, now) || !vehicleVisible(vehicle, layers, routeFilter)) return false;
+      const position = fleet.motion.position(id, now, reducedMotion || (vehicle.mode === 'ship' && (marinePaused || marineSourcePaused)));
+      if (!position) return false;
+      const height = vehicle.mode === 'ferry' || vehicle.mode === 'ship' ? base.waterLevel : sampleTerrainHeight(base.terrain, position.x, position.z);
+      if (height === null) return false;
+      stopKeyboard();
+      // Flush OrbitControls inertia before taking over the camera, as presets do.
+      controls.enableDamping = false; controls.update(); controls.enableDamping = !reducedMotion;
+      followId = id;
+      followCamera = { heading: position.heading ?? THREE.MathUtils.radToDeg(Math.atan2(controls.target.x - camera.position.x, camera.position.z - controls.target.z)),
+        startedAt: performance.now(), cameraFrom: camera.position.clone(), targetFrom: controls.target.clone() };
+      return true;
+    },
     clearSelection() { select(null); },
     dispose() {
       if (disposed) return; stopKeyboard(); disposed = true; cancelAnimationFrame(frame); observer.disconnect();

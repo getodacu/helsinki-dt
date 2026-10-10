@@ -51,6 +51,7 @@ export interface Vehicle {
   serviceDate: string | null;
   startTime: string | null;
   journeyReference: string | null;
+  nextStopId?: string | null;
   reportedAt: string;
   receivedAt: string;
   longitude: number | null;

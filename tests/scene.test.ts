@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { INITIAL_LAYERS, mapClippingPlanes, measureCompassRotation, measureGroundScale, panKeyboardCamera, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
+import { INITIAL_LAYERS, mapClippingPlanes, measureCompassRotation, measureGroundScale, panKeyboardCamera, frameVehicleFollow, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
 import { buildingIdForTriangle } from '../src/lib/data/geometry.ts';
 import type { BuildingChunk } from '../src/lib/types.ts';
 import type { RouteContext } from '../src/lib/route-context.ts';
@@ -193,3 +193,72 @@ test('map clipping follows all four terrain edges at every building height', () 
 });
 
 test('ships start enabled alongside transit without a model asset requirement', () => { assert.equal(INITIAL_LAYERS.ship, true); });
+
+
+test('vehicle follow looks ahead from above and behind each cardinal heading', () => {
+  for (const [heading, dx, dz] of [[0, 0, 400], [90, -400, 0], [180, 0, -400], [270, 400, 0]]) {
+    const camera = new THREE.PerspectiveCamera(), target = new THREE.Vector3();
+    const follow = { heading, startedAt: 0, cameraFrom: camera.position.clone(), targetFrom: target.clone() };
+    frameVehicleFollow(camera, target, { x: 120, y: 8, z: -140, heading }, follow, 800, .02);
+    assert.deepEqual(target, new THREE.Vector3(120, 8.5, -140));
+    assert.ok(camera.position.distanceTo(new THREE.Vector3(120 + dx, 408.5, -140 + dz)) < 1e-9);
+    assert.ok(Math.abs(Math.hypot(camera.position.x - target.x, camera.position.z - target.z) - (camera.position.y - target.y)) < 1e-9);
+  }
+});
+
+test('vehicle follow eases in over 800ms then tracks the received position without lag', () => {
+  const camera = new THREE.PerspectiveCamera(), target = new THREE.Vector3(20, 8, 30);
+  camera.position.set(20, 1450, 1600);
+  const follow = { heading: 90, startedAt: 100, cameraFrom: camera.position.clone(), targetFrom: target.clone() };
+  const position = { x: 120, y: 8, z: -140, heading: 90 };
+  frameVehicleFollow(camera, target, position, follow, 100, .02);
+  assert.deepEqual(camera.position, follow.cameraFrom); assert.deepEqual(target, follow.targetFrom);
+  frameVehicleFollow(camera, target, position, follow, 500, .02);
+  assert.ok(target.distanceTo(new THREE.Vector3(70, 8.25, -55)) < 1e-9);
+  assert.ok(camera.position.distanceTo(new THREE.Vector3(-130, 929.25, 730)) < 1e-9);
+  frameVehicleFollow(camera, target, position, follow, 900, .02);
+  assert.deepEqual(target, new THREE.Vector3(120, 8.5, -140));
+  const offset = camera.position.clone().sub(target);
+  frameVehicleFollow(camera, target, { ...position, x: 140, z: -120 }, follow, 1000, .02);
+  assert.deepEqual(target, new THREE.Vector3(140, 8.5, -120));
+  assert.ok(camera.position.clone().sub(target).distanceTo(offset) < 1e-9);
+});
+
+test('vehicle follow clears city roofs even with low ground or a low entry camera', () => {
+  for (const y of [-100, 0, 300]) {
+    const camera = new THREE.PerspectiveCamera(), target = new THREE.Vector3();
+    camera.position.set(0, 20, 50);
+    const follow = { heading: 0, startedAt: 0, cameraFrom: camera.position.clone(), targetFrom: target.clone() };
+    for (const now of [0, 400, 800]) {
+      frameVehicleFollow(camera, target, { x: 0, y, z: 0, heading: 0 }, follow, now, .02);
+      assert.ok(camera.position.y >= 350);
+    }
+    assert.equal(camera.position.y, Math.max(350, y + .5 + 400));
+    assert.ok(Math.abs(camera.position.z - (camera.position.y - target.y)) < 1e-9);
+  }
+});
+
+test('vehicle follow smooths heading wraparound through north at the same rate across frame rates', () => {
+  const run = (frames: number) => {
+    const camera = new THREE.PerspectiveCamera(), target = new THREE.Vector3();
+    const follow = { heading: 359, startedAt: 0, cameraFrom: camera.position.clone(), targetFrom: target.clone() };
+    for (let frame = 1; frame <= frames; frame++) frameVehicleFollow(camera, target, { x: 0, y: 0, z: 0, heading: 1 }, follow, 800 + frame * 1000 / frames, 1 / frames);
+    assert.ok(follow.heading > 0 && follow.heading < 1);
+    return follow.heading;
+  };
+  assert.ok(Math.abs(run(30) - run(60)) < 1e-9);
+});
+
+test('vehicle follow holds its viewing direction without a heading and snaps for reduced motion', () => {
+  const camera = new THREE.PerspectiveCamera(), target = new THREE.Vector3(0, 8, 0);
+  camera.position.set(1000, 1000, 0);
+  const heading = THREE.MathUtils.radToDeg(Math.atan2(target.x - camera.position.x, camera.position.z - target.z));
+  const follow = { heading, startedAt: 0, cameraFrom: camera.position.clone(), targetFrom: target.clone() };
+  frameVehicleFollow(camera, target, { x: 10, y: 8, z: 20, heading: null }, follow, 800, .02);
+  assert.equal(follow.heading, heading);
+  assert.ok(camera.position.distanceTo(new THREE.Vector3(410, 408.5, 20)) < 1e-9);
+  frameVehicleFollow(camera, target, { x: 10, y: 8, z: 20, heading: 0 }, follow, 0, 0, true);
+  assert.equal(follow.heading, 0);
+  assert.deepEqual(target, new THREE.Vector3(10, 8.5, 20));
+  assert.deepEqual(camera.position, new THREE.Vector3(10, 408.5, 420));
+});

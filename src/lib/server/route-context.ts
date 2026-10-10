@@ -7,13 +7,14 @@ import type { TransitMode, Vehicle } from '../types.ts';
 
 export const ROUTE_INDEX_MAX_BYTES = 64 * 1024 ** 2;
 export type RouteTrip = [id: string, routeId: string, serviceId: string, directionId: string, shapeId: string, destination: string, departure: string, firstStopId: string, patternId: string];
+export type RoutePatternStop = [stopId: string, sequence: number, arrivalOffset: number | null, departureOffset: number | null];
 export interface RouteIndex {
-  version: 1; generatedAt: string; sourceId: 'hsl-gtfs'; bounds: number[]; source: RouteSource;
+  version: 2; generatedAt: string; sourceId: 'hsl-gtfs'; bounds: number[]; source: RouteSource;
   routes: Record<string, { label: string; name: string; mode: Exclude<TransitMode, 'ship'> }>;
   calendar: GtfsRow[]; calendarDates: GtfsRow[]; feedInfo: GtfsRow[];
   trips: RouteTrip[]; shapes: Record<string, [number, number][][]>;
   stops: Record<string, { name: string; longitude: number; latitude: number }>;
-  patterns: Record<string, [stopId: string, sequence: number][]>;
+  patterns: Record<string, RoutePatternStop[]>;
 }
 export function journeyIdentity(query: URLSearchParams): JourneyIdentity {
   const fields = ['ownerOperatorId', 'vehicleId', 'routeId', 'directionId', 'serviceDate', 'startTime'];
@@ -69,11 +70,12 @@ export function routeForJourney(vehicle: JourneyIdentity, index: RouteIndex, rou
   const trip = routeTrips.find(trip => trip[0] === match.tripId)!;
   const shape = index.shapes[trip[4]] ?? [];
   if (!shape.length) return { ...base, tripId: match.tripId, departureAt: match.departureAt, reason: 'The matched journey has no scheduled shape inside city coverage.' };
-  const stops = (index.patterns[trip[8]] ?? []).flatMap(([id, sequence]) => {
-    const stop = index.stops[id];
-    return stop && inBounds(stop.longitude, stop.latitude, RELEASE_BOUNDS) ? [{ id, ...stop, sequence,
-      arrivalAt: null, departureAt: id === trip[7] ? serviceTimeToUtc(vehicle.serviceDate!, serviceSeconds(trip[6])) : null }] : [];
-  });
+  const departureSeconds = serviceSeconds(trip[6]);
+  const stops = (index.patterns[trip[8]] ?? []).map(([id, sequence, arrival, departure]) => ({
+    id, ...index.stops[id], sequence,
+    arrivalAt: arrival === null ? null : serviceTimeToUtc(vehicle.serviceDate!, departureSeconds + arrival),
+    departureAt: departure === null ? null : serviceTimeToUtc(vehicle.serviceDate!, departureSeconds + departure)
+  }));
   return { ...base, status: 'exact', tripId: match.tripId, departureAt: match.departureAt, candidates: match.candidates,
     destination: trip[5] || null, shape, stops, reason: null };
 }
@@ -81,7 +83,7 @@ function validateIndex(value: unknown): RouteIndex {
   const index = value as RouteIndex;
   const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
   const text = (value: unknown) => typeof value === 'string' && value.length > 0 && value.length < 1000;
-  if (!record(index) || index.version !== 1 || index.sourceId !== 'hsl-gtfs' || !Number.isFinite(Date.parse(index.generatedAt))
+  if (!record(index) || index.version !== 2 || index.sourceId !== 'hsl-gtfs' || !Number.isFinite(Date.parse(index.generatedAt))
     || JSON.stringify(index.bounds) !== JSON.stringify(RELEASE_BOUNDS) || !Array.isArray(index.trips) || index.trips.length > 400_000
     || !Array.isArray(index.calendar) || index.calendar.length > 100_000 || !Array.isArray(index.calendarDates) || index.calendarDates.length > 100_000
     || !Array.isArray(index.feedInfo) || !index.feedInfo.length || index.feedInfo.length > 1000
@@ -101,16 +103,20 @@ function validateIndex(value: unknown): RouteIndex {
     if (!Array.isArray(paths) || paths.length > 20_000) throw new Error('Invalid prepared route shapes');
     for (const path of paths) if (!Array.isArray(path) || path.length < 2 || path.length > 20_000 || path.some(point => !Array.isArray(point) || point.length !== 2 || !inBounds(point[0], point[1], RELEASE_BOUNDS))) throw new Error('Invalid prepared route coordinates');
   }
-  for (const stop of Object.values(index.stops)) if (!record(stop) || !text(stop.name) || !inBounds(stop.longitude, stop.latitude, RELEASE_BOUNDS)) throw new Error('Invalid prepared route stop');
+  for (const stop of Object.values(index.stops)) if (!record(stop) || !text(stop.name) || !inBounds(stop.longitude, stop.latitude, [-180, -90, 180, 90])) throw new Error('Invalid prepared route stop');
   for (const pattern of Object.values(index.patterns)) {
-    if (!Array.isArray(pattern) || pattern.length > 500 || pattern.some((entry, i) => !Array.isArray(entry) || entry.length !== 2 || !index.stops[entry[0]]
-      || !Number.isSafeInteger(entry[1]) || entry[1] < 0 || (i > 0 && entry[1] <= pattern[i - 1][1]))) throw new Error('Invalid prepared route stop pattern');
+    if (!Array.isArray(pattern) || pattern.length > 500 || pattern.some((entry, i) => !Array.isArray(entry) || entry.length !== 4 || !index.stops[entry[0]]
+      || !Number.isSafeInteger(entry[1]) || entry[1] < 0 || (i > 0 && entry[1] <= pattern[i - 1][1])
+      || entry.slice(2).some(offset => offset !== null && (typeof offset !== 'number' || !Number.isSafeInteger(offset) || Math.abs(offset) > 172_800))
+      || (entry[2] !== null && entry[3] !== null && entry[3] < entry[2]))) throw new Error('Invalid prepared route stop pattern');
   }
   const ids = new Set<string>();
   for (const trip of index.trips) {
     if (!Array.isArray(trip) || trip.length !== 9 || trip.some(value => typeof value !== 'string') || !text(trip[0]) || ids.has(trip[0])
       || !index.routes[trip[1]] || !text(trip[2]) || !['0', '1'].includes(trip[3]) || !index.shapes[trip[4]] || !index.patterns[trip[8]]) throw new Error('Invalid prepared route trip');
-    serviceSeconds(trip[6]); ids.add(trip[0]);
+    const departure = serviceSeconds(trip[6]);
+    if (index.patterns[trip[8]].some(stop => stop.slice(2).some(offset => typeof offset === 'number' && departure + offset < 0))) throw new Error('Invalid prepared stop time');
+    ids.add(trip[0]);
   }
   return index;
 }

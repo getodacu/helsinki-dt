@@ -32,7 +32,7 @@
 </script>
 
 <span class="eyebrow">RAILWAY STATION / {code}</span><h3>{station.name}</h3>
-<p class="panel-note">Next 12 passenger departures · Helsinki time</p>
+<h4>Passenger departures · Helsinki time</h4>
 {#if loading}<p class="notice" role="status">Loading departures…</p>{/if}
 {#if error || board?.error}<p class="notice" role="status">{board?.data ? 'Showing the last available board. ' : ''}{error || board?.error}</p>{/if}
 <div class="rail-board">
@@ -50,7 +50,7 @@
     </article>
   {:else}{#if !loading && board?.state === 'ready'}<p class="panel-note">No upcoming passenger departures reported.</p>{/if}{/each}
 </div>
-<p class="panel-note">Checked {formatDate(board?.retrievedAt)} · refreshes every 30 seconds while visible. Timetables and position coverage are independent.</p>
+<p class="panel-note">Checked {formatDate(board?.retrievedAt)}</p>
 <style>
   .rail-board { display: grid; gap: 8px; }
   article { border: 1px solid var(--border, #35505d); border-left: 3px solid #b29bd8; padding: 8px; border-radius: 2px; }

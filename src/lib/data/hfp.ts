@@ -39,12 +39,14 @@ export function decodeHfp(topic: string, payload: unknown, receivedAt: string): 
   if (oper !== null && oper !== undefined && typeof oper !== 'number' && typeof oper !== 'string') throw new Error('Invalid operating operator');
   const journey = vp.jrn;
   if (journey != null && typeof journey !== 'string' && (typeof journey !== 'number' || !Number.isSafeInteger(journey))) throw new Error('Invalid HFP journey reference');
+  const nextStopId = fields[13] || null;
+  if (nextStopId !== null && !/^[A-Za-z0-9_-]{1,100}$/.test(nextStopId)) throw new Error('Invalid HFP next stop');
   const deviation = numeric('dl');
   return {
     id: `${fields[7]}/${fields[8]}`, mode: fields[6] as TransitMode,
     ownerOperatorId: fields[7], vehicleId: fields[8], operatingOperatorId: oper == null ? null : String(oper),
     routeId: fields[9], directionId: ['1', '2'].includes(fields[10]) ? fields[10] : null,
-    serviceDate, startTime, journeyReference: journey == null ? null : String(journey),
+    serviceDate, startTime, journeyReference: journey == null ? null : String(journey), nextStopId,
     reportedAt: new Date(reportedTime).toISOString(), receivedAt,
     longitude, latitude, speedMetresPerSecond: numeric('spd'), headingDegrees: numeric('hdg'),
     rawDeviationSeconds: deviation, delaySeconds: deviation === null ? null : -deviation,

@@ -5,7 +5,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { RELEASE_BOUNDS, inBounds } from '../src/lib/area.ts';
 import { withGtfsRows, serviceSeconds, type GtfsRow } from '../src/lib/data/gtfs.ts';
-import { boundedShape, ROUTE_INDEX_MAX_BYTES, type RouteIndex, type RouteTrip } from '../src/lib/server/route-context.ts';
+import { boundedShape, ROUTE_INDEX_MAX_BYTES, type RouteIndex, type RouteTrip, type RoutePatternStop } from '../src/lib/server/route-context.ts';
 
 export function matchingRouteRetrieval(checksum: string, metadata: unknown): string | null {
   const source = metadata as { checksum?: unknown; retrievedAt?: unknown } | null;
@@ -23,7 +23,7 @@ export async function prepareRouteIndex(archive: string): Promise<RouteIndex> {
     const manifest = JSON.parse(await readFile(resolve('static/data/manifest.json'), 'utf8'));
     retrievedAt = matchingRouteRetrieval(archiveSha256, manifest.sources?.find((source: {id: string}) => source.id === 'hsl-gtfs'));
   } catch { /* Unknown retrieval stays separate from preparation time. */ }
-  const index: RouteIndex = { version: 1, generatedAt: new Date().toISOString(), sourceId: 'hsl-gtfs', bounds: [...RELEASE_BOUNDS],
+  const index: RouteIndex = { version: 2, generatedAt: new Date().toISOString(), sourceId: 'hsl-gtfs', bounds: [...RELEASE_BOUNDS],
     source: { url: 'https://infopalvelut.storage.hsldev.com/gtfs/hsl.zip', archiveSha256, feedVersion: null, validFrom: '', validTo: '', retrievedAt },
     routes: {}, calendar: [], calendarDates: [], feedInfo: [], trips: [], shapes: {}, stops: {}, patterns: {} };
   await withGtfsRows(archive, async readRows => {
@@ -52,7 +52,7 @@ export async function prepareRouteIndex(archive: string): Promise<RouteIndex> {
     shapes.clear();
     await readRows('stops.txt', row => {
       const longitude = Number(row.stop_lon), latitude = Number(row.stop_lat);
-      if (!row.stop_lon || !row.stop_lat || !inBounds(longitude, latitude, RELEASE_BOUNDS)) return;
+      if (!row.stop_lon || !row.stop_lat || !inBounds(longitude, latitude, [-180, -90, 180, 90])) return;
       if (index.stops[row.stop_id]) throw new Error('Duplicate GTFS stop');
       index.stops[row.stop_id] = { name: row.stop_name || row.stop_id, longitude, latitude };
       if (Object.keys(index.stops).length > 20_000) throw new Error('GTFS stop retention limit exceeded');
@@ -68,14 +68,14 @@ export async function prepareRouteIndex(archive: string): Promise<RouteIndex> {
     const coveredRoutes = new Set([...trips.values()].filter(trip => index.shapes[trip[4]]?.length).map(trip => trip[1]));
     for (const [id, trip] of trips) if (!coveredRoutes.has(trip[1])) trips.delete(id);
     const first = new Map<string, { sequence: number; departure: string; stopId: string }>();
-    const stops = new Map<string, [string, number][]>(); let retainedStops = 0;
+    const stops = new Map<string, RoutePatternStop[]>(); let retainedStops = 0;
     await readRows('stop_times.txt', row => {
       if (!trips.has(row.trip_id)) return;
       if (!/^\d+$/.test(row.stop_sequence)) throw new Error('Invalid GTFS stop sequence');
       const sequence = Number(row.stop_sequence), previous = first.get(row.trip_id);
       if (!previous || sequence < previous.sequence) { serviceSeconds(row.departure_time); first.set(row.trip_id, { sequence, departure: row.departure_time, stopId: row.stop_id }); }
       if (!index.stops[row.stop_id]) return;
-      const pattern = stops.get(row.trip_id) ?? []; pattern.push([row.stop_id, sequence]); stops.set(row.trip_id, pattern);
+      const pattern = stops.get(row.trip_id) ?? []; pattern.push([row.stop_id, sequence, row.arrival_time ? serviceSeconds(row.arrival_time) : null, row.departure_time ? serviceSeconds(row.departure_time) : null]); stops.set(row.trip_id, pattern);
       if (pattern.length > 500 || ++retainedStops > 8_000_000) throw new Error('GTFS scheduled stop retention limit exceeded');
     });
     const usedRoutes = new Set<string>(), usedShapes = new Set<string>();
@@ -83,8 +83,13 @@ export async function prepareRouteIndex(archive: string): Promise<RouteIndex> {
       const departure = first.get(trip[0]); if (!departure) continue;
       const pattern = (stops.get(trip[0]) ?? []).sort((a, b) => a[1] - b[1]);
       if (pattern.some((point, i) => i > 0 && pattern[i - 1][1] === point[1])) throw new Error('Duplicate GTFS stop sequence');
+      const base = serviceSeconds(departure.departure);
+      for (const stop of pattern) {
+        if (stop[2] !== null) stop[2] -= base;
+        if (stop[3] !== null) stop[3] -= base;
+      }
       const patternId = createHash('sha256').update(JSON.stringify(pattern)).digest('hex');
-      index.patterns[patternId] = pattern;
+      index.patterns[patternId] ??= pattern; stops.delete(trip[0]);
       trip[6] = departure.departure; trip[7] = departure.stopId; trip[8] = patternId;
       index.trips.push(trip); usedRoutes.add(trip[1]); usedShapes.add(trip[4]);
       index.shapes[trip[4]] ??= []; 

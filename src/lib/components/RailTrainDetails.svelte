@@ -1,10 +1,11 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { Vehicle } from '../types.ts';
   import { railDelay, type RailJourney, type RailResult } from '../rail.ts';
   import { formatDate, delayLabel, label } from '../inspection.ts';
   import { trafficAge, trafficIsStale } from '../traffic.ts';
-  let { vehicle, journey, now, removed = false, loading = false, error = '' }: {
-    vehicle: Vehicle; journey: RailResult<RailJourney> | null; now: number; removed?: boolean; loading?: boolean; error?: string
+  let { follow, vehicle, journey, now, removed = false, loading = false, error = '' }: {
+    follow?: Snippet; vehicle: Vehicle; journey: RailResult<RailJourney> | null; now: number; removed?: boolean; loading?: boolean; error?: string
   } = $props();
   let rail = $derived(journey?.data?.summary ?? vehicle.rail!);
   let event = $derived(rail.nextEvent);
@@ -24,13 +25,15 @@
   <div><dt>Operator / type</dt><dd>{rail.operator ?? 'Unknown'} · {rail.trainType ?? 'Unknown'}</dd></div>
   <div><dt>Journey</dt><dd>{rail.origin ?? 'Unknown origin'} → {rail.destination ?? 'Unknown destination'}</dd></div>
   <div><dt>Speed</dt><dd>{vehicle.speedMetresPerSecond === null ? 'Unknown' : `${(vehicle.speedMetresPerSecond * 3.6).toFixed(0)} km/h`}</dd></div>
+</dl>
+{@render follow?.()}
+<dl class="properties">
   <div><dt>Position reported</dt><dd>{formatDate(vehicle.reportedAt)}<small>{Math.floor(trafficAge(vehicle, now) / 1000)} s ago</small></dd></div>
   <div><dt>Position received</dt><dd>{formatDate(vehicle.receivedAt)}</dd></div>
   <div><dt>Timetable checked</dt><dd>{formatDate(journey?.retrievedAt ?? rail.timetableAt)}</dd></div>
 </dl>
 {#if event}
   <h4>Next stop · {event.stationName}</h4>
-  <p class="panel-note">Schedule-based {event.type === 'ARRIVAL' ? 'arrival' : 'departure'} · not inferred from GPS.</p>
   <dl class="properties">
     <div><dt>Scheduled</dt><dd>{formatDate(event.scheduledAt)}</dd></div>
     <div><dt>Estimated</dt><dd>{event.estimatedAt ? formatDate(event.estimatedAt) : 'No estimate supplied'}</dd></div>
@@ -48,6 +51,5 @@
     {/each}
   </ol></details>
 {/if}
-<p class="panel-note">12-second display buffer; movement uses received positions only. Model and rail height are approximate. ±60 seconds is the display convention for on time.</p>
 {#if !rail.departureDate}<p class="notice">Undated position: timetable and route cannot be linked safely.</p>{/if}
 <style>.rail-destination { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; font-weight: 400; } .rail-timetable { max-height: 340px; overflow: auto; }</style>

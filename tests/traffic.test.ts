@@ -400,7 +400,7 @@ test('a maximum combined provider snapshot fits the bounded SSE queue', async t 
   const release = feed.acquire(); broker.emit('connect');
   for (let i = 0; i < TRAFFIC_MAX_VEHICLES; i++) {
     const sample = source[0], fields = sample.topic.split('/');
-    fields[7] = '1'.repeat(31); fields[8] = String(i).padStart(32, '0'); fields[9] = '"'.repeat(64); fields[10] = '0';
+    fields[7] = '1'.repeat(31); fields[8] = String(i).padStart(32, '0'); fields[9] = '"'.repeat(64); fields[10] = '0'; fields[13] = '9'.repeat(100);
     broker.emit('message', fields.join('/'), Buffer.from(JSON.stringify({ VP: { ...sample.payload.VP,
       tst: new Date(NOW).toISOString(), oper: '"'.repeat(64), jrn: '"'.repeat(64),
       lat: 60.199999999999996, long: 24.899999999999998, spd: 0.0000012345678912345678, hdg: 0.0000012345678912345678, dl: -86400 } })));

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildingAddress, buildingName, buildingAttribute, knownValue, delayLabel, signedSeconds, matchesBuilding, matchesVehicle, formatDate, marineSourceLabel, vehicleSourceLabel } from '../src/lib/inspection.ts';
+import { buildingAddress, buildingName, buildingAttribute, knownValue, delayLabel, hslSchedule, signedSeconds, matchesBuilding, matchesVehicle, formatDate, marineSourceLabel, vehicleSourceLabel } from '../src/lib/inspection.ts';
 import { routeRequestUrl } from '../src/lib/route-context.ts';
 import { vehicleLabel } from '../src/lib/rail.ts';
 import type { Building, Vehicle } from '../src/lib/types.ts';
@@ -13,6 +13,20 @@ test('delay convention keeps sign, exact seconds and missing values distinct', (
   assert.equal(delayLabel(60), 'Within ±60 s'); assert.equal(delayLabel(-60), 'Within ±60 s');
   assert.equal(delayLabel(null), 'Unknown delay'); assert.equal(delayLabel(NaN), 'Unknown delay');
   assert.equal(signedSeconds(61), '+61 s'); assert.equal(signedSeconds(-61), '-61 s'); assert.equal(signedSeconds(null), 'Unknown');
+});
+test('HSL schedule badges keep the inclusive on-time band and signed delay', () => {
+  for (const [seconds, state, label, value] of [
+    [0, 'on-time', 'On time', '0 s'], [32, 'on-time', 'On time', '+32 s'],
+    [60, 'on-time', 'On time', '+60 s'], [-60, 'on-time', 'On time', '-60 s'],
+    [61, 'delayed', 'Delayed', '+61 s'], [-61, 'early', 'Early', '-61 s']
+  ] as const) {
+    assert.deepEqual(hslSchedule(seconds), { state, label });
+    assert.equal(signedSeconds(seconds), value);
+  }
+  for (const seconds of [null, NaN, Infinity, -Infinity]) {
+    assert.deepEqual(hslSchedule(seconds), { state: 'unknown', label: 'Unknown delay' });
+    assert.equal(signedSeconds(seconds), 'Unknown');
+  }
 });
 test('prepared address and original string IDs are searchable without guessed attributes', () => {
   assert.equal(buildingAddress(building), 'Mäntytie 7 00270 Helsinki');

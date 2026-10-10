@@ -7,10 +7,13 @@
   import type { TrafficSnapshot } from '#lib/traffic.ts';
   import type { Building } from '#lib/types.ts';
   import type { RouteCatalog, RouteContext } from '#lib/route-context.ts';
-  let { manifest, base, cache, onloadstate, traffic, layers, marinePaused = false, keyboardNavigation = true, stations = [], route = null, routeFilter = null, routes = [], buildingColours = new Map(), buildingTheme = false, onappearance, onselection, onbuildings, onstats, onhover, onerror, oninteraction, onready, oncontroller }:
+  import type { Webcam } from '#lib/webcams.ts';
+  import type { PortHarbour } from '#lib/port-cameras.ts';
+  import type { VehicleItinerary } from '#lib/itinerary.ts';
+  let { manifest, base, cache, onloadstate, traffic, layers, marinePaused = false, keyboardNavigation = true, stations = [], route = null, itinerary = null, routeFilter = null, routes = [], buildingColours = new Map(), buildingTheme = false, onappearance, onselection, onwebcamselect, onportcameraselect, onbuildings, onstats, onhover, onerror, oninteraction, onready, oncontroller }:
     { manifest: CityManifest; base: CityBase; cache: CityAssetCache; onloadstate: (state: SceneLoadState) => void; traffic: TrafficSnapshot; layers: Layers; marinePaused?: boolean; keyboardNavigation?: boolean;
-      stations?: SceneStation[]; route?: RouteContext | null; routeFilter?: string | null; routes?: RouteCatalog['routes']; buildingColours?: ReadonlyMap<string, string>; buildingTheme?: boolean; onappearance: (message: string) => void;
-      onselection: (selection: Selection | null, message?: string) => void; onbuildings: (buildings: Building[]) => void;
+      stations?: SceneStation[]; route?: RouteContext | null; itinerary?: VehicleItinerary | null; routeFilter?: string | null; routes?: RouteCatalog['routes']; buildingColours?: ReadonlyMap<string, string>; buildingTheme?: boolean; onappearance: (message: string) => void;
+      onwebcamselect?: (camera: Webcam) => void; onportcameraselect?: (harbour: PortHarbour) => void; onselection: (selection: Selection | null, message?: string) => void; onbuildings: (buildings: Building[]) => void;
       onstats: (stats: SceneStats) => void; onhover: (label: string) => void; onerror: (message: string) => void;
       oninteraction: () => void; onready: () => void; oncontroller: (controller: CitySceneController | null) => void } = $props();
   let container: HTMLDivElement;
@@ -19,7 +22,7 @@
   let compassRotation = $state<number | null>(null);
   onMount(() => {
     try {
-      controller = createCityScene(container, manifest, base, { onSelection: onselection, onBuildings: onbuildings,
+      controller = createCityScene(container, manifest, base, { onWebcamSelect: onwebcamselect, onPortCameraSelect: onportcameraselect, onSelection: onselection, onBuildings: onbuildings,
         onStats: onstats, onHover: onhover, onError: onerror, onCameraInteraction: oninteraction, onReady: onready, onAppearanceStatus: onappearance, onLoadState: onloadstate, onScale: value => scale = value, onCompassRotation: value => compassRotation = value }, cache, { bus: asset('models/bus.glb'), tram: asset('models/tram.glb'), ferry: asset('models/ferry.glb'), train: asset('models/train.glb') });
       oncontroller(controller);
     } catch (error) { onerror(error instanceof Error ? error.message : 'The 3D scene could not start.'); }
@@ -31,6 +34,7 @@
   $effect(() => { const instance = controller, enabled = keyboardNavigation; untrack(() => instance?.setKeyboardNavigation(enabled)); });
   $effect(() => { const instance = controller, values = stations; untrack(() => instance?.setStations(values)); });
   $effect(() => { const instance = controller, context = route; untrack(() => instance?.setRoute(context)); });
+  $effect(() => { const instance = controller, value = itinerary; untrack(() => instance?.setItinerary(value)); });
   $effect(() => { const instance = controller, labels = routes; untrack(() => instance?.setRoutes(labels)); });
   $effect(() => { const instance = controller, filter = routeFilter; untrack(() => instance?.setRouteFilter(filter)); });
   $effect(() => { const instance = controller, colours = buildingColours, themed = buildingTheme; untrack(() => instance?.setBuildingColours(colours, themed)); });

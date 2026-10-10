@@ -1,10 +1,11 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { Vehicle } from '#lib/types.ts';
   import { KNOTS_TO_METRES_PER_SECOND, marineHeading, marineTypeLabel, marineNavigationLabel, type MarineStatus } from '#lib/marine.ts';
   import { trafficIsStale, trafficShouldRemove } from '#lib/traffic.ts';
   import { formatDate, label, marineSourceLabel } from '#lib/inspection.ts';
   import { vehicleLabel } from '#lib/rail.ts';
-  let { vehicle, source, connected, now, removed = false }: { vehicle: Vehicle; source?: MarineStatus; connected: boolean; now: number; removed?: boolean } = $props();
+  let { follow, vehicle, source, connected, now, removed = false }: { follow?: Snippet; vehicle: Vehicle; source?: MarineStatus; connected: boolean; now: number; removed?: boolean } = $props();
   let marine = $derived(vehicle.marine);
   let expired = $derived(removed || trafficShouldRemove(vehicle, now));
   let positionError = $derived(source && 'positionError' in source ? source.positionError : source?.error);
@@ -23,6 +24,9 @@
     <div><dt>IMO</dt><dd>{marine?.imo ?? 'Unknown'}</dd></div>
     <div><dt>Call sign</dt><dd>{marine?.callSign ?? 'Unknown'}</dd></div>
     <div><dt>Speed</dt><dd>{vehicle.speedMetresPerSecond === null ? 'Unknown' : `${(vehicle.speedMetresPerSecond / KNOTS_TO_METRES_PER_SECOND).toFixed(1)} kn`}</dd></div>
+  </dl>
+  {@render follow?.()}
+  <dl class="properties">
     <div><dt>Course over ground</dt><dd>{degrees(marine?.courseOverGroundDegrees)}</dd></div>
     <div><dt>True heading</dt><dd>{degrees(vehicle.headingDegrees)}</dd></div>
     <div><dt>Marker orientation</dt><dd>{marineHeading(vehicle) === null ? 'Unknown · no direction cue' : vehicle.headingDegrees !== null ? 'Reported true heading' : 'Course while moving'}</dd></div>
@@ -38,6 +42,5 @@
     <div><dt>Metadata quality</dt><dd>{vehicle.quality.filter(flag => flag.startsWith('metadata-')).map(label).join(', ') || 'No additional flags supplied'}</dd></div>
   </dl>
   {#if positionError}<p class="notice">Position source: {positionError}</p>{/if}
-  {#if source?.metadataError}<p class="panel-note">Metadata unavailable: {source.metadataError}. A valid position remains usable.</p>{/if}
-  <p class="panel-note">Schematic marker at the reported sea position. Display delay: 10 seconds of received reports; reduced motion shows the latest accepted position. Reports stop at the last accepted fix, with no movement prediction. Metadata updates do not refresh position age.</p>
+  {#if source?.metadataError}<p class="panel-note">Metadata unavailable: {source.metadataError}</p>{/if}
 </div>

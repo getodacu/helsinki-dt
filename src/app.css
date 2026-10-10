@@ -44,8 +44,10 @@ select{font:inherit;color:inherit;background:#09202b;border:1px solid var(--bord
 .station-flags { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .station-flag { position: absolute; top: 0; left: 0; width: 44px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3px; border: 1px solid currentColor; border-radius: 4px; background: #112936f2; color: #88c9eb; box-shadow: 0 2px 9px #0006; cursor: pointer; pointer-events: auto; }
 .station-flag.rail { color: #b29bd8; }
-.station-flag.air-quality { color: #d8b5e8; }
+.station-flag.weather, .station-flag.air-quality, .station-flag.camera, .station-flag.port-camera { width: 56px; height: 60px; color: #ed765f; }
+.station-flag.camera, .station-flag.port-camera { color: var(--teal); }
 .station-flag::after { content: ''; position: absolute; top: 100%; left: 50%; height: 26px; border-left: 2px solid #d8e4e9; pointer-events: none; }
+.station-flag.weather::after, .station-flag.air-quality::after, .station-flag.camera::after, .station-flag.port-camera::after { height: 60px; border-left: 3px solid currentColor; }
 .station-flag svg { width: 26px; height: 26px; flex-shrink: 0; }
 .station-flag small { font-size: 8px; line-height: 1.4; text-transform: uppercase; letter-spacing: .03em; }
 .station-flag.selected, .station-flag:hover, .station-flag:focus-visible { background: #244657; outline: 2px solid currentColor; outline-offset: 2px; z-index: 1; }

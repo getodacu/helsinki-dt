@@ -263,6 +263,7 @@ Coverage is incomplete by design. The dated 8 October 2026 release evidence reco
 | `GET /api/traffic` | Current vehicle snapshot and dated feed status. |
 | `GET /api/traffic/stream` | SSE snapshots, updates, removals, status and 15-second heartbeat. |
 | `GET /api/observations` | Fixed station/six-hour observation snapshot; no query parameters. |
+| `GET /api/webcams/<stationId>` | Latest reported snapshot time and availability for one of the six fixed Digitraffic cameras; shared one-minute cache, unknown IDs return 404. |
 | `GET /api/route` | Prepared route catalog and source validity. |
 | `GET /api/route?...` | Exact journey lookup using `ownerOperatorId`, `vehicleId`, `routeId`, `directionId`, `serviceDate` and `startTime`. |
 | `GET /api/energy/catalog` | Validated catalog with city compatibility/source status and gzip negotiation. |
@@ -326,6 +327,14 @@ npx vite --config tests/city-depth.config.ts
 
 Open `http://127.0.0.1:5175/tests/city-depth.html`: it must report `PASS` for 144 camera positions. On the same server, `/tests/building-highlight.html` checks 108 views for tint coverage, selection/hover precedence, clearing and occlusion. Both use local renderer fixtures. Vehicle verification is described below.
 
+The port-camera browser self-check uses fixture media to test switching, refresh failures, visibility cleanup and keyboard/focus behavior. Start the app, open it in a headed Playwright CLI session named `port-cameras`, and zoom out until both harbour signs and Mannerheimintie are visible, then run:
+
+```sh
+npx --package @playwright/cli playwright-cli -s=port-cameras run-code --filename=tests/port-cameras.browser.js
+```
+
+Check provider playback separately; the self-check deliberately substitutes media and advances the browser clock, so close that session afterwards.
+
 Explicit live verifications are separate from regression tests. `node scripts/verify-traffic.ts` runs the HSL soak; `node scripts/verify-marine.ts --integrated` exercises the shared HSL/rail/marine feed and two in-process SSE readers, with bounded real-provider observation and cleanup. `node scripts/verify-marine.ts --integrated --fixture --peak=<observed-peak> --seconds=300` runs a labelled offline fixture at twice the supplied AIS peak. Marine reports are written under ignored `.cache/task-f/`; they do not store national raw payloads. Results distinguish provider age, server delivery and browser delivery; the in-process verifier does not measure browser/network latency. See [Task F results](docs/milestone-results/F.md) for the recorded scope and any remaining gates, and [release results](docs/milestone-results/E.md) for earlier release/browser evidence.
 
 | Symptom | Check/action |
@@ -381,6 +390,16 @@ Use these references when changing adapters, coordinates or deployment behavior:
 - [Implementation plan](docs/implementation-plan.md) and the milestone specifications in `docs/milestones/` for the original acceptance criteria.
 
 ExcelJS's UUID override is scoped to 11.1.1 for GHSA-w5hq-g745-h8pq; its workbook write/read regression covers the existing CommonJS usage. Keep the lockfile and installed versions aligned when changing dependencies. Capacity, source availability and browser behavior beyond the recorded verification remain workload/device dependent; full-detail municipal cache size is still unmeasured.
+
+## Traffic cameras
+
+Six teal camera signs mark Kivihaka mast, Ilmala, Ruoholahti, Lauttasaari, Kivihaka west and Munkkiniemi. Zoom out from City Centre to see them; they remain visible independently of weather and air-quality layers. Click or use Tab, Enter and Space to open a centered camera modal while retaining the inspector selection. Escape, the close button or a backdrop click dismisses it and restores focus.
+
+The modal loads the full-resolution JPEG directly from Digitraffic, with Fintraffic / CC BY 4.0 credit and the reported snapshot time in Helsinki time. Metadata refreshes every ten minutes while open and visible; images reload only when the reported timestamp advances. Reports older than thirty minutes, or a retained image after a refresh failure, show a stale notice. These are periodic snapshots, not video. No API key or dataset preparation is needed. The [camera research](docs/webcam-integration-research.md) records coordinates, preset IDs and source limitations.
+
+Two IP/CCTV camera signs open the Port of Helsinki viewer: South Harbour selects its video and West Harbour selects the Terminal 2 video. The grouped chooser includes all six official views, with Vuosaari labelled outside the map area. Harbour markers represent access locations rather than exact camera positions, and opening or switching views preserves the inspector selection.
+
+Port videos use permanent provider players in privacy-enhanced mode with autoplay off. Only the selected player loads; it is removed on switching, closing or hiding the page. The three snapshots load directly from the Port with its one-minute cache-busting refresh, pausing while hidden. Failed refreshes retain the previous image with a notice. Displayed image-load time is separate from the unknown capture time. Every view includes a linked Port source, and no Port media is relayed or saved by the app.
 
 ## Building photographs
 

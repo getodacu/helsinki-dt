@@ -7,7 +7,7 @@ export const TRAFFIC_IDLE_MS = 30_000;
 export const TRAFFIC_HEARTBEAT_MS = 15_000;
 export const TRAFFIC_MAX_VEHICLES = 1_000;
 // The queue must fit one bounded snapshot of all providers.
-export const TRAFFIC_MAX_QUEUE_BYTES = 8 * 1024 * 1024;
+export const TRAFFIC_MAX_QUEUE_BYTES = 9 * 1024 * 1024;
 
 export interface TrafficStatus {
   state: 'idle' | 'connecting' | 'live' | 'reconnecting';

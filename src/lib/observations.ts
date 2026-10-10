@@ -124,6 +124,17 @@ export function observationHistory(observations: Observation[], stationId: strin
     .sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt));
 }
 
+export function nearestHistoryIndex(history: Observation[], observedAt: number): number | null {
+  if (!Number.isFinite(observedAt)) return null;
+  let nearest: number | null = null;
+  let distance = Infinity;
+  for (let index = 0; index < history.length; index++) {
+    const difference = Math.abs(Date.parse(history[index].observedAt) - observedAt);
+    if (difference < distance) { nearest = index; distance = difference; }
+  }
+  return nearest;
+}
+
 /** Null values and absent expected timestamps break a line; never bridge an unobserved period. */
 export function chartSegments(history: Observation[]): Observation[][] {
   const segments: Observation[][] = [];

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { decodeFmiObservations, parseFmiParameters } from '../src/lib/data/fmi.ts';
 import { ObservationCache, OBSERVATION_MAX_BYTES, OBSERVATION_TIMEOUT_MS, validateObservationRequest } from '../src/lib/server/observations.ts';
-import { chartSegments, groupObservationStations, nearestObservation, observationHistory, type ObservationSnapshot } from '../src/lib/observations.ts';
+import { chartSegments, groupObservationStations, nearestObservation, observationHistory, nearestHistoryIndex, type ObservationSnapshot } from '../src/lib/observations.ts';
 import { GET } from '../src/routes/api/observations/+server.ts';
 import type { Observation } from '../src/lib/types.ts';
 
@@ -217,4 +217,20 @@ test('FMI request timeout retains validated station dates and respects its next 
   const requests = h.requests.length; h.setNow(START + 10 * 60_000 - 1);
   await h.cache.snapshot(); assert.equal(h.requests.length, requests);
   h.setNow(START + 10 * 60_000); await h.cache.snapshot(); assert.equal(h.requests.length, requests + 2);
+});
+
+
+test('history inspection selects the nearest recorded time, including null samples and uneven intervals', () => {
+  const history = [reading({ observedAt: '2026-10-08T11:00:00.000Z' }),
+    reading({ observedAt: '2026-10-08T11:10:00.000Z', value: null }),
+    reading({ observedAt: '2026-10-08T12:00:00.000Z' })];
+  assert.equal(nearestHistoryIndex(history, Date.parse('2026-10-08T11:12:00Z')), 1);
+  assert.equal(nearestHistoryIndex(history, Date.parse('2026-10-08T11:40:00Z')), 2);
+  assert.equal(nearestHistoryIndex(history, Date.parse('2026-10-08T11:05:00Z')), 0);
+  assert.equal(nearestHistoryIndex(history, Date.parse('2026-10-08T10:00:00Z')), 0);
+  assert.equal(nearestHistoryIndex(history, Date.parse('2026-10-08T13:00:00Z')), 2);
+  assert.equal(nearestHistoryIndex([history[0]], START), 0);
+  assert.equal(nearestHistoryIndex([], START), null);
+  assert.equal(nearestHistoryIndex(history, NaN), null);
+  assert.equal(nearestHistoryIndex([reading({ observedAt: 'invalid' })], START), null);
 });

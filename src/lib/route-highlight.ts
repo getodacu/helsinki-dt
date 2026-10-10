@@ -7,6 +7,7 @@ import { wgs84ToScene } from './geo.ts';
 import { MODE_COLOURS, type VehiclePlacement } from './live-fleet.ts';
 import type { RouteContext, RouteStop } from './route-context.ts';
 import type { TransitMode } from './types.ts';
+import { itineraryStopLabel, type VehicleItinerary } from './itinerary.ts';
 
 export function routeGeometry(route: RouteContext, base: CityBase, ferry = false): THREE.BufferGeometry {
   const positions: number[] = [];
@@ -73,7 +74,9 @@ export class RouteHighlight {
   private outlineMaterial = new THREE.MeshBasicMaterial({ color: '#071923', side: THREE.DoubleSide, depthTest: false, depthWrite: false });
   private directionGeometry: THREE.ShapeGeometry;
   private markers = document.createElement('div');
-  private stops: { stop: RouteStop; x: number; y: number; z: number; button: HTMLButtonElement }[] = [];
+  private stops: { stop: Pick<RouteStop, 'id' | 'name' | 'sequence'>; x: number; y: number; z: number; button: HTMLButtonElement }[] = [];
+  private itinerary: VehicleItinerary | null = null;
+  private markerSignature = '';
   private point = new THREE.Vector3();
   private base: CityBase;
   constructor(container: HTMLElement, base: CityBase) {
@@ -86,9 +89,13 @@ export class RouteHighlight {
     this.root.add(this.paths, this.direction); this.setVisible(false);
   }
   setRoute(route: RouteContext | null, mode: TransitMode) {
-    disposeLines(this.paths); this.markers.replaceChildren(); this.stops = [];
+    disposeLines(this.paths);
+    if (route?.status === 'exact') {
+      const lines = createRouteLines(route, this.base, mode); this.paths.add(...[...lines.children]);
+    }
+    if (this.itinerary && this.itinerary.vehicleId === route?.vehicleId) return;
+    this.itinerary = null; this.markerSignature = ''; this.markers.replaceChildren(); this.stops = [];
     if (route?.status !== 'exact') return;
-    const lines = createRouteLines(route, this.base, mode); this.paths.add(...[...lines.children]);
     this.markers.style.setProperty('--route-colour', MODE_COLOURS[mode]);
     this.stops = routeStopPositions(route, this.base, mode === 'ferry').map(position => {
       const button = document.createElement('button'); button.type = 'button';
@@ -98,6 +105,36 @@ export class RouteHighlight {
       dot.className = 'route-stop-dot'; name.className = 'route-stop-name'; name.textContent = position.stop.name;
       button.append(dot, name); this.markers.append(button);
       return { ...position, button };
+    });
+  }
+  setItinerary(itinerary: VehicleItinerary | null) {
+    this.itinerary = itinerary;
+    const positions = (itinerary?.stops ?? []).flatMap(stop => {
+      if (stop.longitude === null || stop.latitude === null) return [];
+      const [x, , z] = wgs84ToScene(stop.longitude, stop.latitude);
+      if (x < this.base.bounds[0] || x > this.base.bounds[2] || z < this.base.bounds[1] || z > this.base.bounds[3]) return [];
+      const height = sampleTerrainHeight(this.base.terrain, x, z);
+      return height === null ? [] : [{ stop, x, y: height + 1.5, z }];
+    });
+    const signature = JSON.stringify(positions.map(({ stop, x, y, z }) => [stop.key, x, y, z]));
+    if (signature !== this.markerSignature) {
+      this.markerSignature = signature; this.markers.replaceChildren();
+      this.stops = positions.map(position => {
+        const button = document.createElement('button'); button.type = 'button';
+        const dot = document.createElement('span'), name = document.createElement('span');
+        dot.className = 'route-stop-dot'; name.className = 'route-stop-name';
+        button.append(dot, name); this.markers.append(button);
+        return { ...position, button };
+      });
+    }
+    if (itinerary) this.markers.style.setProperty('--route-colour', MODE_COLOURS[itinerary.mode]);
+    positions.forEach(({ stop }, index) => {
+      const button = this.stops[index].button;
+      const text = `${stop.name} · ${itineraryStopLabel(stop)}`;
+      button.className = `route-stop-marker ${stop.state}`; button.title = text;
+      button.setAttribute('aria-label', `Stop ${stop.sequence}: ${text}`);
+      button.setAttribute('aria-current', stop.state === 'next' || stop.state === 'current' ? 'step' : 'false');
+      button.children[1].textContent = text;
     });
   }
   setVisible(visible: boolean) { this.paths.visible = visible; this.markers.hidden = !visible; }

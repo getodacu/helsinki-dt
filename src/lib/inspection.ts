@@ -2,6 +2,12 @@ import type { MarineStatus } from './marine.ts';
 import type { Building, Vehicle } from './types.ts';
 
 export const ON_TIME_BAND_SECONDS = 60;
+export function hslSchedule(seconds: number | null): { state: 'on-time' | 'delayed' | 'early' | 'unknown'; label: string } {
+  if (seconds === null || !Number.isFinite(seconds)) return { state: 'unknown', label: 'Unknown delay' };
+  if (seconds > ON_TIME_BAND_SECONDS) return { state: 'delayed', label: 'Delayed' };
+  if (seconds < -ON_TIME_BAND_SECONDS) return { state: 'early', label: 'Early' };
+  return { state: 'on-time', label: 'On time' };
+}
 export function delayLabel(seconds: number | null): string {
   if (seconds === null || !Number.isFinite(seconds)) return 'Unknown delay';
   if (Math.abs(seconds) <= ON_TIME_BAND_SECONDS) return 'Within ±60 s';
