@@ -12,6 +12,19 @@ export interface EnergyThemeOption {
   period: string;
   scenario: string | null;
 }
+/** Choose one supplied annual heat/DHW model; never relabel a projection as a baseline. */
+export function closestHeatDemandTheme(options: EnergyThemeOption[], currentYear = new Date().getFullYear()): EnergyThemeOption | null {
+  if (!Number.isFinite(currentYear)) return null;
+  const annual = options.flatMap(option => {
+    const period = /^(\d{4})-01-01 – (\d{4})-01-01$/.exec(option.period);
+    if (option.kind !== 'modeled-demand' || option.metric !== 'heat_dhw_demand' || !period
+      || Number(period[2]) !== Number(period[1]) + 1) return [];
+    return [{ option, year: Number(period[1]) }];
+  });
+  annual.sort((a, b) => Math.abs(a.year - currentYear) - Math.abs(b.year - currentYear) || a.year - b.year);
+  return annual[0]?.option ?? null;
+}
+
 const energyKey = (record: EnergyRecord) => JSON.stringify(['modeled-demand', record.sourceId, record.metric, record.unit, record.period.start, record.period.end, record.scenario]);
 const solarKey = (record: SolarRecord) => JSON.stringify(['solar', record.sourceId, record.metric, record.unit, record.calculationPeriod, record.vintage, record.assumptions]);
 export const exactBuildingEnergy = (record: EnergyRecord) => record.scope === 'building' && record.matchedBuildingIds.length === 1 && record.unmatchedSourceIds.length === 0;
