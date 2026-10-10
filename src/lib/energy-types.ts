@@ -64,6 +64,7 @@ export interface MeasuredEnergySeries {
   timezone: 'Europe/Helsinki';
   resolution: 'daily';
   records: EnergyRecord[];
+  historyRecords: EnergyRecord[];
   complete: boolean;
   total: number | null;
   availableMonths: string[];

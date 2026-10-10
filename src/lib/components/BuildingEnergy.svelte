@@ -1,104 +1,143 @@
 <script lang="ts">
   import EnergyHistory from './EnergyHistory.svelte';
+  import ModeledDemandChart from './ModeledDemandChart.svelte';
   import ConsoleIcon from './ConsoleIcon.svelte';
-  import { exactBuildingEnergy, propertyIsShared, formatEnergyDate, formatEnergyRecord } from '#lib/energy-display.ts';
-  import { buildingName, knownValue, label } from '#lib/inspection.ts';
-  import type { Building } from '#lib/types.ts';
+  import { exactBuildingEnergy, exactBuildingSolar, propertyIsShared, latestCompletedModeledDemand, formatEnergyRecord, humanizeEnergyUsage } from '#lib/energy-display.ts';
+  import { buildingName, knownValue } from '#lib/inspection.ts';
+  import type { Building, EnergyRecord } from '#lib/types.ts';
   import type { EnergyCatalogState, MeasuredEnergySeries } from '#lib/energy-types.ts';
   let { building, catalogState, loadingCatalog, buildings, onmember }:
     { building: Building; catalogState: EnergyCatalogState; loadingCatalog: boolean; buildings: Building[]; onmember: (id: string) => void } = $props();
   let catalog = $derived(catalogState.catalog);
   let properties = $derived(catalog?.properties.filter(property => property.matchedBuildingIds.includes(building.id)) ?? []);
   let property = $derived(properties.length === 1 ? properties[0] : null);
-  let modeled = $derived(catalog?.energy.filter(record => record.method === 'modeled' && exactBuildingEnergy(record) && record.matchedBuildingIds[0] === building.id && record.value !== null) ?? []);
-  let solar = $derived(catalog?.solar.filter(record => record.matchedBuildingIds.length === 1 && record.matchedBuildingIds[0] === building.id && record.value !== null) ?? []);
-  let unresolved = $derived(catalog?.reports.flatMap(report => report.associations.filter(association => ['ambiguous', 'conflict'].includes(association.status)
-    && [...association.buildingIds, ...association.candidates].includes(building.id))) ?? []);
-  let modelId = $state('');
-  let model = $derived(modeled.find(record => record.id === modelId) ?? modeled[0] ?? null);
-  let month = $state('');
+  let modeledRecords = $derived(catalog?.energy.filter(record => record.method === 'modeled' && exactBuildingEnergy(record) && record.matchedBuildingIds[0] === building.id) ?? []);
+  let modeled = $derived(modeledRecords.filter(record => record.value !== null && Number.isFinite(record.value)));
+  let solar = $derived(catalog?.solar.filter(record => exactBuildingSolar(record) && record.matchedBuildingIds[0] === building.id && record.value !== null && Number.isFinite(record.value)) ?? []);
+  let model = $derived(latestCompletedModeledDemand(modeled));
   let measured = $state.raw<MeasuredEnergySeries | null>(null);
   let loading = $state(false);
-  let error = $state('');
-  let selectedMonth = $derived(month || (measured ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Helsinki', year: 'numeric', month: '2-digit' }).format(new Date(measured.period.start)) : ''));
+  let historyOpen = $state(false);
   let hasReadings = $derived(!!measured?.records.some(record => record.value !== null));
-  let showProperty = $derived(!!property && !error && (loading || !!measured && measured.status !== 'unavailable'
-    && (hasReadings || measured.complete && measured.total !== null || measured.availableMonths.length > 0)));
-  const value = (number: number) => number.toLocaleString('en-GB', { maximumFractionDigits: 2 });
+  let showProperty = $derived(!!property && (loading || hasReadings));
+  let recordedUsage = $derived(measured?.records.reduce((sum, record) => sum + (record.value ?? 0), 0) ?? 0);
+  const monthName = (date: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(new Date(date));
+  function showHistory(dialog: HTMLDialogElement) {
+    const trigger = document.activeElement as HTMLElement | null;
+    dialog.showModal();
+    return { destroy() { dialog.close(); if (trigger?.isConnected) trigger.focus({ preventScroll: true }); } };
+  }
+  function historyKeys(event: KeyboardEvent & { currentTarget: HTMLDialogElement }) {
+    event.stopPropagation();
+    if (event.key !== 'Tab') return;
+    const controls = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button')];
+    const first = controls[0], last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  }
+  let electricityDisplay = $derived(humanizeEnergyUsage(recordedUsage));
   const memberName = (id: string) => { const member = buildings.find(item => item.id === id); return member ? buildingName(member) : 'Building'; };
   $effect(() => {
-    const boundary = property, requestedMonth = month;
-    measured = null; error = ''; loading = !!boundary;
+    const boundary = property;
+    // Changing buildings closes the history even when they share a property.
+    building.id;
+    historyOpen = false; measured = null; loading = !!boundary;
     if (!boundary) return;
     const request = new AbortController();
     const params = new URLSearchParams({ property: boundary.id });
-    if (requestedMonth) params.set('month', requestedMonth);
     void fetch(`/api/energy?${params}`, { cache: 'no-store', signal: AbortSignal.any([request.signal, AbortSignal.timeout(45_000)]) })
       .then(async response => {
         if (!response.ok) throw new Error(`Measured energy unavailable (${response.status}).`);
         const series = await response.json() as MeasuredEnergySeries;
+        const validRecords = (records: EnergyRecord[]) => Array.isArray(records) && records.length <= 397
+          && records.every(record => record && record.scope === 'property' && record.scopeId === boundary.id && record.method === 'measured'
+            && record.unit === 'kWh' && record.metric === 'electricity_consumption' && record.sourceId === 'helsinki-nuuka' && record.scenario === null
+            && Number.isFinite(Date.parse(record.period?.start)) && Date.parse(record.period?.end) - Date.parse(record.period?.start) === 86_400_000
+            && (record.value === null || Number.isFinite(record.value)));
         if (series.property?.id !== boundary.id || series.scope !== 'property' || series.method !== 'measured' || series.unit !== 'kWh'
-          || series.metric !== 'electricity_consumption' || series.resolution !== 'daily' || !Array.isArray(series.records)
+          || series.metric !== 'electricity_consumption' || series.resolution !== 'daily' || series.timezone !== 'Europe/Helsinki'
+          || !validRecords(series.records) || !validRecords(series.historyRecords)
           || !Array.isArray(series.availableMonths) || !Array.isArray(series.availableCompleteMonths)
-          || !Number.isFinite(Date.parse(series.period?.start)) || !Number.isFinite(Date.parse(series.period?.end))
-          || series.records.some(record => record.scope !== 'property' || record.scopeId !== boundary.id || record.method !== 'measured'
-            || record.unit !== series.unit || record.metric !== series.metric || (record.value !== null && !Number.isFinite(record.value)))) throw new Error('Measured energy response could not be read.');
+          || !Number.isFinite(Date.parse(series.period?.start)) || !Number.isFinite(Date.parse(series.period?.end))) throw new Error('Measured energy response could not be read.');
         return series;
       }).then(series => { if (!request.signal.aborted) measured = series; })
-      .catch(reason => { if (!request.signal.aborted) error = reason instanceof Error ? reason.message : 'Measured energy unavailable.'; })
+      .catch(() => { if (!request.signal.aborted) measured = null; })
       .finally(() => { if (!request.signal.aborted) loading = false; });
     return () => request.abort();
   });
 </script>
-  <section class="energy-section" aria-label="Building energy and solar records">
-    <h4 class="console-section-heading"><ConsoleIcon name="energy" />Energy & solar</h4>
-    {#if !loadingCatalog && !showProperty && !model && !solar.length}<p class="panel-note">{error || catalogState.message || 'No verified energy or solar records are available for this building.'}</p>{/if}
-    {#if loadingCatalog}<p class="notice" role="status">Loading…</p>{:else if catalogState.status === 'stale'}<p class="notice" role="status">Stale</p>{/if}
-    {#if unresolved.length}<p class="notice">Unresolved energy association</p>{/if}
-    {#if showProperty && property}
-      <div class="energy-block" data-energy-scope="property">
-        <h4>{propertyIsShared(property) ? 'Shared property electricity' : 'Property electricity'}</h4>
-        {#if knownValue(property.name)}<p class="panel-note"><strong>{property.name}</strong></p>{/if}
-        {#if propertyIsShared(property)}<details><summary>Buildings · {property.matchedBuildingIds.length}</summary>
-          <ul class="member-list">{#each property.matchedBuildingIds as id (id)}<li><button class="text-button" onclick={() => onmember(id)}>{memberName(id)}</button></li>{/each}</ul>
-        </details>{/if}
-        {#if loading}<p class="notice" role="status">Loading readings…</p>{/if}
-        {#if measured}
-          <p class="notice" role="status">{label(measured.status)} · {measured.complete ? 'Complete month' : 'Partial month'}</p>
-          {#if measured.availableMonths.length}<label class="filter-label">Energy month<select value={selectedMonth} onchange={event => month = event.currentTarget.value}>{#each measured.availableMonths as available (available)}<option value={available}>{available} · {measured.availableCompleteMonths.includes(available) ? 'complete' : 'partial'}</option>{/each}</select></label>{/if}
-          <dl class="properties"><div><dt>Period</dt><dd>{formatEnergyDate(measured.period.start)} – {formatEnergyDate(measured.period.end)}</dd></div>{#if measured.complete && measured.total !== null}<div><dt>Month total</dt><dd>{value(measured.total)} {measured.unit}</dd></div>{/if}</dl>
-          {#if hasReadings}{#key `${property.id}/${selectedMonth}`}<EnergyHistory records={measured.records} />{/key}{/if}
-        {/if}
-      </div>
-    {/if}
+<div class="energy-records">
+  {#if showProperty || loadingCatalog}
+    <section class="energy-section demand-section" aria-label="Electricity demand" aria-busy={loading || loadingCatalog}>
+      <h4 class="console-section-heading"><ConsoleIcon name="energy" />Electricity demand</h4>
+      {#if showProperty && property}
+        <div class="energy-block" data-energy-scope="property">
+          <p class="property-label">{propertyIsShared(property) ? 'Measured shared property total' : 'Measured property total'}</p>
+          {#if knownValue(property.name)}<p class="panel-note"><strong>{property.name}</strong></p>{/if}
+          {#if propertyIsShared(property)}<details><summary>Buildings · {property.matchedBuildingIds.length}</summary>
+            <ul class="member-list">{#each property.matchedBuildingIds as id (id)}<li><button class="text-button" onclick={() => onmember(id)}>{memberName(id)}</button></li>{/each}</ul>
+          </details>{/if}
+          {#if measured && hasReadings}
+            <p class="energy-month">{monthName(measured.period.start)}</p>
+            <p class="energy-value">{electricityDisplay.value} {electricityDisplay.unit}<small>Recorded usage</small></p>
+            <EnergyHistory records={measured.records} onexpand={() => historyOpen = true} />
+          {:else}<p class="energy-placeholder" aria-label="Loading electricity readings">—</p>{/if}
+        </div>
+      {:else}<p class="energy-placeholder" aria-label="Loading electricity demand">—</p>{/if}
+    </section>
+  {/if}
+  {#if model || loadingCatalog}
+    <section class="energy-section demand-section" aria-label="Heat/hot-water demand" aria-busy={loadingCatalog}>
+      <h4 class="console-section-heading"><ConsoleIcon name="energy" />Heat/hot-water demand</h4>
     {#if model && model.value !== null}
       {@const display = formatEnergyRecord(model)}
       <div class="energy-block" data-modeled-records={modeled.length}>
-        <h4>Modeled demand</h4>
-        {#if modeled.length > 1}<label class="filter-label">Metric / period<select value={model.id} onchange={event => modelId = event.currentTarget.value}>{#each modeled as record (record.id)}<option value={record.id}>{label(record.metric)} · {record.unit}{knownValue(record.scenario) ? ` · ${record.scenario}` : ''} · {record.period.start.slice(0, 10)}</option>{/each}</select></label>{/if}
-        <p class="energy-value">{display.value}{#if display.dailyAverage}<small>{display.dailyAverage}</small>{/if}</p>
-        <dl class="properties"><div><dt>Metric</dt><dd>{label(model.metric)} · {model.unit}</dd></div><div><dt>Period</dt><dd>{formatEnergyDate(model.period.start)} – {formatEnergyDate(model.period.end)}</dd></div>{#if knownValue(model.scenario)}<div><dt>Scenario</dt><dd>{model.scenario}</dd></div>{/if}</dl>
+        <p class="energy-value">{display.value}{#if display.dailyAverage}<small title={display.dailyAverage}>{display.dailyAverage.replace(/ average$/, '')}</small>{/if}</p>
+        <ModeledDemandChart records={modeledRecords} selectedId={model.id} />
       </div>
-    {/if}
-    {#if solar.length}
-      <div class="energy-block" data-solar-records={solar.length}>
-        <h4 class="console-section-heading"><ConsoleIcon name="solar" />Modeled solar radiation</h4>
+    {:else}<p class="energy-placeholder" aria-label="Loading heat and hot-water demand">—</p>{/if}
+    </section>
+  {/if}
+  {#if solar.length || loadingCatalog}
+    <section class="energy-section solar-section" aria-label="Solar energy potential" aria-busy={loadingCatalog}>
+      <h4 class="console-section-heading"><ConsoleIcon name="solar" />Solar energy potential</h4>
+      <div data-solar-records={solar.length} role="group" aria-label="Modeled incoming solar radiation on roof and wall surfaces">
         {#each solar as record (record.id)}
           {#if record.value !== null}
             {@const display = formatEnergyRecord(record)}
-            <div class="solar-record"><p class="energy-value">{display.value}{#if display.dailyAverage}<small>{display.dailyAverage}</small>{/if}</p></div>
+            <div class="solar-record"><p class="energy-value">{display.value}{#if display.dailyAverage}<small title={display.dailyAverage}>{display.dailyAverage.replace(/ average$/, '')}</small>{/if}</p></div>
           {/if}
         {/each}
+        {#if loadingCatalog && !solar.length}<p class="energy-placeholder" aria-label="Loading solar energy potential">—</p>{/if}
       </div>
+    </section>
     {/if}
-  </section>
+  {#if historyOpen && measured && property && hasReadings}
+    <dialog class="energy-history-dialog" aria-labelledby="energy-history-heading" use:showHistory onkeydown={historyKeys} onclose={() => historyOpen = false}>
+      <div class="dialog-heading"><h2 id="energy-history-heading">Electricity demand</h2><button class="icon-button" aria-label="Close electricity history" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
+      <p class="property-label">{propertyIsShared(property) ? 'Measured shared property total' : 'Measured property total'} · {property.name}</p>
+      <EnergyHistory records={measured.historyRecords} monthly />
+    </dialog>
+  {/if}
+</div>
 
 <style>
-  .energy-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .energy-section { --energy-accent: var(--teal); margin-top: 12px; border-top: 1px solid var(--border); border-left: 2px solid var(--energy-accent); padding: 10px 0 0 10px; }
+  .solar-section { --energy-accent: #efd480; }
+  .console-section-heading { color: var(--energy-accent); }
   h4 { font-size: 12px; font-weight: 500; margin: 0 0 8px; }
-  .energy-block { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
-  .energy-value { color: var(--teal); font-size: 16px; margin: 8px 0; font-variant-numeric: tabular-nums; }
-  .energy-value small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .energy-block { margin-top: 8px; }
+  .energy-value { display: flex; align-items: baseline; gap: 6px; color: var(--energy-accent); font-size: 12px; margin: 6px 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .energy-value small { color: var(--muted); font-size: 11px; }
+  .energy-month { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .property-label { color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+  .energy-placeholder { color: var(--muted); font-size: 16px; padding: 12px 0; }
+  .energy-history-dialog { margin: auto; width: min(850px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 20px; overflow: auto; color: #eaf0ef; background: #102733; border: 1px solid var(--border); border-radius: 6px; }
+  .energy-history-dialog::backdrop { background: #00101eb3; }
+  .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+  .dialog-heading h2 { font-size: 18px; font-weight: 500; }
+  .dialog-heading button { min-width: 44px; min-height: 44px; }
+  @media (max-width: 780px) { .energy-history-dialog { padding: 12px; } }
   .member-list { padding-left: 18px; margin: 8px 0; }
   .solar-record + .solar-record { border-top: 1px solid var(--border); padding-top: 8px; }
 </style>

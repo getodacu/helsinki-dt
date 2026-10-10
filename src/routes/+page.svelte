@@ -17,7 +17,7 @@
   import { RYHTI_THEMES, RYHTI_DIM_COLOUR } from '#lib/ryhti-display.ts';
   import type { RyhtiCatalogState } from '#lib/ryhti-types.ts';
   import BuildingEnergy from '#lib/components/BuildingEnergy.svelte';
-  import { ENERGY_COLOURS, NO_ENERGY_COLOUR } from '#lib/energy-display.ts';
+  import { ENERGY_COLOURS, NO_ENERGY_COLOUR, humanizeEnergyUsage } from '#lib/energy-display.ts';
   import type { EnergyCatalogState } from '#lib/energy-types.ts';
   import StationHistory from '#lib/components/StationHistory.svelte';
   import { loadCityManifest, loadCityBase, type CityManifest, type CityBase } from '#lib/city-assets.ts';
@@ -482,7 +482,7 @@
               {#if activeRyhtiTheme.key === 'ryhti:permits'}<p class="panel-note">All linked records, including historical permits. Multiple statuses means records report different statuses; this is not a live construction map.</p>{/if}
             {:else if activeTheme}
               <p class="panel-note">{label(activeTheme.metric)} · {activeTheme.unit}<br />{activeTheme.kind === 'solar' ? 'Modeled solar potential' : 'Modeled building demand'} · {activeTheme.period}{activeTheme.scenario ? ` · ${activeTheme.scenario}` : ''}<br />Source: {activeTheme.sourceId}</p>
-              {#if theme.minimum !== null && theme.maximum !== null}<div class="theme-gradient" style:background={`linear-gradient(to right, ${ENERGY_COLOURS[0]} 0% 33.333%, ${ENERGY_COLOURS[1]} 33.333% 66.666%, ${ENERGY_COLOURS[2]} 66.666% 100%)`} aria-hidden="true"></div><div class="theme-limits"><span>{theme.minimum.toLocaleString('en-GB', { maximumFractionDigits: 2 })}</span><span>{theme.maximum.toLocaleString('en-GB', { maximumFractionDigits: 2 })} {activeTheme.unit}</span></div><p class="panel-note">{theme.minimum === theme.maximum ? 'One value; middle color.' : 'Three equal ranges from the displayed minimum to maximum.'}</p>{/if}
+              {#if theme.minimum !== null && theme.maximum !== null}{@const minimum = humanizeEnergyUsage(theme.minimum, activeTheme.unit)}{@const maximum = humanizeEnergyUsage(theme.maximum, activeTheme.unit)}<div class="theme-gradient" style:background={`linear-gradient(to right, ${ENERGY_COLOURS[0]} 0% 33.333%, ${ENERGY_COLOURS[1]} 33.333% 66.666%, ${ENERGY_COLOURS[2]} 66.666% 100%)`} aria-hidden="true"></div><div class="theme-limits"><span>{minimum.value} {minimum.unit}</span><span>{maximum.value} {maximum.unit}</span></div><p class="panel-note">{theme.minimum === theme.maximum ? 'One value; middle color.' : 'Three equal ranges from the displayed minimum to maximum.'}</p>{/if}
               <p class="panel-note" data-theme-covered={theme.count} data-theme-denominator={releaseBuildingCount ?? ''}>{theme.count.toLocaleString()} colored / {releaseBuildingCount?.toLocaleString() ?? 'unknown'} prepared release buildings. Shared property totals and ambiguous associations excluded.</p>
               <p class="panel-note"><span class="no-data-swatch" style:background={NO_ENERGY_COLOUR}></span> Neutral = no comparable record. {theme.count ? '' : 'No comparable values in this dataset selection.'}</p>
             {/if}

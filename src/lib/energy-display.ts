@@ -73,19 +73,31 @@ function cadence(record: EnergyRecord): 'daily' | 'monthly' | 'annual' | null {
   return null;
 }
 
+const energyUnits = new Map([['kWh', 1], ['MWh', 1_000], ['GWh', 1_000_000]]);
+export function humanizeEnergyUsage(value: number, unit = 'kWh') {
+  const scale = energyUnits.get(unit);
+  if (!scale) return { value: value.toLocaleString('en-GB', { maximumFractionDigits: 2 }), unit };
+  const kwh = value * scale, magnitude = Math.abs(kwh);
+  const divisor = magnitude >= 1_000_000 ? 1_000_000 : magnitude >= 1_000 ? 1_000 : 1;
+  return { value: (kwh / divisor).toLocaleString('en-GB', { maximumFractionDigits: 2 }),
+    unit: divisor === 1_000_000 ? 'GWh' : divisor === 1_000 ? 'MWh' : 'kWh' };
+}
+
 export function formatEnergyRecord(record: EnergyRecord | SolarRecord) {
   if (record.value === null || !Number.isFinite(record.value)) return { value: 'Unknown', dailyAverage: null };
-  const original = { value: `${record.value.toLocaleString('en-GB', { maximumFractionDigits: 2 })} ${record.unit}`, dailyAverage: null };
-  if (record.unit !== 'kWh' || record.value < 0) return original;
+  const display = humanizeEnergyUsage(record.value, record.unit);
+  const original = { value: `${display.value} ${display.unit}`, dailyAverage: null };
+  const scale = energyUnits.get(record.unit);
+  if (!scale || record.value < 0) return original;
   const days = 'period' in record
     ? cadence(record) === 'annual' ? (Date.parse(record.period.end) - Date.parse(record.period.start)) / 86_400_000 : null
     // shortcut: solar has no weather year; use 365 days until the source supplies its calculation year.
     : /^annual\b/i.test(record.calculationPeriod) ? 365 : null;
   if (!days) return original;
-  const daily = record.value / days;
+  const daily = record.value * scale / days, average = humanizeEnergyUsage(daily);
   return {
-    value: `${(record.value / 1_000_000).toLocaleString('en-GB', { maximumSignificantDigits: 3 })} GWh/year`,
-    dailyAverage: `${daily > 0 && daily < 1 ? '<1' : `≈${daily.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`} kWh/day average`
+    value: `${original.value}/year`,
+    dailyAverage: daily > 0 && daily < 1 ? '<1 kWh/day average' : `≈${average.value} ${average.unit}/day average`
   };
 }
 
@@ -99,6 +111,27 @@ export function compatibleEnergyHistory(records: EnergyRecord[]): EnergyRecord[]
     && record.metric === first.metric && record.unit === first.unit && record.method === first.method && record.scenario === first.scenario && cadence(record) === expectedCadence)
     .sort((a, b) => Date.parse(a.period.start) - Date.parse(b.period.start));
 }
+/** Monthly recorded usage keeps unread days out of the sum and empty months as gaps. */
+export function monthlyEnergyUsage(records: EnergyRecord[]) {
+  const history = compatibleEnergyHistory(records), first = history[0];
+  if (!first || cadence(first) !== 'daily' || first.method !== 'measured' || first.scope !== 'property'
+    || first.metric !== 'electricity_consumption' || first.unit !== 'kWh') return [];
+  const monthKey = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7)
+    : periodParts.format(new Date(date)).slice(0, 7);
+  const months = new Map<string, { month: string; value: number | null }>();
+  const lastMonth = monthKey(history.at(-1)!.period.start);
+  for (let date = new Date(`${monthKey(first.period.start)}-01T00:00:00Z`); date.toISOString().slice(0, 7) <= lastMonth; date.setUTCMonth(date.getUTCMonth() + 1)) {
+    const month = date.toISOString().slice(0, 7);
+    months.set(month, { month, value: null });
+  }
+  for (const record of history) {
+    if (record.value === null || !Number.isFinite(record.value)) continue;
+    const month = months.get(monthKey(record.period.start))!;
+    month.value = (month.value ?? 0) + record.value;
+  }
+  return [...months.values()];
+}
+
 export function energyChartSegments(records: EnergyRecord[]): EnergyRecord[][] {
   const segments: EnergyRecord[][] = [];
   let segment: EnergyRecord[] = [], previous: EnergyRecord | null = null;
@@ -109,6 +142,37 @@ export function energyChartSegments(records: EnergyRecord[]): EnergyRecord[][] {
     }
     if (!previous || previous.period.end !== record.period.start) { segment = []; segments.push(segment); }
     segment.push(record); previous = record;
+  }
+  return segments;
+}
+
+export function latestCompletedModeledDemand(records: EnergyRecord[], currentYear = new Date().getFullYear()): EnergyRecord | null {
+  return records.filter(record => record.method === 'modeled' && cadence(record) === 'annual'
+    && record.value !== null && Number.isFinite(record.value) && Number(record.period.start.slice(0, 4)) < currentYear)
+    .sort((a, b) => Date.parse(b.period.start) - Date.parse(a.period.start))[0] ?? null;
+}
+
+/** The verified Helsinki workbook links its SQ baseline to five-year CC projections. */
+export function modeledDemandSegments(records: EnergyRecord[], selected: EnergyRecord): EnergyRecord[][] {
+  const years = [2020, 2025, 2030, 2035, 2040, 2045, 2050];
+  const selectedYear = Number(selected.period.start.slice(0, 4));
+  if (selected.method !== 'modeled' || !exactBuildingEnergy(selected) || selected.sourceId !== 'helsinki-modeled-demand' || selected.unit !== 'kWh'
+    || cadence(selected) !== 'annual' || !years.includes(selectedYear)
+    || selected.scenario !== (selectedYear === 2020 ? '2020 baseline (SQ)' : 'Climate change (CC)')) return [];
+  const compatible = records.filter(record => record.method === 'modeled' && exactBuildingEnergy(record)
+    && record.scopeId === selected.scopeId && record.matchedBuildingIds[0] === selected.matchedBuildingIds[0]
+    && record.sourceId === selected.sourceId && record.metric === selected.metric && record.unit === selected.unit && cadence(record) === 'annual');
+  const segments: EnergyRecord[][] = [];
+  let segment: EnergyRecord[] = [];
+  for (const year of years) {
+    const matches = compatible.filter(record => record.period.start === `${year}-01-01`
+      && record.scenario === (year === 2020 ? '2020 baseline (SQ)' : 'Climate change (CC)'));
+    const record = matches[0];
+    if (matches.length !== 1 || record.value === null || !Number.isFinite(record.value) || record.value < 0) {
+      segment = []; continue;
+    }
+    if (!segment.length) segments.push(segment);
+    segment.push(record);
   }
   return segments;
 }

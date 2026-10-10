@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import type { EnergyCatalog, EnergyCatalogState, EnergyProperty } from '../src/lib/energy-types.ts';
 import type { DatasetSource } from '../src/lib/types.ts';
 import { EnergyCatalogStore, validateEnergyCatalog } from '../src/lib/server/energy-catalog.ts';
-import { EnergyCache, ENERGY_MAX_ENTRIES, ENERGY_MAX_INFLIGHT, ENERGY_MAX_REQUESTS_PER_MINUTE, ENERGY_REFRESH_MS,
+import { EnergyCache, ENERGY_MAX_ENTRIES, ENERGY_MAX_INFLIGHT, ENERGY_MAX_REQUESTS_PER_MINUTE, ENERGY_REFRESH_MS, ENERGY_MAX_ROWS,
   completedEnergyMonths, decodeMeasuredDays, validateEnergyRequest } from '../src/lib/server/energy.ts';
 import { GET } from '../src/routes/api/energy/+server.ts';
 import { GET as catalogGET } from '../src/routes/api/energy/catalog/+server.ts';
@@ -45,7 +45,7 @@ test('measured series uses actual property membership, full daily month, units a
   assert.ok(result.records.every(record => record.scope === 'property' && record.scopeId === property.id && record.matchedBuildingIds.length === 1));
   assert.deepEqual(result.availableMonths, ['2026-09']); assert.deepEqual(result.availableCompleteMonths, ['2026-09']);
   assert.equal(result.source?.retrievedAt, new Date(initialNow).toISOString()); assert.match(result.source!.method, /no building allocation/);
-  assert.equal(new URL(requestedUrl).searchParams.get('EndTime'), '2026-09-30');
+  assert.equal(new URL(requestedUrl).searchParams.get('EndTime'), '2026-10-08');
   assert.equal(new URL(requestedUrl).searchParams.get('StartTime'), '2025-10-01');
   await cache.series({ ...query, month: '2026-09' }); assert.equal(requests, 1); assert.equal((await readdir(directory)).length, 1);
 });
@@ -61,13 +61,72 @@ test('null/absent days stay gaps, a real zero is retained and partial months hav
   assert.match(result.message!, /missing daily/);
 });
 
-test('latest default prefers complete coverage over a more recent partial month', async t => {
+test('latest default prefers the latest finite readings over older complete coverage', async t => {
   const august = Array.from({ length: 31 }, (_, index) => ({ ...fixture.rows[0], timestamp: '2026-08-' + String(index + 1).padStart(2, '0') + 'T00:00:00', value: 1 }));
   const cache = new EnergyCache({ cacheDirectory: await temporary(t), now: () => initialNow, loadCatalog: async () => ready(), fetchEnergy: async () => response([...august, fixture.rows[0]]) });
   const result = await cache.series(query);
-  assert.equal(result.period.start, '2026-08-01'); assert.equal(result.total, 31); assert.deepEqual(result.availableMonths, ['2026-09', '2026-08']);
+  assert.equal(result.period.start, '2026-09-01'); assert.equal(result.total, null); assert.deepEqual(result.availableMonths, ['2026-09', '2026-08']);
   const partial = await cache.series({ ...query, month: '2026-09' }); assert.equal(partial.total, null); assert.equal(partial.records[1].value, null);
   assert.deepEqual(partial.availableMonths, result.availableMonths);
+});
+
+test('current-month zero selects current readings and never invents future days or a complete total', async t => {
+  let requestedUrl = '';
+  const rows = [...fixture.rows, { ...fixture.rows[0], timestamp: '2026-10-02T00:00:00', value: 0 }];
+  const cache = new EnergyCache({ cacheDirectory: await temporary(t), now: () => initialNow, loadCatalog: async () => ready(),
+    fetchEnergy: async url => { requestedUrl = url; return response(rows); } });
+  const result = await cache.series(query);
+  assert.equal(result.period.start, '2026-10-01'); assert.equal(result.complete, false); assert.equal(result.total, null);
+  assert.equal(result.records.length, 8); assert.equal(result.records[1].value, 0);
+  assert.equal(result.records[0].value, null); assert.equal(result.records.at(-1)!.period.start, '2026-10-08');
+  assert.equal(new URL(requestedUrl).searchParams.get('EndTime'), '2026-10-08');
+  assert.deepEqual(result.availableMonths, ['2026-10', '2026-09']); assert.deepEqual(result.availableCompleteMonths, ['2026-09']);
+});
+
+test('all-null current month falls back to latest finite month while history preserves missing days and months', async t => {
+  let requests = 0;
+  const rows = [fixture.rows[0], { ...fixture.rows[0], timestamp: '2025-10-31T00:00:00', value: 0 },
+    { ...fixture.rows[0], timestamp: '2026-09-03T00:00:00', value: 12 }, { ...fixture.rows[0], timestamp: '2026-10-01T00:00:00', value: null }];
+  const cache = new EnergyCache({ cacheDirectory: await temporary(t), now: () => initialNow, loadCatalog: async () => ready(),
+    fetchEnergy: async () => { requests++; return response(rows); } });
+  const result = await cache.series(query);
+  assert.equal(result.period.start, '2026-09-01'); assert.equal(result.total, null);
+  assert.equal(result.historyRecords[0].period.start, '2025-10-01'); assert.equal(result.historyRecords.at(-1)!.period.start, '2026-10-08');
+  assert.equal(result.historyRecords.find(record => record.period.start === '2025-10-31')!.value, 0);
+  assert.equal(result.historyRecords.find(record => record.period.start === '2026-09-02')!.value, null);
+  assert.ok(result.historyRecords.filter(record => record.period.start.startsWith('2026-01')).every(record => record.value === null));
+  assert.ok(result.historyRecords.every(record => record.scopeId === property.id && record.matchedBuildingIds[0] === property.matchedBuildingIds[0]));
+  assert.deepEqual((await cache.series({ ...query, month: '2025-10' })).historyRecords, result.historyRecords); assert.equal(requests, 1);
+});
+
+test('full thirteen-month leap-year window fits row and saved-cache bounds', async t => {
+  const now = Date.parse('2024-03-31T20:30:00Z'), directory = await temporary(t);
+  const rows: { timestamp: string; reportingGroup: string; locationName: string; value: number; unit: string }[] = [];
+  for (let date = '2023-03-01'; date < '2024-04-01'; date = new Date(Date.parse(date) + 86_400_000).toISOString().slice(0, 10)) {
+    rows.push({ ...fixture.rows[0], timestamp: date + 'T00:00:00', value: 1 });
+  }
+  assert.equal(rows.length, ENERGY_MAX_ROWS);
+  let requests = 0;
+  const options = { cacheDirectory: directory, now: () => now, loadCatalog: async () => ready(),
+    fetchEnergy: async () => { requests++; return response(rows, now); } };
+  const cache = new EnergyCache(options), result = await cache.series(query);
+  assert.equal(result.historyRecords.length, 397); assert.equal(result.records.length, 31); assert.equal(result.complete, false); assert.equal(result.total, null);
+  const february = await cache.series({ ...query, month: '2024-02' });
+  assert.equal(february.records.length, 29); assert.equal(february.total, 29);
+  assert.deepEqual((await new EnergyCache(options).series(query)).historyRecords, result.historyRecords); assert.equal(requests, 1);
+});
+
+test('Helsinki day and month rollover refresh the window without waiting six hours', async t => {
+  let now = Date.parse('2026-09-30T20:30:00Z'); const ends: string[] = [];
+  const cache = new EnergyCache({ cacheDirectory: await temporary(t), now: () => now, loadCatalog: async () => ready(),
+    fetchEnergy: async url => { ends.push(new URL(url).searchParams.get('EndTime')!); return response(fixture.rows, now); } });
+  assert.equal((await cache.series(query)).complete, false);
+  now = Date.parse('2026-09-30T21:30:00Z');
+  const october = await cache.series(query);
+  assert.equal(october.complete, true); assert.equal(october.period.start, '2026-09-01');
+  assert.equal(october.historyRecords.at(-1)!.period.start, '2026-10-01');
+  now = Date.parse('2026-10-01T21:30:00Z'); await cache.series(query);
+  assert.deepEqual(ends, ['2026-09-30', '2026-10-01', '2026-10-02']);
 });
 
 test('successful empty, all-null, and cold provider failure remain distinct', async t => {
@@ -95,9 +154,10 @@ test('provider outage retains the original retrieval date in memory and after pr
   const cache = new EnergyCache(options); const first = await cache.series(query);
   now += ENERGY_REFRESH_MS + 1; offline = true;
   const stale = await cache.series(query); assert.equal(stale.status, 'stale'); assert.equal(stale.retrievedAt, first.retrievedAt); assert.equal(stale.total, first.total);
+  assert.deepEqual(stale.historyRecords, first.historyRecords);
   assert.match(stale.message!, /Dated readings are retained/); assert.equal(requests, 2);
   await cache.series(query); assert.equal(requests, 2);
-  const restarted = await new EnergyCache(options).series(query); assert.equal(restarted.status, 'stale'); assert.equal(restarted.retrievedAt, first.retrievedAt); assert.equal(restarted.total, first.total);
+  const restarted = await new EnergyCache(options).series(query); assert.equal(restarted.status, 'stale'); assert.equal(restarted.retrievedAt, first.retrievedAt); assert.equal(restarted.total, first.total); assert.deepEqual(restarted.historyRecords, first.historyRecords);
 });
 
 test('calendar rollover retains dated previous-month cache during an outage', async t => {
@@ -108,7 +168,7 @@ test('calendar rollover retains dated previous-month cache during an outage', as
   assert.equal(result.status, 'stale'); assert.equal(result.period.start, '2026-09-01'); assert.equal(result.complete, true);
 });
 
-test('disk write failure keeps fresh readings with a visible persistence warning', async t => {
+test('disk write failure keeps fresh readings and persistence diagnostics', async t => {
   const directory = await temporary(t), path = join(directory, 'not-a-directory'); await writeFile(path, 'occupied');
   const cache = new EnergyCache({ cacheDirectory: path, now: () => initialNow, loadCatalog: async () => ready(), fetchEnergy: async () => response() });
   const result = await cache.series(query); assert.equal(result.status, 'current'); assert.equal(result.complete, true); assert.match(result.message!, /could not be saved to disk/);
@@ -140,15 +200,17 @@ test('Nuuka validates daily dates, unit, scope, duplicates, bounds, rows and fin
     assert.throws(() => decodeMeasuredDays([{ ...fixture.rows[0], ...change }], property, window));
   }
   assert.throws(() => decodeMeasuredDays([fixture.rows[0], fixture.rows[0]], property, window));
-  assert.throws(() => decodeMeasuredDays(Array(367).fill(fixture.rows[0]), property, window));
+  assert.throws(() => decodeMeasuredDays(Array(ENERGY_MAX_ROWS + 1).fill(fixture.rows[0]), property, window));
 });
 
-test('browser requests accept only one prepared property and twelve completed Helsinki months', async () => {
+test('browser requests accept only one prepared property, current month and twelve completed Helsinki months', async () => {
   const valid = new URL('http://localhost/api/energy?property=' + property.id + '&month=2026-09');
   assert.deepEqual(validateEnergyRequest(valid, initialNow), { propertyId: property.id, month: '2026-09' });
+  valid.searchParams.set('month', '2026-10');
+  assert.deepEqual(validateEnergyRequest(valid, initialNow), { propertyId: property.id, month: '2026-10' });
   for (const suffix of ['', '?property=wrong', '?property=' + property.id + '&property=' + property.id,
     '?property=' + property.id + '&month=2026-09&month=2026-08', '?property=' + property.id + '&url=https://other.example',
-    '?property=' + property.id + '&month=2026-10', '?property=' + property.id + '&month=2025-09', '?property=' + property.id + '&month=2026-02-30']) {
+    '?property=' + property.id + '&month=2026-11', '?property=' + property.id + '&month=2025-09', '?property=' + property.id + '&month=2026-02-30']) {
     assert.throws(() => validateEnergyRequest(new URL('http://localhost/api/energy' + suffix), initialNow));
   }
   assert.equal(completedEnergyMonths(Date.parse('2026-09-30T21:30:00Z'))[0], '2026-09');
@@ -161,7 +223,7 @@ test('catalog and property whitelist failures do not make an upstream request', 
   let requests = 0;
   const cache = new EnergyCache({ cacheDirectory: await temporary(t), now: () => initialNow, loadCatalog: async () => ready(), fetchEnergy: async () => { requests++; return response(); } });
   await assert.rejects(cache.series({ propertyId: '000-000-0000-0000', month: null }), /not in the prepared/);
-  await assert.rejects(cache.series({ ...query, month: '2026-10' }), /bounded/); assert.equal(requests, 0);
+  await assert.rejects(cache.series({ ...query, month: '2026-11' }), /bounded/); assert.equal(requests, 0);
   const unavailable = new EnergyCache({ loadCatalog: async () => ({ status: 'unavailable', catalog: null, message: 'missing catalog', attemptedAt: null }) });
   await assert.rejects(unavailable.series(query), /missing catalog/);
 });

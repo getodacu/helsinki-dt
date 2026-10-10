@@ -9,7 +9,7 @@ import { requestText, type RequestOptions } from './io.ts';
 export const ENERGY_UPSTREAM = 'https://helsinki-openapi.nuuka.cloud/api/v1.0/EnergyData/Daily/ListByProperty';
 export const ENERGY_CACHE_DIRECTORY = resolve('.cache/energy/runtime');
 export const ENERGY_MAX_BYTES = 256 * 1024;
-export const ENERGY_MAX_ROWS = 366;
+export const ENERGY_MAX_ROWS = 397;
 export const ENERGY_MAX_ENTRIES = 64;
 export const ENERGY_REFRESH_MS = 6 * 3600_000;
 export const ENERGY_MAX_INFLIGHT = 4;
@@ -28,18 +28,20 @@ export function shiftMonth(month: string, offset: number): string {
   date.setUTCMonth(date.getUTCMonth() + offset);
   return date.toISOString().slice(0, 7);
 }
+function energyDay(now: number): string {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Helsinki', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
 export function completedEnergyMonths(now = Date.now()): string[] {
-  const parts = new Intl.DateTimeFormat('en', { timeZone: 'Europe/Helsinki', year: 'numeric', month: '2-digit' }).formatToParts(now);
-  const current = parts.find(part => part.type === 'year')!.value + '-' + parts.find(part => part.type === 'month')!.value;
+  const current = energyDay(now).slice(0, 7);
   return Array.from({ length: 12 }, (_, index) => shiftMonth(current, -index - 1));
 }
 export function validateEnergyRequest(url: URL, now = Date.now()): EnergyQuery {
   if ([...url.searchParams.keys()].some(key => !['property', 'month'].includes(key))
-    || url.searchParams.getAll('property').length !== 1 || url.searchParams.getAll('month').length > 1) throw new EnergyRequestError('Use one prepared property and an optional completed month.');
+    || url.searchParams.getAll('property').length !== 1 || url.searchParams.getAll('month').length > 1) throw new EnergyRequestError('Use one prepared property and an optional calendar month.');
   const propertyId = url.searchParams.get('property')!;
   if (!/^\d{3}-\d{3}-\d{4}-\d{4}$/.test(propertyId)) throw new EnergyRequestError('Invalid measured property identifier.');
   const month = url.searchParams.get('month');
-  if (month !== null && !completedEnergyMonths(now).includes(month)) throw new EnergyRequestError('Energy selection is limited to the previous twelve completed calendar months.');
+  if (month !== null && month !== energyDay(now).slice(0, 7) && !completedEnergyMonths(now).includes(month)) throw new EnergyRequestError('Energy selection is limited to the current and previous twelve calendar months.');
   return { propertyId, month };
 }
 function nextDay(value: string): string { return new Date(Date.parse(value) + 86400_000).toISOString().slice(0, 10); }
@@ -64,10 +66,10 @@ export function decodeMeasuredDays(payload: unknown, property: EnergyProperty, w
 function fingerprint(property: EnergyProperty, source: DatasetSource, cityGeneratedAt: string): string {
   return createHash('sha256').update(JSON.stringify({ version: 1, cityGeneratedAt, property, sourceId: source.id, sourceVersion: source.checksum, vintage: source.vintage })).digest('hex');
 }
-function rowsForMonth(rows: DailyRow[], property: EnergyProperty, month: string): EnergyRecord[] {
+function rowsForPeriod(rows: DailyRow[], property: EnergyProperty, start: string, end: string): EnergyRecord[] {
   const byDay = new Map(rows.map(row => [row.timestamp.slice(0, 10), row.value]));
-  const end = shiftMonth(month, 1) + '-01', records: EnergyRecord[] = [];
-  for (let date = month + '-01'; date < end; date = nextDay(date)) records.push({
+  const records: EnergyRecord[] = [];
+  for (let date = start; date < end; date = nextDay(date)) records.push({
     id: `nuuka:${property.id}:Electricity:${date}`, scope: 'property', scopeId: property.id,
     matchedBuildingIds: [...property.matchedBuildingIds], unmatchedSourceIds: [...property.unmatchedSourceIds],
     metric: 'electricity_consumption', period: { start: date, end: nextDay(date) }, value: byDay.get(date) ?? null,
@@ -95,12 +97,13 @@ export class EnergyCache {
     if (!state.catalog) throw new EnergyRequestError(state.message ?? 'The prepared energy catalog is unavailable.', 503);
     const property = state.catalog.properties.find(property => property.id === query.propertyId);
     if (!property) throw new EnergyRequestError('This property is not in the prepared energy catalog.');
-    const allowed = completedEnergyMonths(this.now());
+    const now = this.now(), today = energyDay(now), currentMonth = today.slice(0, 7);
+    const allowed = [currentMonth, ...completedEnergyMonths(now)];
     if (query.month !== null && !allowed.includes(query.month)) throw new EnergyRequestError('Energy month is outside the bounded selection.');
     const source = state.catalog.sources.find(source => source.id === 'helsinki-nuuka')!;
     const version = fingerprint(property, source, state.catalog.cityGeneratedAt);
     const key = createHash('sha256').update(version + ':latest').digest('hex');
-    const window = { start: allowed.at(-1)! + '-01', end: shiftMonth(allowed[0], 1) + '-01' };
+    const window = { start: allowed.at(-1)! + '-01', end: nextDay(today) };
     let entry = this.entries.get(key);
     if (!entry) {
       if (this.entries.size >= ENERGY_MAX_ENTRIES) {
@@ -121,22 +124,25 @@ export class EnergyCache {
     if (entry.pending) await entry.pending;
     const rows = entry.saved?.rows.filter(row => allowed.includes(row.timestamp.slice(0, 7))) ?? [];
     const availableMonths = [...new Set(rows.map(row => row.timestamp.slice(0, 7)))].sort().reverse();
-    const availableCompleteMonths = availableMonths.filter(month => complete(rowsForMonth(rows, property, month)));
-    const month = query.month ?? availableCompleteMonths[0] ?? availableMonths[0] ?? allowed[0];
-    const records = rowsForMonth(rows, property, month), isComplete = complete(records);
+    const historyRecords = rowsForPeriod(rows, property, window.start, window.end);
+    const availableCompleteMonths = availableMonths.filter(month => month !== currentMonth
+      && complete(historyRecords.filter(record => record.period.start.startsWith(month))));
+    const month = query.month ?? availableMonths.find(month => rows.some(row => row.timestamp.startsWith(month) && row.value !== null)) ?? availableMonths[0] ?? currentMonth;
+    const records = historyRecords.filter(record => record.period.start.startsWith(month));
+    const isComplete = month !== currentMonth && complete(records);
     const empty = !records.some(record => record.value !== null);
     const messages = [state.status === 'stale' ? state.message : null, entry.error,
       !isComplete && !empty ? 'This month has missing daily readings; its total is unavailable.' : null,
-      empty && entry.saved ? 'No finite daily electricity readings are available for this completed month.' : null];
+      empty && entry.saved ? 'No finite daily electricity readings are available for this month.' : null];
     return { status: !entry.saved ? 'unavailable' : entry.refreshFailed || state.status === 'stale' ? 'stale' : empty ? 'empty' : 'current',
       property, metric: 'electricity_consumption', unit: 'kWh', method: 'measured', scope: 'property',
-      period: { start: month + '-01', end: shiftMonth(month, 1) + '-01' }, timezone: 'Europe/Helsinki', resolution: 'daily', records,
+      period: { start: month + '-01', end: shiftMonth(month, 1) + '-01' }, timezone: 'Europe/Helsinki', resolution: 'daily', records, historyRecords,
       complete: isComplete, total: isComplete ? records.reduce((sum, record) => sum + record.value!, 0) : null,
       availableMonths, availableCompleteMonths,
       source: entry.saved ? { ...source, url: entry.saved.requestUrl, retrievedAt: entry.saved.retrievedAt,
         checksum: entry.saved.rowsSha256, units: ['kWh'],
         coverage: `Property ${property.id}; ${property.memberSourceIds.length} declared members, including unresolved associations.`,
-        method: 'Measured daily property electricity; no building allocation. Daily source calendar labels have no timezone suffix; displayed in Europe/Helsinki. Successful requests are cached for six hours; failures retry after one minute and a new completed-month or city/source version triggers a new lookup. Provider publication cadence is unknown.' } : source,
+        method: 'Measured daily property electricity; no building allocation. Daily source calendar labels have no timezone suffix; displayed in Europe/Helsinki. Successful requests are cached for six hours; failures retry after one minute and a new Helsinki calendar day or city/source version triggers a new lookup. Provider publication cadence is unknown.' } : source,
       retrievedAt: entry.saved?.retrievedAt ?? null, lastAttemptAt: entry.lastAttemptAt,
       message: messages.filter(Boolean).join(' ') || null };
   }
@@ -149,7 +155,7 @@ export class EnergyCache {
       const value = object(JSON.parse(bytes.toString('utf8'))), savedWindow = object(value.window);
       if (value.version !== 1 || value.fingerprint !== version || !timestamp(value.retrievedAt)
         || Date.parse(value.retrievedAt as string) > this.now() + 60000 || !day(savedWindow.start) || !day(savedWindow.end)
-        || savedWindow.start >= savedWindow.end || Date.parse(savedWindow.end) - Date.parse(savedWindow.start) > 366 * 86400_000
+        || savedWindow.start >= savedWindow.end || Date.parse(savedWindow.end) - Date.parse(savedWindow.start) > ENERGY_MAX_ROWS * 86400_000
         || savedWindow.end > window.end || savedWindow.start < shiftMonth(window.start.slice(0, 7), -1) + '-01'
         || value.requestUrl !== queryUrl(property, savedWindow as SavedSeries['window'])) return null;
       decodeMeasuredDays(value.rows, property, savedWindow as SavedSeries['window']);
