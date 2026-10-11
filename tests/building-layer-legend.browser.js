@@ -2,7 +2,7 @@
 // Catalog fixtures exercise long labels, equal ranges, missing values and stale status.
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
-  const picker = page.locator('#layers-dialog'), legend = page.locator('.building-layer-legend');
+  const picker = page.locator('#exploration-panel'), legend = page.locator('.building-layer-legend');
   const trigger = page.locator('#layers-trigger'), body = page.locator('#building-legend-body');
   const originalViewport = page.viewportSize();
   const reload = async () => { await page.reload(); await page.waitForFunction(() => document.querySelector('main')?.getAttribute('data-scene-ready') === 'true'); };
@@ -25,13 +25,17 @@ async (page) => {
     }
     return route.fulfill({ json: data });
   };
+  const openLayers = async () => {
+    if (!await picker.isVisible()) await trigger.click();
+  };
   const choose = async name => {
-    await trigger.click(); await picker.waitFor();
-    check(await picker.locator('.panel-note, .ryhti-legend, .theme-gradient').count() === 0, 'Legend or notes remain in picker');
-    await picker.getByRole('button', { name, exact: true }).click();
-    await picker.waitFor({ state: 'detached' });
-    check(await trigger.evaluate(element => element === document.activeElement), 'Layer selection did not restore focus');
+    await openLayers();
+    const group = picker.locator('details[name="exploration"]').filter({ has: page.getByRole('button', { name, exact: true, includeHidden: true }) });
+    if (!await group.evaluate(element => element.open)) await group.locator(':scope > summary').click();
+    await group.getByRole('button', { name, exact: true }).click();
+    check(await picker.locator('.building-layer-choices button[aria-pressed="true"]').count() === 1, 'Multiple colouring themes active');
     if (name !== 'Default appearance') {
+      if (page.viewportSize().width < 1200) await page.getByRole('button', { name: 'View legend', exact: true }).click();
       await legend.waitFor();
       check((await legend.locator('#building-legend-heading').innerText()).includes(name), 'Wrong legend title');
       check(await legend.count() === 1, 'Multiple legends mounted');
@@ -45,16 +49,16 @@ async (page) => {
       const inspector = document.querySelector('#identity-inspector');
       return { legend: { x: legend.x, y: legend.y, right: legend.right, bottom: legend.bottom }, mapHeight: map.height,
         bodyHeight: content.getBoundingClientRect().height, bodyWidth: content.clientWidth, bodyScrollWidth: content.scrollWidth,
-        inspectorBottom: inspector && getComputedStyle(inspector).display !== 'none' ? inspector.getBoundingClientRect().bottom : null };
+        inspectorBox: inspector && inspector.getClientRects().length ? { x: inspector.getBoundingClientRect().x, right: inspector.getBoundingClientRect().right } : null };
     });
     const viewport = page.viewportSize();
     check(result.legend.x >= 0 && result.legend.right <= viewport.width && result.legend.y >= 0 && result.legend.bottom <= viewport.height, 'Legend leaves viewport');
-    check(result.bodyHeight <= result.mapHeight * .4 + 1, 'Legend body exceeds 40% of map height');
+    if (viewport.width >= 1200) check(result.bodyHeight <= result.mapHeight * .4 + 1, 'Desktop legend body exceeds 40% of map height');
     check(result.bodyScrollWidth <= result.bodyWidth + 1, 'Category label creates horizontal overflow');
-    if (result.inspectorBottom !== null) check(result.legend.y >= result.inspectorBottom + 6, 'Legend overlaps inspector');
+    if (result.inspectorBox) check(result.legend.right <= result.inspectorBox.x || result.legend.x >= result.inspectorBox.right, 'Legend overlaps inspector');
   };
   try {
-    if (await picker.count()) await picker.getByRole('button', { name: 'Close layers' }).click();
+
     await page.route('**/api/catalog/status', catalogRoute);
     await page.setViewportSize({ width: 928, height: 1104 });
     await reload();
@@ -78,9 +82,11 @@ async (page) => {
     }
     await choose('Use');
     await page.screenshot({ path: 'output/playwright/building-legend-928.png' });
-    await page.getByRole('button', { name: '3D buildings', exact: true }).click();
+    await openLayers();
+    await picker.locator('details[name="exploration"]').first().locator(':scope > summary').click();
+    await picker.getByRole('checkbox', { name: '3D buildings', exact: true }).uncheck();
     check(await legend.count() === 0, 'Legend remains when buildings hidden');
-    await page.getByRole('button', { name: '3D buildings', exact: true }).click(); await legend.waitFor();
+    await picker.getByRole('checkbox', { name: '3D buildings', exact: true }).check();
     await choose('Default appearance'); check(await legend.count() === 0, 'Default appearance retains legend');
     await choose('Use');
     const search = page.getByRole('searchbox', { name: 'Vehicle, route, building, address or station' });
@@ -89,29 +95,26 @@ async (page) => {
     await page.locator('#identity-inspector').waitFor();
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 928, height: 1104 }, { width: 390, height: 844 }, { width: 1000, height: 450 }]) {
       await page.setViewportSize(viewport);
-      const mobile = viewport.width <= 780 || viewport.width <= 1100 && viewport.height <= 500;
-      if (mobile) {
-        const toggle = legend.locator('.legend-toggle');
-        if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click();
-        check(!await body.isVisible(), 'Mobile legend starts expanded');
-        await toggle.focus(); await page.keyboard.press('Enter'); check(await body.isVisible(), 'Keyboard expansion failed');
-        check((await legend.locator('.layer-control').first().boundingBox()).height >= 44, 'Mobile category target too small');
-        await toggle.focus(); await page.keyboard.press('Space'); check(!await body.isVisible(), 'Keyboard collapse failed');
-        await toggle.click();
+      if (viewport.width < 1200) {
+        if (!await body.isVisible()) {
+          if (await page.locator('#legend-trigger').isVisible()) await page.locator('#legend-trigger').click();
+          else { await trigger.click(); await page.getByRole('button', { name: 'View legend', exact: true }).click(); }
+        }
+        check(await body.isVisible() && !await page.locator('#identity-inspector').isVisible(), 'Shared panel overlaps inspector');
+        check((await legend.locator('.layer-control').first().boundingBox()).height >= 44, 'Category target too small');
       }
       await bounds();
       check(await body.evaluate(element => element.scrollHeight > element.clientHeight), 'Long category list does not scroll');
       await page.screenshot({ path: `output/playwright/building-legend-${viewport.width}-inspector.png` });
     }
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('#context-trigger').click();
     await page.getByRole('button', { name: 'Close inspector sheet' }).click();
-    check(await legend.isVisible() && !await page.locator('#identity-inspector').isVisible(), 'Closing inspector hides legend');
-    await choose('Heating method'); check(!await body.isVisible(), 'Switching layers did not collapse mobile legend');
-    await page.setViewportSize({ width: 928, height: 1104 });
-    await page.locator('.map-appearance').getByRole('button', { name: 'Transport', exact: true }).click();
-    const transport = page.locator('#transport-dialog'); await transport.waitFor();
-    check(!(await transport.innerText()).includes('Transit models use real-world scale'), 'Transport explanation remains');
-    await transport.getByRole('button', { name: 'Close transport' }).click();
+    check(!await page.locator('#identity-inspector').isVisible(), 'Inspector sheet remains open');
+    await page.locator('#context-trigger').click();
+    check((await page.locator('#identity-inspector').innerText()).includes('Helsinki Mannerheimintie'), 'Closing sheet cleared selection');
+    await choose('Heating method');
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByRole('button', { name: 'Data & sources', exact: true }).click();
     const sources = page.locator('#sources'); await sources.waitFor();
     const sourceText = await sources.innerText();
@@ -121,10 +124,11 @@ async (page) => {
     for (mode of ['equal', 'missing', 'stale', 'unavailable']) {
       await reload();
       if (mode === 'unavailable') {
-        await trigger.click(); await picker.waitFor();
+        await openLayers();
+        const energyGroup = picker.locator('details[name="exploration"]').filter({ has: page.getByRole('button', { name: 'Heat demand', exact: true, includeHidden: true }) });
+        if (!await energyGroup.evaluate(element => element.open)) await energyGroup.locator(':scope > summary').click();
         check(await picker.getByRole('button', { name: 'Heat demand', exact: true }).isDisabled(), 'Unavailable layer selectable');
         check(await legend.count() === 0, 'Unavailable layer has a legend');
-        await picker.getByRole('button', { name: 'Close layers' }).click();
         continue;
       }
       await choose('Heat demand');

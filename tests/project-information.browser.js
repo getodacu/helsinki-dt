@@ -3,7 +3,14 @@
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   const viewport = page.viewportSize();
-  const navigation = page.getByRole('navigation', { name: 'Project information', exact: true });
+  const navigation = page.locator('.header-actions');
+  const compactNavigation = page.locator('#project-menu');
+  const menuTrigger = page.locator('#project-menu-trigger');
+  const openMenu = async () => {
+    const compact = page.viewportSize().width < 1200;
+    if (compact && !await compactNavigation.evaluate(element => element.matches(':popover-open'))) await menuTrigger.click();
+    return compact ? compactNavigation : navigation;
+  };
   const trigger = navigation.getByRole('button', { name: 'Data & sources', exact: true });
   const dialog = page.locator('#sources');
   const sections = dialog.getByRole('group', { name: 'Project information sections' });
@@ -46,6 +53,7 @@ async (page) => {
     await page.route('**/api/observations', observationsRoute);
     await page.route('**/api/catalog/status', catalogRoute);
     const loadedObservations = page.waitForResponse(response => new URL(response.url()).pathname === '/api/observations');
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.reload();
     await loadedObservations;
     await trigger.focus(); await trigger.press('Enter');
@@ -96,7 +104,17 @@ async (page) => {
       }
     }
     await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
-    check(await trigger.evaluate(element => element === document.activeElement), 'Escape did not return focus');
+    check(await menuTrigger.evaluate(element => element === document.activeElement), 'Hidden desktop opener has no compact focus fallback');
+    for (const [name, heading] of [['About this project', 'About this project'], ['Open for collaboration', 'Open for collaboration'], ['Data & sources', 'Data & Sources']]) {
+      const button = (await openMenu()).locator('.source-button').filter({ hasText: name });
+      await button.focus(); await button.press('Enter'); await dialog.waitFor();
+      check(await dialog.getByRole('heading', { name: heading, exact: true }).isVisible(), 'Compact header opened the wrong section');
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
+      check(await navigation.locator('.source-button').filter({ hasText: name }).evaluate(element => element === document.activeElement), 'Hidden compact opener has no desktop focus fallback');
+      await page.setViewportSize({ width: 1000, height: 450 });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
     const copyright = page.locator('.scene-footer .project-copyright');
     await inViewport(copyright);
     check(await copyright.innerText() === `© ${new Date().getFullYear()} ai.ro`, 'Map copyright year incorrect');
@@ -110,11 +128,11 @@ async (page) => {
     check((await navigation.getByRole('button').allTextContents()).map(text => text.trim()).join('|') === 'About this project|Open for collaboration|Data & sources ↗', 'Header menu order differs from Ocean Lens');
     for (const size of [{ width: 1440, height: 1000 }, { width: 928, height: 1104 }, { width: 781, height: 844 }, { width: 390, height: 844 }, { width: 320, height: 568 }, { width: 1000, height: 450 }]) {
       await page.setViewportSize(size);
-      await inViewport(navigation);
+      await inViewport(size.width < 1200 ? menuTrigger : navigation);
       await inViewport(page.locator('#city-search'));
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Header causes page overflow at ${size.width}×${size.height}`);
       for (const [name, heading] of [['About this project', 'About this project'], ['Open for collaboration', 'Open for collaboration'], ['Data & sources', 'Data & Sources']]) {
-        const button = navigation.getByRole('button', { name, exact: true });
+        const button = (await openMenu()).locator('.source-button').filter({ hasText: name });
         await inViewport(button);
         check((await button.boundingBox()).height >= 44, 'Header touch target too small');
         await button.focus(); await button.press('Enter'); await dialog.waitFor();
@@ -122,12 +140,12 @@ async (page) => {
         check(await button.getAttribute('aria-expanded') === 'true', 'Open section is not exposed by the header');
         await inViewport(dialog); await inViewport(dialog.locator('.information-footer'));
         await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
-        check(await button.evaluate(element => element === document.activeElement), 'Header opener did not regain focus');
+        check(await (size.width < 1200 ? menuTrigger : button).evaluate(element => element === document.activeElement), 'Header opener did not regain focus');
       }
       await inViewport(copyright);
       await page.screenshot({ path: `output/playwright/project-menu-${size.width}.png` });
     }
-    console.log('PASS: Ocean Lens menu, direct section access, source provenance, outages, keyboard focus, links and responsive layouts');
+    return { projectSections: 3, provenance: true, outages: true, keyboardFocus: true, compactMenu: true, viewports: 6 };
   } finally {
     await page.unroute('**/api/observations', observationsRoute);
     await page.unroute('**/api/catalog/status', catalogRoute);

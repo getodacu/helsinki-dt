@@ -61,7 +61,8 @@ async (page) => {
     check((await page.locator('[aria-label="Inspector"]').innerText()).includes('Helsinki Mannerheimintie'), 'Inspector selection changed');
     await page.keyboard.press('Enter'); await modal.waitFor(); await close();
     await page.keyboard.press('Space'); await modal.waitFor(); await page.mouse.click(4, 4); await modal.waitFor({ state: 'detached' });
-    await marker('West Harbour').click(); await settled(); check(await chooser.inputValue() === 'west-lt2', 'Wrong West default');
+    // The desktop exploration column can cover this projected marker; use its keyboard entry point.
+    await marker('West Harbour').focus(); await page.keyboard.press('Enter'); await settled(); check(await chooser.inputValue() === 'west-lt2', 'Wrong West default');
     failImages = true; await chooser.selectOption('west-parking'); await settled();
     check(await modal.locator('img').count() === 0 && (await modal.innerText()).includes('Camera snapshot unavailable.'), 'Initial unavailable state missing');
     await page.evaluate(() => {

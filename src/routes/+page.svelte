@@ -1,6 +1,7 @@
 <script lang="ts">
   import '#lib/city-console.css';
   import ConsoleIcon from '#lib/components/ConsoleIcon.svelte';
+  import CityOverview from '#lib/components/CityOverview.svelte';
   import VehicleModelPreview from '#lib/components/VehicleModelPreview.svelte';
   import MarineVesselDetails from '#lib/components/MarineVesselDetails.svelte';
   import RailTrainDetails from '#lib/components/RailTrainDetails.svelte';
@@ -41,19 +42,13 @@
     { key: 'imagery', label: 'Aerial imagery' }, { key: 'buildings', label: '3D buildings' },
     { key: 'terrain', label: 'Land & islands' }, { key: 'roads', label: 'Roads & rail' }
   ] as const;
-  let transportOpen = $state(false);
   let helpOpen = $state(false);
-  let layersOpen = $state(false);
-  let controlsHeight = $state(0);
   let buildingTab = $state<'overview' | 'details'>('overview');
   let themeKey = $state('');
   let city = $state.raw<{ manifest: CityManifest; base: CityBase; cache: CityAssetCache } | null>(null);
   let selectedRyhtiCategories = $state<string[]>([]);
-  let legendExpanded = $state(false);
   const changeTheme = (key: string) => {
     themeKey = key;
-    legendExpanded = false;
-    layersOpen = false;
     selectedRyhtiCategories = catalog?.themes.find(theme => theme.key === key)?.categories.map(category => category.key) ?? [];
   };
   let scene = $state.raw<CitySceneController | null>(null);
@@ -137,7 +132,8 @@
   let railStationsError = $state('');
   let routeCatalog = $state.raw<RouteCatalog | null>(null);
   let routeCatalogLoading = $state(true);
-  let mobilePanel = $state<'inspect' | null>(null);
+  let activePanel = $state<'layers' | 'inspect' | 'overview' | 'legend' | null>(null);
+  let panelTrigger: HTMLElement | null = null;
   let stats = $state.raw<SceneStats | null>(null);
   let traffic = $state.raw<TrafficSnapshot>({ type: 'snapshot', generatedAt: new Date().toISOString(), vehicles: [],
     status: { state: 'idle', connectedAt: null, lastPositionAt: null, retryAt: null } });
@@ -290,8 +286,8 @@
     if (changed || (selection?.kind === 'vehicle' && selection.removed)) following = false;
     if (changed) {
       buildingTab = 'overview';
-      if (selection) { mobilePanel = 'inspect'; layersOpen = false; searchOpen = false; focusInspector(); }
-      else { if (mobilePanel === 'inspect') mobilePanel = null; closeSearch(); }
+      if (selection) { activePanel = 'inspect'; searchOpen = false; focusInspector(); }
+      else { if (activePanel === 'inspect') activePanel = null; closeSearch(); }
     }
     if (selection?.kind === 'vehicle' && selection.vehicle.mode === 'ship') { route = null; railJourney = null; routeError = ''; }
     selected = selection; selectionMessage = message;
@@ -299,20 +295,28 @@
   const selectObject = (selection: Selection) => {
     if (scene && ready) scene.select(selection);
     else setSelection(selection, sceneError ? '3D rendering unavailable. Showing available source metadata.' : 'Map loading. Showing source metadata.');
-    if (searchOpen && identity(selected) === identity(selection)) { searchOpen = false; mobilePanel = 'inspect'; focusInspector(); }
+    if (identity(selected) === identity(selection)) { searchOpen = false; activePanel = 'inspect'; focusInspector(); }
   };
   const clearSelection = () => { if (scene) scene.clearSelection(); else setSelection(null); };
-  const setMobilePanel = (panel: typeof mobilePanel) => {
-    mobilePanel = panel;
+  const setActivePanel = (panel: typeof activePanel) => {
+    if (panel && !activePanel) panelTrigger = document.activeElement as HTMLElement | null;
+    activePanel = panel;
     void tick().then(() => {
-      if (panel) document.querySelector<HTMLButtonElement>('#identity-inspector .mobile-sheet-heading button')?.focus();
-      else document.querySelector<HTMLButtonElement>('.mobile-panel-nav [aria-controls="identity-inspector"]')?.focus();
+      if (panel) document.getElementById(panel === 'inspect' ? 'inspection-heading' : panel === 'overview' ? 'overview-heading' : panel === 'legend' ? 'building-legend-heading' : 'exploration-heading')?.focus({ preventScroll: true });
+      else if (panelTrigger?.isConnected && panelTrigger.getClientRects().length) panelTrigger.focus({ preventScroll: true });
+      else document.getElementById('context-trigger')?.focus({ preventScroll: true });
     });
   };
   function showDialog(dialog: HTMLDialogElement) {
-    const trigger = document.activeElement as HTMLElement | null;
+    const trigger = document.activeElement as HTMLElement | null, section = informationSection;
     dialog.showModal();
-    return { destroy() { dialog.close(); if (trigger?.isConnected) trigger.focus({ preventScroll: true }); } };
+    return { destroy() {
+      dialog.close();
+      const target = [trigger, document.getElementById('project-menu-trigger'),
+        document.querySelector<HTMLElement>(`.header-actions [data-information-section="${section}"]`)]
+        .find(element => element?.isConnected && element.getClientRects().length);
+      target?.focus({ preventScroll: true });
+    } };
   }
   const choosePreset = (value: CameraPreset) => { preset = value; following = false; scene?.preset(value); };
   const chooseRoute = (id: string) => {
@@ -322,7 +326,11 @@
     if (vehicle) selectObject({ kind: 'vehicle', vehicle });
     else selectionMessage = 'No current vehicle report for this route. No journey shape can be inferred.';
   };
-  const openSources = (section: typeof informationSection = 'data') => { informationSection = section; sourceOpen = true; };
+  const openSources = (section: typeof informationSection = 'data') => {
+    const menu = document.getElementById('project-menu');
+    if (menu?.matches(':popover-open')) { menu.hidePopover(); document.getElementById('project-menu-trigger')?.focus(); }
+    informationSection = section; sourceOpen = true;
+  };
   const showInformationSection = (section: typeof informationSection) => {
     informationSection = section;
     document.querySelector('#sources .drawer-content')?.scrollTo({ top: 0 });
@@ -434,7 +442,7 @@
 </script>
 
 <svelte:head><title>Helsinki Lens · Digital Twin</title><meta name="description" content="Inspect central Helsinki buildings, live HSL, rail and AIS ship reports and dated environmental station observations." /></svelte:head>
-<svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !document.querySelector('dialog[open]') && !document.getElementById('live-feed-status')?.matches(':popover-open')) { if (searchOpen) { event.preventDefault(); closeSearch(); } else { clearSelection(); if (mobilePanel) setMobilePanel(null); } } }} onpointerdown={event => { if (searchOpen && event.target instanceof Element && !event.target.closest('.navbar-search')) searchOpen = false; }} />
+<svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !document.querySelector('dialog[open]') && !document.querySelector('[popover]:popover-open')) { if (searchOpen) { event.preventDefault(); closeSearch(); } else if (activePanel && window.matchMedia('(max-width: 1199px)').matches) { event.preventDefault(); setActivePanel(null); } else clearSelection(); } }} onpointerdown={event => { if (searchOpen && event.target instanceof Element && !event.target.closest('.navbar-search')) searchOpen = false; }} />
 <a class="skip-link" href="#city-search">Skip to city search</a>
 <div class="app-shell city-console">
   <header class="masthead">
@@ -460,13 +468,16 @@
       {#if trafficError}<p class="panel-note">{trafficError}</p>{/if}
     </div>
     <button class="console-help" aria-label="Help using the city" onclick={() => helpOpen = true}>?</button>
-    <nav class="header-actions" aria-label="Project information">
-      <button class="source-button" onclick={() => openSources('about')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'about'} aria-controls="sources">About this project</button>
-      <button class="source-button collaboration-button" onclick={() => openSources('collaboration')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'collaboration'} aria-controls="sources">Open for collaboration</button>
-      <button class="source-button" onclick={() => openSources()} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'data'} aria-controls="sources">Data & sources <span aria-hidden="true">↗</span></button>
-    </nav>
+    {#snippet projectLinks()}
+      <button class="source-button" data-information-section="about" onclick={() => openSources('about')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'about'} aria-controls="sources">About this project</button>
+      <button class="source-button collaboration-button" data-information-section="collaboration" onclick={() => openSources('collaboration')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'collaboration'} aria-controls="sources">Open for collaboration</button>
+      <button class="source-button" data-information-section="data" onclick={() => openSources()} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'data'} aria-controls="sources">Data & sources <span aria-hidden="true">↗</span></button>
+    {/snippet}
+    <nav class="header-actions" aria-label="Project information">{@render projectLinks()}</nav>
+    <button id="project-menu-trigger" class="project-menu-trigger" popovertarget="project-menu" aria-label="Project information menu">···</button>
+    <nav id="project-menu" class="project-menu" popover="auto" aria-label="Project information">{@render projectLinks()}</nav>
   </header>
-  <main class="city-workspace" style:--controls-height={`${controlsHeight}px`} data-scene-ready={!mapCovered} aria-busy={mapCovered}>
+  <main class="city-workspace" class:has-open-panel={!!activePanel} data-scene-ready={!mapCovered} aria-busy={mapCovered}>
     {#if city}
       <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} marinePaused={!browserConnected} {keyboardNavigation} {stations} {route} {itinerary} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection} onwebcamselect={camera => activeWebcam = camera} onportcameraselect={harbour => activePortHarbour = harbour}
         onbuildings={(value) => buildings = value} onstats={(value) => stats = value} onhover={(value) => hovered = value}
@@ -498,18 +509,78 @@
       </div>
     {/if}
     {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={() => openSources()}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
-    <div class="map-controls" bind:clientHeight={controlsHeight}>
-      <nav class="map-appearance" aria-label="Map appearance and tools">
-        {#each appearanceLayers as layer (layer.key)}<button aria-label={layer.label} title={layer.label} aria-pressed={layers[layer.key]} onclick={() => layers[layer.key] = !layers[layer.key]}><ConsoleIcon name={layer.key} /></button>{/each}
-        <button aria-label="Transport" title="Transport" aria-haspopup="dialog" aria-expanded={transportOpen} aria-controls="transport-dialog" onclick={() => transportOpen = true}><ConsoleIcon name="transport" /></button>
-        <button id="layers-trigger" aria-label="Layers" title="Layers" aria-haspopup="dialog" aria-expanded={layersOpen} aria-controls="layers-dialog" onclick={() => layersOpen = true}><ConsoleIcon name="layers" />{#if themeKey}<span class="theme-indicator" aria-hidden="true">●</span>{/if}</button>
-      </nav>
-    </div>
-    {#if layers.imagery && appearanceStatus}<div class="appearance-status" role="status">{appearanceStatus}</div>{/if}
-    <aside class="right-stack" class:mobile-active={!!selected && mobilePanel === 'inspect'} class:has-layer-legend={legendVisible} aria-label="Map information">
+    <aside class="left-stack" class:mobile-active={activePanel === 'layers' || activePanel === 'legend'} class:legend-active={activePanel === 'legend'} aria-label="Explore the city">
+      <div class="mobile-sheet-heading"><strong>{activePanel === 'legend' ? legendLabel : 'Explore the layers'}</strong>{#if legendVisible && activePanel === 'layers'}<button class="text-button" onclick={() => setActivePanel('legend')}>View legend</button>{/if}<button class="icon-button" aria-label="Close exploration panel" onclick={() => setActivePanel(null)}>×</button></div>
+      <div class="console-intro"><span class="eyebrow">60° N / 24° E · HELSINKI, FINLAND</span><h1>A city of<br />connections<span>.</span></h1><p>Explore Helsinki.<br />One city. Connected perspectives.</p></div>
+      <section class="panel layers-panel exploration-content" id="exploration-panel" aria-labelledby="exploration-heading">
+        <div class="panel-heading"><h2 id="exploration-heading" tabindex="-1">Explore the layers</h2><span>5 perspectives</span></div>
+        <details name="exploration" open><summary><ConsoleIcon name="explore" /><span>Map<small>The city in three dimensions</small></span></summary>
+          <div class="layer-list">{#each appearanceLayers as layer (layer.key)}<label class="layer-control"><ConsoleIcon name={layer.key} /><span>{layer.label}</span><input type="checkbox" bind:checked={layers[layer.key]} /></label>{/each}</div>
+          {#if layers.imagery && appearanceStatus}<p class="panel-note group-note" role="status">{appearanceStatus}</p>{/if}
+        </details>
+        <details name="exploration"><summary><ConsoleIcon name="transport" /><span>Transport<small>Movement &amp; connection</small></span></summary>
+    <div class="layer-list">{#each modes as mode (mode)}<label class="layer-control"><input type="checkbox" aria-label={modeNames[mode]} bind:checked={layers[mode]} /><span class="mode-swatch" style:background={MODE_COLOURS[mode]}></span><span class="mode-label">{modeNames[mode]}</span><small aria-label={`${availableVehicles.filter(vehicle => vehicle.mode === mode).length} reports`}>{availableVehicles.filter(vehicle => vehicle.mode === mode).length}</small></label>{/each}
+          <label class="layer-control"><input type="checkbox" bind:checked={layers.railStations} /><span class="station-swatch rail" aria-hidden="true">▣</span><span>Rail stations</span></label>
+          {#if layers.train}<details class="rail-filters"><summary>Train categories</summary>{#each RAIL_CATEGORIES as category (category)}<label class="layer-control"><input type="checkbox" bind:checked={layers[category]} /><span>{label(category)}</span></label>{/each}</details>{/if}
+          <div class="rail-summary"><strong>Rail · {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'}</strong><span>{freshRail.length} fresh · {railVehicles.length - freshRail.length} stale</span><span>{railDelayed} delayed · {railUnknown} delay unknown</span></div>
+          {#if traffic.sources?.rail?.error}<p class="notice">{traffic.sources.rail.error}</p>{/if}
+          {#if railStationsError}<p class="panel-note">{railStationsError}</p>{/if}
+          <div class="rail-summary marine-summary"><strong>Ships · {marineState}</strong><span>{freshMarine.length} fresh reports · {marineVehicles.length - freshMarine.length} stale reports</span>{#if !marineVehicles.length}<span>No retained reports in this coverage.</span>{/if}</div>
+          {#if marineSource?.error}<p class="notice">{marineSource.error}</p>{/if}
+          <label class="filter-label">Transit route filter<select bind:value={routeFilter}><option value="">All received routes</option>{#each [...new Set(availableVehicles.flatMap(vehicle => vehicle.routeId === null ? [] : [vehicle.routeId]))].sort() as id (id)}<option value={id}>{routeName(id)} · {id}</option>{/each}</select></label>
+          {#if routeFilter}<button class="text-button" onclick={() => routeFilter = ''}>Clear route filter</button>{/if}
+          </div>
+    <section class="panel feed-panel" aria-label="Traffic status"><div class="panel-heading"><h2>Reported traffic</h2><span class:connected={currentFeed} class="status-dot"></span></div>
+        <div class="feed-summary"><strong>{visibleVehicles.length}</strong><span>reports in visible modes / transit route<br />{staleCount ? `${staleCount} stale · held at last position` : 'Latest received positions'}</span></div>
+        <p class="panel-note">{trafficError || (traffic.status.lastPositionAt ? `Last report ${formatDate(traffic.status.lastPositionAt)}` : 'Waiting for real position reports.')}</p>
+        {#if stats?.unplacedVehicles}<p class="panel-note">{stats.unplacedVehicles} ground vehicles omitted where terrain height is unknown.</p>{/if}
+      </section>
+        </details>
+        <details name="exploration"><summary><ConsoleIcon name="buildings" /><span>Buildings<small>Use &amp; register records</small></span></summary>
+          {@render themeChoices(false)}
+        </details>
+        <details name="exploration"><summary><ConsoleIcon name="energy" /><span>Energy<small>Demand, heating &amp; sunlight</small></span></summary>
+          {@render themeChoices(true)}
+        </details>
+        <details name="exploration"><summary><ConsoleIcon name="environment" /><span>Environment<small>Observations at their source</small></span></summary>
+          <div class="layer-list"><label class="layer-control"><span class="station-swatch weather" aria-hidden="true">○</span><span>Weather stations</span><input type="checkbox" bind:checked={layers.weather} /></label><label class="layer-control"><span class="station-swatch air-quality" aria-hidden="true">◇</span><span>Air-quality stations</span><input type="checkbox" bind:checked={layers.airQuality} /></label>
+            {#each stations.filter(station => station.kind === 'weather' || station.kind === 'air-quality') as station (station.id)}<button class="station-link" onclick={() => { layers[station.kind === 'weather' ? 'weather' : 'airQuality'] = true; selectObject({ kind: 'station', station }); }}>{station.name} ↗</button>{/each}
+            {#if observationLoading}<p class="panel-note">Loading station observations…</p>{:else if !observationStations.length}<p class="panel-note">No station observations available.</p>{/if}
+            {#if observationError}<p class="notice" role="status">{observationError}</p>{/if}
+            <p class="panel-note">Readings describe individual stations, with their own observation times.</p>
+          </div>
+        </details>
+      </section>
+      {#if legendVisible}
+        <section class="panel building-layer-legend" aria-labelledby="building-legend-heading" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind}>
+          <div class="panel-heading"><h2 id="building-legend-heading" tabindex="-1">{legendLabel}</h2></div>
+          <div class="building-legend-body" id="building-legend-body" data-theme-covered={theme.count}>
+            {#if themeQueries.pending}<p class="notice" role="status">Loading colors for the current view…</p>{/if}
+            {#if themeQueries.error}<p class="notice" role="status">{themeQueries.error.message}</p>{/if}
+            {#if activeRyhtiTheme}
+              <div class="category-actions"><button class="text-button" onclick={() => selectedRyhtiCategories = ryhtiColors.categories.map(category => category.key)}>Select all</button><button class="text-button" onclick={() => selectedRyhtiCategories = []}>Clear all</button></div>
+              <fieldset class="ryhti-legend"><legend>{selectedRyhtiCategories.length} of {ryhtiColors.categories.length} highlighted</legend>
+                {#each ryhtiColors.categories as category (category.key)}<label class="layer-control"><input type="checkbox" value={category.key} bind:group={selectedRyhtiCategories} /><span class="no-data-swatch" style:background={category.colour}></span><span>{category.label}</span><small>{category.count.toLocaleString()}</small></label>{:else}<p class="notice" role="status">No categories available.</p>{/each}
+              </fieldset>
+              {#if ryhti.status !== 'ready'}<p class="notice" role="status">{ryhti.status === 'stale' ? 'Dated catalog retained' : 'Ryhti catalog unavailable'} · {ryhti.message}</p>{/if}
+            {:else if activeTheme}
+              {#if theme.minimum !== null && theme.maximum !== null}
+                {@const minimum = humanizeEnergyUsage(theme.minimum, activeTheme.unit)}{@const maximum = humanizeEnergyUsage(theme.maximum, activeTheme.unit)}
+                <div class="theme-gradient" style:background={theme.minimum === theme.maximum ? ENERGY_COLOURS[1] : `linear-gradient(to right, ${ENERGY_COLOURS[0]} 0% 33.333%, ${ENERGY_COLOURS[1]} 33.333% 66.666%, ${ENERGY_COLOURS[2]} 66.666% 100%)`} aria-hidden="true"></div>
+                <div class="theme-limits"><span>{minimum.value} {minimum.unit}</span>{#if theme.minimum !== theme.maximum}<span>{maximum.value} {maximum.unit}</span>{/if}</div>
+              {:else}<p class="notice" role="status">No values available.</p>{/if}
+              <div class="legend-no-data"><span class="no-data-swatch" style:background={NO_ENERGY_COLOUR}></span>No data</div>
+              {#if energy.status !== 'ready'}<p class="notice" role="status">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
+            {/if}
+          </div>
+        </section>
+      {/if}
+    </aside>
+    {#if legendVisible}<button id="legend-trigger" class="legend-shortcut" aria-expanded={activePanel === 'legend'} aria-controls="building-legend-body" onclick={() => setActivePanel(activePanel === 'legend' ? null : 'legend')}>{legendLabel}<span>Legend ↗</span></button>{/if}
+    <aside class="right-stack" class:mobile-active={activePanel === 'inspect' || activePanel === 'overview'} aria-label="Map information">
       {#if selected}
       <section class="panel inspector" id="identity-inspector" aria-label="Inspector">
-        <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setMobilePanel(null)}>×</button></div><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || selected.station.kind === 'rail' ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
+        <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setActivePanel(null)}>×</button></div><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || selected.station.kind === 'rail' ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
         {#if selected.kind === 'building'}
           {#key selected.building.id}<BuildingPhoto building={selected.building} {generation} base={city?.base} cache={city?.cache} />{/key}
         {/if}
@@ -574,39 +645,21 @@
           {#if selectionMessage}<p class="notice" role="status">{selectionMessage}</p>{/if}
         </div>
       </section>
-      {/if}
-      {#if legendVisible}
-        <section class="panel building-layer-legend" aria-labelledby="building-legend-heading" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind}>
-          <div class="panel-heading"><h2 id="building-legend-heading"><span class="legend-title">{legendLabel}</span><button class="legend-toggle" aria-label={`${legendExpanded ? 'Collapse' : 'Expand'} ${legendLabel} legend`} aria-expanded={legendExpanded} aria-controls="building-legend-body" onclick={() => legendExpanded = !legendExpanded}>{legendLabel}<span aria-hidden="true">{legendExpanded ? '−' : '+'}</span></button></h2></div>
-          <div class="building-legend-body" id="building-legend-body" class:expanded={legendExpanded} data-theme-covered={theme.count}>
-            {#if themeQueries.pending}<p class="notice" role="status">Loading colors for the current view…</p>{/if}
-            {#if themeQueries.error}<p class="notice" role="status">{themeQueries.error.message}</p>{/if}
-            {#if activeRyhtiTheme}
-              <div class="category-actions"><button class="text-button" onclick={() => selectedRyhtiCategories = ryhtiColors.categories.map(category => category.key)}>Select all</button><button class="text-button" onclick={() => selectedRyhtiCategories = []}>Clear all</button></div>
-              <fieldset class="ryhti-legend"><legend>{selectedRyhtiCategories.length} of {ryhtiColors.categories.length} highlighted</legend>
-                {#each ryhtiColors.categories as category (category.key)}<label class="layer-control"><input type="checkbox" value={category.key} bind:group={selectedRyhtiCategories} /><span class="no-data-swatch" style:background={category.colour}></span><span>{category.label}</span><small>{category.count.toLocaleString()}</small></label>{:else}<p class="notice" role="status">No categories available.</p>{/each}
-              </fieldset>
-              {#if ryhti.status !== 'ready'}<p class="notice" role="status">{ryhti.status === 'stale' ? 'Dated catalog retained' : 'Ryhti catalog unavailable'} · {ryhti.message}</p>{/if}
-            {:else if activeTheme}
-              {#if theme.minimum !== null && theme.maximum !== null}
-                {@const minimum = humanizeEnergyUsage(theme.minimum, activeTheme.unit)}{@const maximum = humanizeEnergyUsage(theme.maximum, activeTheme.unit)}
-                <div class="theme-gradient" style:background={theme.minimum === theme.maximum ? ENERGY_COLOURS[1] : `linear-gradient(to right, ${ENERGY_COLOURS[0]} 0% 33.333%, ${ENERGY_COLOURS[1]} 33.333% 66.666%, ${ENERGY_COLOURS[2]} 66.666% 100%)`} aria-hidden="true"></div>
-                <div class="theme-limits"><span>{minimum.value} {minimum.unit}</span>{#if theme.minimum !== theme.maximum}<span>{maximum.value} {maximum.unit}</span>{/if}</div>
-              {:else}<p class="notice" role="status">No values available.</p>{/if}
-              <div class="legend-no-data"><span class="no-data-swatch" style:background={NO_ENERGY_COLOUR}></span>No data</div>
-              {#if energy.status !== 'ready'}<p class="notice" role="status">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
-            {/if}
-          </div>
+      {:else}
+        <section class="panel city-overview" id="city-overview" aria-labelledby="overview-heading">
+          <div class="mobile-sheet-heading"><strong>Overview</strong><button class="icon-button" aria-label="Close overview panel" onclick={() => setActivePanel(null)}>×</button></div>
+          <div class="panel-heading"><h2 id="overview-heading" tabindex="-1">Helsinki at a glance</h2><span class:connected={currentFeed} class="status-dot" aria-hidden="true"></span></div>
+          <CityOverview feeds={liveFeeds} snapshot={observationSnapshot} {now} loading={observationLoading} error={observationError} onstation={id => { const station = stations.find(item => item.id === id); if (station) { layers[station.kind === 'weather' ? 'weather' : 'airQuality'] = true; selectObject({ kind: 'station', station }); } }} />
         </section>
       {/if}
     </aside>
-    <nav class="camera-presets" aria-label="Camera presets">{#each [['city', 'City Centre'], ['harbour', 'Harbour'], ['central', 'Central Station']] as [id, name] (id)}<button class:active={preset === id} aria-pressed={preset === id} disabled={!scene} onclick={() => choosePreset(id as CameraPreset)}>{name}</button>{/each}</nav>
+    <nav class="camera-presets" aria-label="Camera presets"><span class="tour-label">Take a<br />closer look</span>{#each [{ id: 'city', name: 'City Centre', detail: 'Buildings & urban life' }, { id: 'harbour', name: 'Harbour', detail: 'Ships & waterfront connections' }, { id: 'central', name: 'Central Station', detail: 'Rail & everyday movement' }] as view, index (view.id)}<button class:active={preset === view.id} aria-label={view.name} aria-pressed={preset === view.id} disabled={!scene} onclick={() => choosePreset(view.id as CameraPreset)}><span class="tour-number">0{index + 1}</span><span class="tour-copy"><strong>{view.name}</strong><small>{view.detail}</small></span><span class="tour-arrow" aria-hidden="true">↗</span></button>{/each}</nav>
     <div class="scene-footer"><span class="scene-guidance">{hovered || (keyboardNavigation ? 'WASD to pan · drag to orbit · scroll to zoom' : 'Drag to orbit · scroll to zoom')}</span>{#if stats}<span class="performance" aria-label="Scene performance" data-fps={stats.fps} data-draw-calls={stats.drawCalls} data-geometries={stats.geometries} data-triangles={stats.triangles} data-loaded-chunks={stats.loadedChunks} data-placed-vehicles={stats.vehicles} data-unplaced-vehicles={stats.unplacedVehicles} data-receipt-latency-ms={stats.lastReceiptLatencyMs ?? ''}>{stats.fps} FPS · {stats.drawCalls} draws · {stats.loadedChunks} chunks</span>{/if}<a class="project-copyright" href="https://ai.ro/" target="_blank" rel="noreferrer">© {new Date(now).getFullYear()} ai.ro</a></div>
     {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
-    <nav class="mobile-panel-nav" aria-label="Mobile city tools">
-      <button aria-haspopup="dialog" aria-controls="transport-dialog" onclick={() => transportOpen = true}><ConsoleIcon name="transport" /><span>Transport</span></button>
-      <button aria-haspopup="dialog" aria-controls="layers-dialog" aria-expanded={layersOpen} onclick={() => layersOpen = true}><ConsoleIcon name="layers" /><span>Layers</span></button>
-      <button disabled={!selected} aria-controls="identity-inspector" aria-expanded={mobilePanel === 'inspect'} onclick={() => setMobilePanel(mobilePanel === 'inspect' ? null : 'inspect')}><ConsoleIcon name="inspect" /><span>Inspect{selected ? ' •' : ''}</span></button>
+    <nav class="mobile-panel-nav" aria-label="City panels">
+      <button aria-pressed={!activePanel} onclick={() => setActivePanel(null)}><ConsoleIcon name="explore" /><span>Explore</span></button>
+      <button id="layers-trigger" aria-controls="exploration-panel" aria-expanded={activePanel === 'layers'} onclick={() => setActivePanel(activePanel === 'layers' ? null : 'layers')}><ConsoleIcon name="layers" /><span>Layers</span></button>
+      <button id="context-trigger" aria-controls={selected ? 'identity-inspector' : 'city-overview'} aria-expanded={activePanel === (selected ? 'inspect' : 'overview')} onclick={() => { const panel = selected ? 'inspect' : 'overview'; setActivePanel(activePanel === panel ? null : panel); }}><ConsoleIcon name={selected ? 'inspect' : 'environment'} /><span>{selected ? 'Inspect' : 'Overview'}</span></button>
     </nav>
   </main>
 </div>
@@ -616,42 +669,17 @@
 {#if activePortHarbour}
   <PortCameraModal harbour={activePortHarbour} onclose={() => activePortHarbour = null} />
 {/if}
-{#if layersOpen}
-  <dialog class="tool-dialog city-console" id="layers-dialog" aria-labelledby="layers-heading" use:showDialog onclose={() => layersOpen = false}>
-    <div class="panel-heading"><h2 id="layers-heading"><ConsoleIcon name="layers" />Layers</h2><button class="icon-button" aria-label="Close layers" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
-    <section class="building-layer-panel">
-      <div class="layer-list building-theme" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind ?? 'neutral'}>
-        <div class="building-layer-choices" role="group" aria-label="Color buildings by">
-          {#each buildingLayers as layer (layer.key)}<button aria-pressed={themeKey === layer.key} disabled={!layer.available} onclick={() => changeTheme(layer.key)}>{layer.label}</button>{/each}
-        </div>
-        {#if !layers.buildings}<p class="notice">3D buildings are hidden. Enable them in the map toolbar to see this layer.</p>{/if}
-        {#if energyLoading}<p class="notice" role="status">Loading available energy themes…</p>{:else if energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
-      </div>
-    </section>
-
-  </dialog>
-{/if}
-{#if transportOpen}
-  <dialog class="tool-dialog city-console" id="transport-dialog" aria-labelledby="transport-heading" use:showDialog onclose={() => transportOpen = false}>
-    <div class="panel-heading"><h2 id="transport-heading"><ConsoleIcon name="transport" />Transport</h2><button class="icon-button" aria-label="Close transport" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
-    <div class="layer-list">{#each modes as mode (mode)}<label class="layer-control"><input type="checkbox" aria-label={modeNames[mode]} bind:checked={layers[mode]} /><span class="mode-swatch" style:background={MODE_COLOURS[mode]}></span><span class="mode-label">{modeNames[mode]}</span><small aria-label={`${availableVehicles.filter(vehicle => vehicle.mode === mode).length} reports`}>{availableVehicles.filter(vehicle => vehicle.mode === mode).length}</small></label>{/each}
-          <label class="layer-control"><input type="checkbox" bind:checked={layers.railStations} /><span class="station-swatch rail" aria-hidden="true">▣</span><span>Rail stations</span></label>
-          {#if layers.train}<details class="rail-filters"><summary>Train categories</summary>{#each RAIL_CATEGORIES as category (category)}<label class="layer-control"><input type="checkbox" bind:checked={layers[category]} /><span>{label(category)}</span></label>{/each}</details>{/if}
-          <div class="rail-summary"><strong>Rail · {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'}</strong><span>{freshRail.length} fresh · {railVehicles.length - freshRail.length} stale</span><span>{railDelayed} delayed · {railUnknown} delay unknown</span></div>
-          {#if traffic.sources?.rail?.error}<p class="notice">{traffic.sources.rail.error}</p>{/if}
-          {#if railStationsError}<p class="panel-note">{railStationsError}</p>{/if}
-          <div class="rail-summary marine-summary"><strong>Ships · {marineState}</strong><span>{freshMarine.length} fresh reports · {marineVehicles.length - freshMarine.length} stale reports</span>{#if !marineVehicles.length}<span>No retained reports in this coverage.</span>{/if}</div>
-          {#if marineSource?.error}<p class="notice">{marineSource.error}</p>{/if}
-          <label class="filter-label">Transit route filter<select bind:value={routeFilter}><option value="">All received routes</option>{#each [...new Set(availableVehicles.flatMap(vehicle => vehicle.routeId === null ? [] : [vehicle.routeId]))].sort() as id (id)}<option value={id}>{routeName(id)} · {id}</option>{/each}</select></label>
-          {#if routeFilter}<button class="text-button" onclick={() => routeFilter = ''}>Clear route filter</button>{/if}
-          </div>
-    <section class="panel feed-panel" aria-label="Traffic status"><div class="panel-heading"><h2>Reported traffic</h2><span class:connected={currentFeed} class="status-dot"></span></div>
-        <div class="feed-summary"><strong>{visibleVehicles.length}</strong><span>reports in visible modes / transit route<br />{staleCount ? `${staleCount} stale · held at last position` : 'Latest received positions'}</span></div>
-        <p class="panel-note">{trafficError || (traffic.status.lastPositionAt ? `Last report ${formatDate(traffic.status.lastPositionAt)}` : 'Waiting for real position reports.')}</p>
-        {#if stats?.unplacedVehicles}<p class="panel-note">{stats.unplacedVehicles} ground vehicles omitted where terrain height is unknown.</p>{/if}
-      </section>
-  </dialog>
-{/if}
+{#snippet themeChoices(energyGroup: boolean)}
+  <div class="layer-list building-theme" data-building-theme={activeRyhtiTheme ? 'ryhti' : activeTheme?.kind ?? 'neutral'}>
+    <div class="building-layer-choices" role="group" aria-label={energyGroup ? 'Energy building colours' : 'Building record colours'}>
+      {#each buildingLayers.filter(layer => energyGroup === !['', 'ryhti:main_purpose', 'ryhti:permits'].includes(layer.key)) as layer (layer.key)}<button aria-pressed={themeKey === layer.key} disabled={!layer.available} onclick={() => changeTheme(layer.key)}>{layer.label}</button>{/each}
+    </div>
+    {#if themeKey}<button class="text-button" onclick={() => changeTheme('')}>Reset building colours</button>{/if}
+    {#if !layers.buildings}<p class="notice">3D buildings are hidden. Enable them in Map to see this layer.</p>{/if}
+    {#if energyGroup && energyLoading}<p class="notice" role="status">Loading available energy themes…</p>{:else if energyGroup && energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
+    {#if !energyGroup && ryhti.status !== 'ready'}<p class="notice">{ryhti.status === 'stale' ? 'Dated catalog retained' : 'Ryhti catalog unavailable'} · {ryhti.message}</p>{/if}
+  </div>
+{/snippet}
 {#if helpOpen}
   <dialog class="tool-dialog city-console" aria-labelledby="help-heading" use:showDialog onclose={() => helpOpen = false}>
     <div class="panel-heading"><h2 id="help-heading">Getting around</h2><button class="icon-button" aria-label="Close help" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>

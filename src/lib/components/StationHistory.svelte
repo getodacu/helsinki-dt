@@ -68,7 +68,7 @@
   .station-chart { position: relative; max-width: 400px; margin-inline: auto; user-select: none; }
   .station-chart:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
   .history-chart { max-height: none; }
-  .station-tooltip { position: absolute; z-index: 2; top: 6px; width: 180px; max-width: 100%; padding: 7px 10px; transform: translateX(-50%); pointer-events: none; color: #eaf0ef; background: #071c27; border: 1px solid #547b79; border-radius: 4px; box-shadow: 0 4px 12px #00101e66; font-size: 10px; line-height: 1.5; }
+  .station-tooltip { position: absolute; z-index: 2; top: 6px; width: 180px; max-width: 100%; padding: 7px 10px; transform: translateX(-50%); pointer-events: none; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 12px #00101e66; font-size: 10px; line-height: 1.5; }
   .station-tooltip strong, .station-tooltip span { display: block; }
   .station-tooltip strong { font-size: 14px; font-weight: 500; }
   .station-tooltip span { color: var(--muted); }

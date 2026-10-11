@@ -84,15 +84,15 @@
 </dialog>
 
 <style>
-  .webcam-modal { inset: 0; margin: auto; padding: 0; width: min(960px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); color: #eaf0ef; background: #102733; border: 2px solid #49636c; border-radius: 2px; box-shadow: 0 16px 80px #0009; overflow: auto; }
+  .webcam-modal { inset: 0; margin: auto; padding: 0; width: min(960px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 16px 80px #0009; overflow: auto; }
   .webcam-modal::backdrop { background: #00121cbb; }
-  header { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: linear-gradient(90deg, #24504f, #16343e); border-bottom: 1px solid #52796d; }
+  header { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
   h2 { margin: 0; flex: 1; font-size: 15px; line-height: 1.4; }
-  header button { min-height: 44px; min-width: 44px; border: 1px solid #65867b; background: #17353c; color: #c8ded7; font-size: 24px; border-radius: 2px; }
+  header button { min-height: 44px; min-width: 44px; border: 1px solid var(--border); background: var(--accent-wash); color: var(--text); font-size: 24px; border-radius: var(--radius); }
   .camera-image { background: #091e29; }
   .camera-image img { display: block; width: 100%; height: auto; max-height: calc(100dvh - 210px); object-fit: contain; }
   .camera-image > p { padding: 48px 16px; text-align: center; }
-  footer { padding: 12px; font-size: 12px; line-height: 1.6; color: #b3c9cc; }
+  footer { padding: 12px; font-size: 12px; line-height: 1.6; color: var(--muted); }
   footer p { margin: 0; }
   .camera-notice { color: #edba91; }
   a { color: #8cddbc; text-decoration: underline; text-underline-offset: 2px; }

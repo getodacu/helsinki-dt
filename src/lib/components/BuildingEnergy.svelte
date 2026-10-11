@@ -132,7 +132,7 @@
   .energy-month { color: var(--muted); font-size: 12px; margin-top: 10px; }
   .property-label { color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
   .energy-placeholder { color: var(--muted); font-size: 16px; padding: 12px 0; }
-  .energy-history-dialog { margin: auto; width: min(850px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 20px; overflow: auto; color: #eaf0ef; background: #102733; border: 1px solid var(--border); border-radius: 6px; }
+  .energy-history-dialog { margin: auto; width: min(850px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 20px; overflow: auto; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
   .energy-history-dialog::backdrop { background: #00101eb3; }
   .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
   .dialog-heading h2 { font-size: 18px; font-weight: 500; }

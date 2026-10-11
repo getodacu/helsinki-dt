@@ -65,13 +65,13 @@
   .photo-button img { display: block; width: 100%; height: auto; }
   .photo-button:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
   a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-  .building-viewer { inset: 0; margin: auto; padding: 0; width: min(960px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); color: inherit; background: #102733; border: 2px solid #49636c; border-radius: 2px; box-shadow: 0 16px 80px #0009; overflow: auto; }
+  .building-viewer { inset: 0; margin: auto; padding: 0; width: min(960px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 16px 80px #0009; overflow: auto; }
   .building-viewer::backdrop { background: #00121cbb; }
-  header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: linear-gradient(90deg, #24504f, #16343e); border-bottom: 1px solid #52796d; }
+  header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
   h2 { margin: 0; flex: 1; font-size: 14px; line-height: 1.35; }
-  .close-button { min-height: 28px; min-width: 28px; border: 1px solid #65867b; background: #17353c; color: #c8ded7; font-size: 20px; border-radius: 2px; }
+  .close-button { min-height: 44px; min-width: 44px; border: 1px solid var(--border); background: var(--accent-wash); color: var(--text); font-size: 20px; border-radius: var(--radius); }
   nav { display: flex; gap: 2px; padding: 3px 8px 0; border-bottom: 1px solid #334951; }
-  nav button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; min-height: 32px; font-size: 11px; color: #adc4c7; background: transparent; border-radius: 0; border-bottom: 2px solid transparent; }
+  nav button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; min-height: 44px; font-size: 13px; color: #adc4c7; background: transparent; border-radius: 0; border-bottom: 2px solid transparent; }
   nav button[aria-pressed=true] { color: #b2efce; border-color: #8cddbc; }
   nav :global(svg) { width: 14px; height: 14px; }
   button:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
