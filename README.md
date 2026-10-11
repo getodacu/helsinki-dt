@@ -1,6 +1,6 @@
 # Helsinki Lens
 
-Helsinki Lens is a 3D view of central Helsinki combining selectable buildings, live HSL trams, buses and ferries, Fintraffic trains, scheduled routes, station weather and air quality, and verified building energy and solar records. It keeps original building identifiers, source attribution and data age visible. Displayed times use `Europe/Helsinki`.
+Helsinki Lens is a 3D view of central Helsinki combining selectable buildings, live HSL trams, buses and ferries, Fintraffic trains and AIS ships, scheduled routes, station weather and air quality, and verified building energy and solar records. Building inspectors include available Ryhti register facts, permits and attributed Wikimedia photographs; traffic and harbour cameras open from map markers. It keeps original building identifiers, source attribution and data age visible. Displayed times use `Europe/Helsinki`.
 
 The map covers the prepared release area, WGS84 `[24.86, 60.135, 25.06, 60.225]` in west, south, east, north order. It is a bounded city view, not a complete Finland dataset. Missing readings remain missing; prepared samples never replace live feeds during an outage.
 
@@ -18,6 +18,9 @@ Coverage extends through Lauttasaari, Munkkiniemi, Pasila/Käpylä and Herttonie
 - [Configuration, production and releases](#configuration-production-and-releases)
 - [Verification and troubleshooting](#verification-and-troubleshooting)
 - [Vehicle models](#vehicle-models)
+- [Traffic cameras](#traffic-cameras)
+- [Building photographs](#building-photographs)
+- [Ryhti building register](#ryhti-building-register)
 - [Source evidence and development notes](#source-evidence-and-development-notes)
 
 ## First run
@@ -31,7 +34,7 @@ npm ci
 cp .env.example .env
 ```
 
-Copy the environment example only if `.env` does not already exist. No upstream credentials are required. Preparation needs internet access to the documented public providers; live operation needs outbound HTTPS and TLS MQTT to `mqtt.hsl.fi:8883`.
+Copy the environment example only if `.env` does not already exist. No upstream credentials are required. Preparation needs internet access to the documented public providers; live operation needs outbound HTTPS, TLS MQTT to `mqtt.hsl.fi:8883`, and TLS WebSocket MQTT to `meri.digitraffic.fi:443`.
 
 A clean checkout does not contain generated datasets. Prepare the complete application in this order:
 
@@ -39,7 +42,7 @@ A clean checkout does not contain generated datasets. Prepare the complete appli
 npm run data:prepare
 npm run city:prepare
 npm run energy:prepare
-npm run ryhti:prepare
+npm run ryhti:prepare # Optional building register and permit enrichment
 npm run routes:prepare
 npm run rail:prepare
 npm run entities:prepare
@@ -47,7 +50,7 @@ npm run entities:prepare
 
 Inspect each command's result before continuing. `data:prepare` exit **2** means a usable foundation sample was published with explicit open source gates; inspect `.cache/task-a/latest-preparation.json` and the reported gates. Exit **1** means preparation failed and the previous published sample was retained. Historical foundation gates and the later verified energy catalog have separate evidence; see [data access](docs/data-access.md) and [energy/solar evidence](docs/energy-solar-evidence.md).
 
-`energy:prepare` must run after **every** `city:prepare`, even when the upstream semantic tileset checksum is unchanged. The energy catalog must match the exact prepared city generation. `routes:prepare` uses the HSL GTFS ZIP downloaded by foundation preparation.
+`energy:prepare` must run after **every** `city:prepare`, even when the upstream semantic tileset checksum is unchanged. The energy catalog must match the exact prepared city generation. `routes:prepare` uses the HSL GTFS ZIP downloaded by foundation preparation. `rail:prepare` downloads the independent Digitraffic GTFS archive. Ryhti is optional on first installation; once published, it must be re-prepared after a city refresh before importing entities.
 
 Start development:
 
@@ -102,6 +105,7 @@ Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.
 | `.cache/task-f/` | Ignored marine verifier reports, browser evidence and bounded diagnostics; never raw national AIS payloads. |
 | `static/data/route-index.json` | Prepared route labels, trips, shapes and stop patterns. |
 | `static/data/energy-manifest.json` and `static/data/energy/` | Energy catalog pointer and immutable catalogs. |
+| `static/data/ryhti-manifest.json` and `static/data/ryhti/` | Optional building register/permit catalog pointer and immutable catalogs. |
 | `server/data/entities/` | Private immutable SQLite generations and their active manifest; rebuilt from prepared data with `entities:prepare`. |
 | `.cache/city-map/` | Persistent municipal imagery, tile indexes, textured model bytes and building photographs; configurable. |
 | `.cache/energy/runtime/` | Persistent measured-electricity cache; preserve across deployments. |
@@ -118,11 +122,12 @@ Exploration sits to the left of the desktop map. A compact top-right display sho
 
 Below 1200px, **Layers** and **Inspect** use one shared panel; **Explore** closes it. Inspect appears only while an object is selected. Below 780px the header uses two rows and the panel becomes a sheet above bottom navigation. Closing an inspection sheet or pressing Escape once preserves selection; **Clear selection** removes it separately. Guided camera cards collapse while a compact panel is open. Use the **Legend** shortcut for expanded legends in the shared panel.
 
-The header **?** opens Help. Project information links remain in the header, inside the **···** menu on compact screens. **Data & sources** opens source status and attribution.
-Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Keyboard navigation pauses in interactive controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow. Turn off **WASD navigation** in the header **?** help panel to disable these shortcuts; it starts enabled on each page load.
+The header links **About this project**, **Open for collaboration** and **Data & sources** open a shared dialog with project information, collaboration details, source status and attribution. On compact screens they sit inside the **···** menu.
+
+Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Drag to orbit and scroll to zoom. Keyboard navigation pauses in interactive controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow.
 
 Choose the numbered **City Centre**, **Harbour** or **Central Station** cards for existing camera views. The header live dot opens separate HSL, rail and AIS statuses and report times. Search has **Vehicles**, **Routes**, **Buildings** and **Stations** tabs. The query filters the selected tab, which is remembered until reload. Lists scroll by mouse, touch or keyboard with the scrollbar hidden. Buildings shows loaded identities with an empty query, searches prepared metadata/addresses when typing, and retains a server-backed list if WebGL is unavailable. Building search requests run only while its tab is open. Search and scene picking use the same selection contract. On desktop, Escape clears selection. Search results, popovers and dialogs handle Escape before the map.
-Selecting a building opens its source identifiers and compatible energy/solar records. Selection and hover tint the displayed building, with selection taking precedence. Selecting a vehicle shows its real report age, deviation and exact scheduled journey when available, without moving the camera. Verified routes use an outlined line and stop markers with names on hover, keyboard focus or touch focus. A chevron ahead of the selected vehicle shows a reported heading or a bearing from accepted movement; it pulses while moving and stays static with reduced motion. Unknown direction, stale reports and hidden vehicles suppress the cue. AIS ships have no scheduled route mapping. Following ends when you interact with the camera. Station inspectors show a recent six-hour history without changing current traffic into historical playback. **Data & sources** explains dates, coverage, attribution and gaps. Search/inspection provide a metadata fallback when WebGL is unavailable.
+Selecting a building opens its source identifiers and compatible energy/solar records. Selection and hover tint the displayed building, with selection taking precedence. Selecting a vehicle shows its real report age, deviation and exact scheduled journey when available, without moving the camera. Verified routes use an outlined line and stop markers with names on hover, keyboard focus or touch focus. A chevron ahead of the selected vehicle shows a reported heading or a bearing from accepted movement; it pulses while moving and stays static with reduced motion. Unknown direction, stale reports and hidden vehicles suppress the cue. AIS ships have no scheduled route mapping. Following ends when you interact with the camera. Weather and air-quality inspectors show the station name, station ID and a recent six-hour history for each available parameter. Each history retains its latest reading, unit, observation time and freshness; source diagnostics remain in **Data & sources**. Inspecting history does not change current traffic into historical playback. **Data & sources** explains dates, coverage, attribution and gaps. Search/inspection provide a metadata fallback when WebGL is unavailable.
 
 ### Map appearance and loading
 
@@ -179,6 +184,8 @@ Saved municipal bytes become eligible for revalidation after 30 days, with older
 | `npm run city:prepare` | Prepare licensed terrain, context, semantic building geometry and metadata. |
 | `npm run energy:prepare` | Publish an energy catalog compatible with the current city. `-- --refresh` retrieves a new source version for review. |
 | `npm run routes:prepare` | Build the route index from `.cache/task-a/hsl-gtfs.zip`; optional positional arguments are archive path and output path. |
+| `npm run rail:prepare` | Download and prepare the independent Digitraffic rail index; an optional positional archive path supports offline rebuilding. |
+| `npm run ryhti:prepare` | Prepare optional register/permit enrichment for exact city building identifiers; `-- --refresh` retrieves new source snapshots. |
 | `npm run entities:prepare` | Build and atomically publish the private SQLite read database after foundation, city, energy or Ryhti preparation; no source downloads. |
 | `npm run city:cache` | Warm the municipal asset cache; see flag combinations above. |
 | `npm run check` | SvelteKit sync, TypeScript and Svelte diagnostics. |
@@ -259,6 +266,8 @@ Coverage is incomplete by design. The dated 8 October 2026 release evidence reco
 | `GET /api/catalog/status` | Compact coverage, sources, foundation gates, theme metadata and active SQLite generation. |
 | `GET /api/entities?generation=...&q=...&kind=building&limit=30&cursor=...` | Accent-insensitive substring search and exact-ID priority; 1–60 buildings per page, opaque next cursor. Optional `theme` plus `category` narrows search. |
 | `GET /api/entities/building/:id?generation=...` | One building, its energy/Ryhti records, join evidence and shared-property member identities. URL-encode the original ID. |
+| `GET /api/entities/building/:id/photo?generation=...` | Optional exact-ID Wikimedia photo and its attribution; absent or conflicting matches remain empty. |
+| `GET /api/entities/building/:id/photo/image?generation=...` | Checksum-verified locally cached photo bytes with ETags. |
 | `GET /api/themes?generation=...` | Available theme options, global ranges, categories and counts. |
 | `GET /api/themes/:key?generation=...&chunks=...` | Colour/category tuples for 1–16 distinct comma-separated chunk IDs; global colour scale stays fixed while panning. |
 | `GET /api/city-asset?url=...` | Validated municipal asset proxy/cache; only approved model paths and bounded aerial requests are accepted. |
@@ -266,11 +275,15 @@ Coverage is incomplete by design. The dated 8 October 2026 release evidence reco
 | `POST /api/city-cache` | Start/resume automatic overview warming. |
 | `GET /api/traffic` | Current vehicle snapshot and dated feed status. |
 | `GET /api/traffic/stream` | SSE snapshots, updates, removals, status and 15-second heartbeat. |
+| `GET /api/rail/stations` | Passenger railway stations within the prepared city bounds and dated source status. |
+| `GET /api/rail/stations/:code/departures` | Next passenger departures for a known station in city coverage. |
+| `GET /api/rail/trains/:date/:number` | Dated train timetable and available prepared route; date is `YYYY-MM-DD`. |
 | `GET /api/observations` | Fixed station/six-hour observation snapshot; no query parameters. |
 | `GET /api/webcams/<stationId>` | Latest reported snapshot time and availability for one of the six fixed Digitraffic cameras; shared one-minute cache, unknown IDs return 404. |
 | `GET /api/route` | Prepared route catalog and source validity. |
 | `GET /api/route?...` | Exact journey lookup using `ownerOperatorId`, `vehicleId`, `routeId`, `directionId`, `serviceDate` and `startTime`. |
 | `GET /api/energy/catalog` | Validated catalog with city compatibility/source status and gzip negotiation. |
+| `GET /api/ryhti/catalog` | Optional register/permit catalog with city compatibility/source status and gzip negotiation; accepts no parameters. |
 | `GET /api/energy?property=...&month=YYYY-MM` | Measured series for a prepared property; `month` is optional. |
 
 Entity endpoints require the generation returned by `/api/catalog/status` and return 409 after a new publication; the client refreshes catalog metadata and retries under new keys. Unknown/duplicate parameters return 400, missing entities 404, oversized responses 413, and missing/incompatible databases 503. Successful responses support ETags, and bodies are capped at 2 MB. Static search covers buildings; compact route labels and live vehicle/station searches retain their existing APIs.
@@ -323,6 +336,17 @@ A reverse proxy must leave `/api/traffic/stream` unbuffered and uncached, preser
 
 `npm run check` checks TypeScript/Svelte; `npm test` exercises source validation, coordinates, identity matching, cache repair, retry behavior and prepared-data publication with local fixtures. These ordinary tests do not require municipal services to be online. The map-cache tests include all-level traversal, nested/duplicate references, full-area bounds, refresh/resume, retained saved bytes during outages, storage failure and CLI exit status.
 
+Before committing, run the local checks from the project root:
+
+```sh
+npm run check
+npm test
+npm run build
+git diff --check
+```
+
+`npm audit` checks the locked dependency tree against the current npm advisory service and requires network access. Keep `package-lock.json` in sync with `package.json`. Generated datasets, private SQLite databases, `.env`, caches, build output and browser screenshots are ignored; preserve usable data and runtime caches when tidying the checkout. Editable Blender sources, GLB exports, test fixtures and dated release evidence are intentional tracked assets.
+
 For browser/GPU checks:
 
 ```sh
@@ -330,6 +354,8 @@ npx vite --config tests/city-depth.config.ts
 ```
 
 Open `http://127.0.0.1:5175/tests/city-depth.html`: it must report `PASS` for 144 camera positions. On the same server, `/tests/building-highlight.html` checks 108 views for tint coverage, selection/hover precedence, clearing and occlusion. Both use local renderer fixtures. Vehicle verification is described below.
+
+Existing application browser checks cover [responsive exploration and inspectors](tests/ocean-lens-ui.browser.js), [tabbed search](tests/search-tabs.browser.js), [sensor readings and histories](tests/sensor-readings.browser.js), [project information](tests/project-information.browser.js), [building themes](tests/building-layer-legend.browser.js), [selection workflows](tests/ocean-lens-workflows.browser.js) and [fallback states](tests/ocean-lens-fallbacks.browser.js). They are explicit Playwright CLI checks against a running app, separate from `npm test`; feed/outage fixtures are labelled in each script.
 
 The port-camera browser self-check uses fixture media to test switching, refresh failures, visibility cleanup and keyboard/focus behavior. Start the app, open it in a headed Playwright CLI session named `port-cameras`, and zoom out until both harbour signs and Mannerheimintie are visible, then run:
 
@@ -380,21 +406,6 @@ The generator checks geometry and byte budgets and contact/waterline bounds. To 
 
 Ship model verification on 10 October 2026 passed type checks, all 317 offline tests, the production build, and side/top visual and selection checks for every variant. The 700-vehicle fixture rendered 5,616,750 triangles in 58 draw calls, with minimum and median 100 FPS across twenty one-second samples at 1440×1000 in Chrome 154 on a Mac Studio M2 Ultra with 64 GiB RAM. This fixture measurement excludes city geometry and does not establish performance on lower-powered devices.
 
-## Source evidence and development notes
-
-Original IDs remain strings, including leading zeroes. Ambiguous joins stay unresolved, missing readings stay null, and observed/report time is separate from retrieval/receipt time. Licensed prepared data keeps provider attribution and source versions. Fixtures and simulated load workloads are explicitly identified; the normal application uses actual live reports.
-
-Use these references when changing adapters, coordinates or deployment behavior:
-
-- [Data access and source gates](docs/data-access.md), [data contracts](docs/data-contracts.md), and [city source evidence](docs/city-source-evidence.md).
-- [Rail source evidence and verification](docs/rail-evidence.md).
-- [Transit/environment evidence](docs/transit-environment-evidence.md), [geometry/energy evidence](docs/geometry-energy-evidence.md), and [coordinate controls](docs/coordinate-controls-evidence.md).
-- [Energy/solar sources](docs/energy-solar-evidence.md) and [solar method/export](docs/solar-method-evidence.md).
-- [Operations](docs/operations.md) and dated milestone results: [foundation](docs/milestone-results/A.md), [city/traffic](docs/milestone-results/B.md), [inspection](docs/milestone-results/C.md), [energy](docs/milestone-results/D.md), [release](docs/milestone-results/E.md).
-- [Implementation plan](docs/implementation-plan.md) and the milestone specifications in `docs/milestones/` for the original acceptance criteria.
-
-ExcelJS's UUID override is scoped to 11.1.1 for GHSA-w5hq-g745-h8pq; its workbook write/read regression covers the existing CommonJS usage. Keep the lockfile and installed versions aligned when changing dependencies. Capacity, source availability and browser behavior beyond the recorded verification remain workload/device dependent; full-detail municipal cache size is still unmeasured.
-
 ## Traffic cameras
 
 Six teal camera signs mark Kivihaka mast, Ilmala, Ruoholahti, Lauttasaari, Kivihaka west and Munkkiniemi. Zoom out from City Centre to see them; they remain visible independently of weather and air-quality layers. Click or use Tab, Enter and Space to open a centered camera modal while retaining the inspector selection. Escape, the close button or a backdrop click dismisses it and restores focus.
@@ -421,6 +432,21 @@ The inspector shows completed-building register facts separately from municipal 
 
 Building colors include Use, Heating method, Heating energy source and Permit action status. Selecting a legend category highlights its buildings and narrows building search; other buildings remain dimmed and pickable. Changing color mode clears this selection. Multiple permit statuses remain explicitly mixed. No linked permit records is not evidence of no construction. Sources & status shows coverage, attribution and snapshot dates.
 
-`GET /api/ryhti/catalog` accepts no parameters, validates the immutable catalog and city-manifest checksum, and reports ready/stale/unavailable. It supports gzip and loads after scene readiness. Existing installations without a Ryhti snapshot remain operational. Release packaging verifies optional Ryhti assets when present. No runtime upstream requests or automatic refresh are added.
+`GET /api/ryhti/catalog` accepts no parameters, validates the immutable catalog and city-manifest checksum, and reports ready/stale/unavailable. It supports gzip for compatibility clients. The application reads selected-building register/permit records through the generation-pinned entity API and category values through the theme API. Existing installations without a Ryhti snapshot remain operational. Release packaging verifies optional Ryhti assets when present. No runtime upstream requests or automatic refresh are added.
 
 The [Ryhti source evidence](docs/ryhti-evidence.md) records measured coverage, limitations and code-list provenance. Syke requires an application identifier for long-term API use; the operator should request it from Syke GIS support as described in the [official instructions](https://ryhti.syke.fi/en/front-page/services/instructions-for-using-open-interfaces-in-the-ryhti-system/). No application identifier has been requested by this integration.
+
+## Source evidence and development notes
+
+Original IDs remain strings, including leading zeroes. Ambiguous joins stay unresolved, missing readings stay null, and observed/report time is separate from retrieval/receipt time. Licensed prepared data keeps provider attribution and source versions. Fixtures and simulated load workloads are explicitly identified; the normal application uses actual live reports.
+
+Use these references when changing adapters, coordinates or deployment behavior:
+
+- [Data access and source gates](docs/data-access.md), [data contracts](docs/data-contracts.md), and [city source evidence](docs/city-source-evidence.md).
+- [Rail source evidence and verification](docs/rail-evidence.md).
+- [Transit/environment evidence](docs/transit-environment-evidence.md), [geometry/energy evidence](docs/geometry-energy-evidence.md), and [coordinate controls](docs/coordinate-controls-evidence.md).
+- [Energy/solar sources](docs/energy-solar-evidence.md) and [solar method/export](docs/solar-method-evidence.md).
+- [Operations](docs/operations.md) and dated milestone results: [foundation](docs/milestone-results/A.md), [city/traffic](docs/milestone-results/B.md), [inspection](docs/milestone-results/C.md), [energy](docs/milestone-results/D.md), [release](docs/milestone-results/E.md).
+- [Implementation plan](docs/implementation-plan.md) and the milestone specifications in `docs/milestones/` for the original acceptance criteria.
+
+ExcelJS's UUID override is scoped to 11.1.1 for GHSA-w5hq-g745-h8pq; its workbook write/read regression covers the existing CommonJS usage. Keep the lockfile and installed versions aligned when changing dependencies. Capacity, source availability and browser behavior beyond the recorded verification remain workload/device dependent; full-detail municipal cache size is still unmeasured.

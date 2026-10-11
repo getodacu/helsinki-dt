@@ -11,7 +11,9 @@ npm ci
 npm run data:prepare
 npm run city:prepare
 npm run energy:prepare
+npm run ryhti:prepare # Optional building register and permit enrichment
 npm run routes:prepare
+npm run rail:prepare
 npm run entities:prepare
 npm run check
 npm test
