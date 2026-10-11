@@ -3,7 +3,8 @@
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   const viewport = page.viewportSize();
-  const trigger = page.getByRole('button', { name: 'Data & sources ↗', exact: true });
+  const navigation = page.getByRole('navigation', { name: 'Project information', exact: true });
+  const trigger = navigation.getByRole('button', { name: 'Data & sources', exact: true });
   const dialog = page.locator('#sources');
   const sections = dialog.getByRole('group', { name: 'Project information sections' });
   const content = dialog.locator('.drawer-content');
@@ -106,7 +107,27 @@ async (page) => {
     check(await dialog.locator('.information-footer .project-copyright').getAttribute('href') === 'https://ai.ro/', 'Panel copyright destination incorrect');
     await dialog.getByRole('button', { name: 'Close sources' }).click(); await dialog.waitFor({ state: 'detached' });
     check(await trigger.evaluate(element => element === document.activeElement), 'Close button did not return focus');
-    console.log('PASS: project information, source provenance, outages, keyboard focus, links and responsive layouts');
+    check((await navigation.getByRole('button').allTextContents()).map(text => text.trim()).join('|') === 'About this project|Open for collaboration|Data & sources ↗', 'Header menu order differs from Ocean Lens');
+    for (const size of [{ width: 1440, height: 1000 }, { width: 928, height: 1104 }, { width: 781, height: 844 }, { width: 390, height: 844 }, { width: 320, height: 568 }, { width: 1000, height: 450 }]) {
+      await page.setViewportSize(size);
+      await inViewport(navigation);
+      await inViewport(page.locator('#city-search'));
+      check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Header causes page overflow at ${size.width}×${size.height}`);
+      for (const [name, heading] of [['About this project', 'About this project'], ['Open for collaboration', 'Open for collaboration'], ['Data & sources', 'Data & Sources']]) {
+        const button = navigation.getByRole('button', { name, exact: true });
+        await inViewport(button);
+        check((await button.boundingBox()).height >= 44, 'Header touch target too small');
+        await button.focus(); await button.press('Enter'); await dialog.waitFor();
+        check(await dialog.getByRole('heading', { name: heading, exact: true }).isVisible(), 'Header opened the wrong section');
+        check(await button.getAttribute('aria-expanded') === 'true', 'Open section is not exposed by the header');
+        await inViewport(dialog); await inViewport(dialog.locator('.information-footer'));
+        await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
+        check(await button.evaluate(element => element === document.activeElement), 'Header opener did not regain focus');
+      }
+      await inViewport(copyright);
+      await page.screenshot({ path: `output/playwright/project-menu-${size.width}.png` });
+    }
+    console.log('PASS: Ocean Lens menu, direct section access, source provenance, outages, keyboard focus, links and responsive layouts');
   } finally {
     await page.unroute('**/api/observations', observationsRoute);
     await page.unroute('**/api/catalog/status', catalogRoute);

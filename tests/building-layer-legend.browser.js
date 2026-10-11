@@ -112,7 +112,7 @@ async (page) => {
     const transport = page.locator('#transport-dialog'); await transport.waitFor();
     check(!(await transport.innerText()).includes('Transit models use real-world scale'), 'Transport explanation remains');
     await transport.getByRole('button', { name: 'Close transport' }).click();
-    await page.getByRole('button', { name: 'Data & sources ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Data & sources', exact: true }).click();
     const sources = page.locator('#sources'); await sources.waitFor();
     const sourceText = await sources.innerText();
     check(!/Juxtaposed weather|Motion buffer:|Exact identifier joins only|Energy months are historical/.test(sourceText), 'Source explanations remain');

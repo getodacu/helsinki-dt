@@ -322,7 +322,7 @@
     if (vehicle) selectObject({ kind: 'vehicle', vehicle });
     else selectionMessage = 'No current vehicle report for this route. No journey shape can be inferred.';
   };
-  const openSources = () => { informationSection = 'data'; sourceOpen = true; };
+  const openSources = (section: typeof informationSection = 'data') => { informationSection = section; sourceOpen = true; };
   const showInformationSection = (section: typeof informationSection) => {
     informationSection = section;
     document.querySelector('#sources .drawer-content')?.scrollTo({ top: 0 });
@@ -460,7 +460,11 @@
       {#if trafficError}<p class="panel-note">{trafficError}</p>{/if}
     </div>
     <button class="console-help" aria-label="Help using the city" onclick={() => helpOpen = true}>?</button>
-    <button class="source-button" onclick={openSources} aria-haspopup="dialog" aria-expanded={sourceOpen} aria-controls="sources">Data & sources ↗</button>
+    <nav class="header-actions" aria-label="Project information">
+      <button class="source-button" onclick={() => openSources('about')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'about'} aria-controls="sources">About this project</button>
+      <button class="source-button collaboration-button" onclick={() => openSources('collaboration')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'collaboration'} aria-controls="sources">Open for collaboration</button>
+      <button class="source-button" onclick={() => openSources()} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'data'} aria-controls="sources">Data & sources <span aria-hidden="true">↗</span></button>
+    </nav>
   </header>
   <main class="city-workspace" style:--controls-height={`${controlsHeight}px`} data-scene-ready={!mapCovered} aria-busy={mapCovered}>
     {#if city}
@@ -493,7 +497,7 @@
           : `Caching area on the server: ${mapLoad.background.completed.toLocaleString()} / ${mapLoad.background.total.toLocaleString()}`}
       </div>
     {/if}
-    {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={openSources}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
+    {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={() => openSources()}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
     <div class="map-controls" bind:clientHeight={controlsHeight}>
       <nav class="map-appearance" aria-label="Map appearance and tools">
         {#each appearanceLayers as layer (layer.key)}<button aria-label={layer.label} title={layer.label} aria-pressed={layers[layer.key]} onclick={() => layers[layer.key] = !layers[layer.key]}><ConsoleIcon name={layer.key} /></button>{/each}
@@ -534,7 +538,7 @@
               <details class="console-source-details"><summary>Source identifiers</summary><dl class="properties">
                 {#each [['Building ID', selected.building.id], ['CityGML ID', selected.building.gmlId], ['VTJ-PRT', selected.building.vtjPrt], ['RATU', selected.building.ratu], ['Source', selected.building.sourceId]].filter(([, value]) => knownValue(value)) as [name, value] (name)}<div><dt>{name}</dt><dd>{value}</dd></div>{/each}
               </dl></details>
-              <button class="text-button" onclick={openSources}>Data coverage & sources ↗</button>
+              <button class="text-button" onclick={() => openSources()}>Data coverage & sources ↗</button>
             </div>
           {:else if selected?.kind === 'vehicle'}
             {#snippet vehicleFollow()}
@@ -654,7 +658,7 @@
     <div class="layer-list"><dl class="console-instructions"><div><dt>Look around</dt><dd>Drag to orbit. Scroll or pinch to zoom.</dd></div><div><dt>Move across the city</dt><dd>Use W, A, S and D, or right-drag. On a touch screen, drag with two fingers.</dd></div><div><dt>Inspect a place</dt><dd>Select a building, vehicle or station. Escape closes your selection.</dd></div><div><dt>Find something</dt><dd>Search an address, route, vehicle or station above.</dd></div></dl>
             <label class="layer-control"><input type="checkbox" bind:checked={keyboardNavigation} /><span>WASD navigation</span></label>
             <button class="follow-button" disabled={!scene} onclick={() => choosePreset('city')}>Return to City Centre <span>↗</span></button>
-            <button class="text-button" onclick={openSources}>About the data & sources ↗</button>
+            <button class="text-button" onclick={() => openSources()}>About the data & sources ↗</button>
 </div>
   </dialog>
 {/if}
