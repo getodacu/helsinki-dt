@@ -1,10 +1,17 @@
-// Run with playwright-cli run-code --filename after zooming out until both harbour POIs are visible.
+// Run with playwright-cli run-code --filename against the local app.
 // Media responses below are deliberate fixtures; verify actual provider playback separately.
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   const modal = page.locator('dialog.port-camera-modal'), chooser = page.getByRole('combobox', { name: 'Port camera', exact: true });
   if (await modal.count()) { await page.getByRole('button', { name: 'Close port cameras' }).click(); await modal.waitFor({ state: 'detached' }); }
   const marker = name => page.getByRole('button', { name: `Port cameras · ${name}`, exact: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.waitForFunction(() => document.querySelector('main')?.getAttribute('data-scene-ready') === 'true');
+  await page.getByRole('button', { name: 'City Centre', exact: true }).click();
+  await page.mouse.move(720, 400);
+  for (let step = 0; step < 6 && (!await marker('South Harbour').isVisible() || !await marker('West Harbour').isVisible()); step++) {
+    await page.mouse.wheel(0, 400); await page.waitForTimeout(500);
+  }
   await marker('South Harbour').waitFor(); await marker('West Harbour').waitFor();
   await page.getByRole('button', { name: 'Air quality station · Helsinki Mannerheimintie', exact: true }).click();
   const requests = [], record = request => { if (/camstreamer\.com\/embed|portofhelsinki\.fi\/webcams/.test(request.url())) requests.push(request.url()); };

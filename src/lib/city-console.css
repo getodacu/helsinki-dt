@@ -33,7 +33,7 @@
 .city-workspace::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(90deg, #07131de6, #07131d55 26%, transparent 48%); }
 .left-stack, .right-stack { position: absolute; top: 24px; bottom: 126px; z-index: 3; display: flex; flex-direction: column; gap: 12px; min-height: 0; pointer-events: none; }
 .left-stack { left: 24px; width: 280px; }
-.right-stack { right: 24px; width: 340px; }
+.right-stack { right: 24px; top: 88px; width: 340px; }
 .left-stack > *, .right-stack > * { pointer-events: auto; }
 .console-intro { flex-shrink: 0; padding-bottom: 8px; color: var(--text); text-shadow: 0 2px 15px #07131d; }
 .console-intro .eyebrow { font-size: 9px; }
@@ -73,7 +73,7 @@
 .theme-limits { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
 .legend-no-data { display: flex; gap: 7px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
 .legend-shortcut { display: none; }
-.inspector, .city-overview { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.inspector { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .inspector > .panel-heading { position: sticky; top: 0; z-index: 2; background: var(--surface); }
 .console-inspector-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin: 12px 0; }
 .console-inspector-tabs button { min-height: 44px; padding: 8px 12px; color: var(--muted); background: transparent; border-bottom: 2px solid transparent; font-size: 13px; }
@@ -87,18 +87,17 @@
 .vehicle-schedule.delayed, .late { color: #dfa96b; }
 .vehicle-schedule.early, .early { color: #8cc8ef; }
 .vehicle-schedule.unknown { color: var(--muted); }
-.overview-content { padding: 16px; }
-.overview-feed { border-bottom: 1px solid var(--border); padding: 12px 0; }
-.overview-feed > div { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
-.overview-feed p { font-size: 13px; margin-top: 5px; }
-.overview-feed small, .overview-reading small { color: var(--muted); font-size: 11px; line-height: 1.6; }
-.overview-observations { margin-top: 18px; }
-.overview-reading { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); padding: 14px 0; gap: 4px; }
-.overview-reading > span:first-child { font-size: 12px; color: var(--muted); }
-.overview-reading > strong { font-size: 29px; letter-spacing: -.04em; font-weight: 400; }
-.overview-reading .station-link { font-size: 12px; min-height: 44px; }
-.reading-state { text-transform: uppercase; letter-spacing: .1em; font-size: 10px; color: var(--muted); }
-.overview-observations > .panel-note { margin-top: 14px; }
+#exploration-heading { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sensor-readings { position: absolute; top: 24px; right: 24px; width: 260px; max-width: calc(100% - 48px); height: 52px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); z-index: 4; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.sensor-reading { min-width: 0; min-height: 44px; border: 0; border-radius: 0; background: transparent; padding: 4px; text-align: center; }
+.sensor-reading + .sensor-reading { border-left: 1px solid var(--border); }
+.sensor-reading > span { display: flex; justify-content: center; align-items: baseline; gap: 4px; font-size: 11px; color: var(--muted); }
+.sensor-reading strong { display: block; margin-top: 3px; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sensor-reading strong span { margin-left: 3px; font-size: 10px; font-weight: 400; }
+.sensor-reading small { font-size: 9px; }
+.sensor-reading.stale > span { color: #dfa96b; }
+.sensor-reading:disabled { opacity: 1; color: var(--muted); cursor: default; }
+.sensor-reading:focus-visible { outline-offset: -3px; }
 .camera-presets { position: absolute; inset: auto 24px 44px; display: flex; align-items: center; gap: 12px; z-index: 3; }
 .tour-label { flex: 0 0 110px; color: var(--muted); font-size: 11px; line-height: 1.6; text-transform: uppercase; letter-spacing: .12em; }
 .camera-presets button { min-width: 0; flex: 1; min-height: 64px; display: flex; gap: 14px; align-items: center; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); text-align: left; }
@@ -227,7 +226,8 @@
   .left-stack .building-layer-legend { display: none; }
   .left-stack.legend-active .building-layer-legend { display: flex; flex: 1; max-height: none; }
   .left-stack.legend-active .exploration-content { display: none; }
-  .legend-shortcut { position: absolute; top: 12px; right: 16px; z-index: 4; display: flex; align-items: center; gap: 12px; min-height: 44px; max-width: calc(100% - 32px); padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; }
+  .sensor-readings { top: 16px; right: 16px; max-width: calc(100% - 32px); }
+  .legend-shortcut { position: absolute; top: 80px; right: 16px; z-index: 4; display: flex; align-items: center; gap: 12px; min-height: 44px; max-width: calc(100% - 32px); padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; }
   .legend-shortcut span { color: var(--teal); }
   .mobile-panel-nav { position: absolute; inset: auto 0 0; display: flex; height: 66px; gap: 6px; padding: 6px 12px; background: #09151ff5; border-top: 1px solid var(--border); z-index: 6; }
   .mobile-panel-nav button { flex: 1; min-width: 0; display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding: 6px; background: transparent; border: 1px solid transparent; font-size: 13px; }
@@ -259,7 +259,9 @@
   .live-feed-button { grid-column: 2; grid-row: 1; font-size: 11px; }
   .search-results { max-height: calc(100dvh - 190px); }
   .project-menu, .live-feed-popover { top: 52px; right: 8px; }
-  .left-stack, .right-stack { top: auto; left: 8px; right: 8px; bottom: 100px; width: auto; max-height: calc(100% - 116px); }
+  .sensor-readings { top: 8px; right: 8px; max-width: calc(100% - 16px); }
+  .legend-shortcut { top: 72px; right: 8px; }
+  .left-stack, .right-stack { top: auto; left: 8px; right: 8px; bottom: 100px; width: auto; max-height: calc(100% - 172px); }
   .mobile-panel-nav button { flex-direction: column; gap: 2px; font-size: 12px; }
   .tour-number { display: none; }
   .tour-copy strong { font-size: 12px; }
