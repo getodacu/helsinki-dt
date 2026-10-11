@@ -66,7 +66,13 @@ async (page) => {
     check(await picker.getByRole('button', { name: 'Default appearance', exact: true, includeHidden: true }).count() === 0, 'Default appearance button remains');
     check(await picker.getByRole('button', { name: 'Reset building colours', exact: true, includeHidden: true }).count() === 0, 'Redundant reset button remains');
     for (const name of ['Heating method', 'Heating energy source', 'Use', 'Permits', 'Heat demand', 'Solar radiation']) {
+      await openLayers();
+      const mapGroup = picker.locator('details[name="exploration"]').first();
+      if (!await mapGroup.evaluate(element => element.open)) await mapGroup.locator(':scope > summary').click();
+      await picker.getByRole('checkbox', { name: '3D buildings', exact: true }).uncheck();
       await choose(name); await bounds();
+      check(await picker.getByRole('checkbox', { name: '3D buildings', exact: true, includeHidden: true }).isChecked(), `${name} did not enable buildings`);
+      check(await picker.getByText('3D buildings are hidden.', { exact: false }).count() === 0, 'Manual-enable instruction remains');
       if (['Heat demand', 'Solar radiation'].includes(name)) {
         check(await legend.locator('.theme-gradient').count() === 1, 'Missing energy scale');
         check((await legend.locator('.theme-limits').innerText()).includes('Wh'), 'Missing scale units');
@@ -86,6 +92,7 @@ async (page) => {
       const activeButton = picker.getByRole('button', { name, exact: true });
       await activeButton.focus(); await activeButton.press('Enter');
       check(await picker.locator('.building-layer-choices button[aria-pressed="true"]').count() === 0 && await legend.count() === 0, 'Repeated theme click did not restore default appearance');
+      check(await picker.getByRole('checkbox', { name: '3D buildings', exact: true, includeHidden: true }).isChecked(), 'Toggling off hides buildings');
       await choose(name);
       if (!['Heat demand', 'Solar radiation'].includes(name)) check(await legend.locator('input:checked').count() === await legend.getByRole('checkbox').count(), 'Reactivated theme did not restore category filters');
     }
@@ -95,16 +102,18 @@ async (page) => {
     await picker.locator('details[name="exploration"]').first().locator(':scope > summary').click();
     await picker.getByRole('checkbox', { name: '3D buildings', exact: true }).uncheck();
     check(await legend.count() === 0, 'Legend remains when buildings hidden');
-    await picker.getByRole('checkbox', { name: '3D buildings', exact: true }).check();
+
     await openLayers();
     const useGroup = picker.locator('details[name="exploration"]').nth(2);
     if (!await useGroup.evaluate(element => element.open)) await useGroup.locator(':scope > summary').click();
     await useGroup.getByRole('button', { name: 'Use', exact: true }).click();
     check(await legend.count() === 0, 'Active theme toggle retains legend');
+    check(!await picker.getByRole('checkbox', { name: '3D buildings', exact: true, includeHidden: true }).isChecked(), 'Toggling off changed hidden building visibility');
     check(await picker.locator('.building-layer-choices button[aria-pressed="true"]').count() === 0, 'Default appearance has a pressed theme');
     await choose('Use');
     const search = page.getByRole('searchbox', { name: 'Vehicle, route, building, address or station' });
     await search.fill('Mannerheimintie');
+    await page.getByRole('tab', { name: 'Stations', exact: true }).click();
     await page.locator('.search-results').getByRole('button', { name: /Helsinki Mannerheimintie/ }).click();
     await page.locator('#identity-inspector').waitFor();
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 928, height: 1104 }, { width: 390, height: 844 }, { width: 1000, height: 450 }]) {

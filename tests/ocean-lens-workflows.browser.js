@@ -43,12 +43,13 @@ async (page) => {
     await follow.click(); check(await follow.getAttribute('aria-pressed') === 'false', 'Stop following failed');
     await page.route('**/api/rail/stations/*/departures', boardRoute);
     await search.fill('Helsinki asema');
+    await page.getByRole('tab', { name: 'Stations', exact: true }).click();
     await page.locator('.search-results').getByRole('button', { name: /^Helsinki asema rail/ }).click();
     await inspector.getByText('No upcoming passenger departures reported.', { exact: true }).waitFor();
     check((await inspector.innerText()).includes('Helsinki time'), 'Departure time attribution lost');
     await page.route(/\/api\/entities\/building\/[^/]+\?/, detailRoute);
     await page.route(/\/api\/energy\?/, energyRoute);
-    await search.fill('Mannerheimintie'); await page.locator('.search-results .building-list button').first().click();
+    await search.fill('Mannerheimintie'); await page.getByRole('tab', { name: 'Buildings', exact: true }).click(); await page.locator('.search-results .building-list > button').first().click();
     await inspector.getByRole('button', { name: 'View electricity history', exact: true }).click();
     const history = page.locator('.energy-history-dialog'); await history.waitFor();
     check(await history.locator('.monthly-chart').isVisible(), 'Electricity history chart missing');

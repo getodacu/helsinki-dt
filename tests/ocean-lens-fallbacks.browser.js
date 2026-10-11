@@ -22,7 +22,8 @@ async (page) => {
     await fallback.getByText('City scene unavailable', { exact: true }).waitFor();
     const search = fallback.getByRole('searchbox');
     await search.fill('Mannerheimintie');
-    const building = fallback.locator('.search-results .building-list button').first();
+    await fallback.getByRole('tab', { name: 'Buildings', exact: true }).click();
+    const building = fallback.locator('.search-results .building-list > button').first();
     await building.waitFor(); await building.click();
     const inspector = fallback.locator('#identity-inspector'); await inspector.waitFor();
     check((await inspector.innerText()).includes('3D rendering unavailable'), 'WebGL metadata fallback missing');

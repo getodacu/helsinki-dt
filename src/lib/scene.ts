@@ -401,7 +401,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   let keyboardNavigation = true, pointerInteracting = false;
   const heldKeys = new Set<string>();
   const keyboardBlocked = (target: EventTarget | null = document.activeElement) => !keyboardNavigation || !initiallyReady || document.hidden
-    || (target instanceof HTMLElement && (target.isContentEditable || !!target.closest('input, textarea, select, button, a[href], summary, [role="button"], [role="textbox"]')))
+    || (target instanceof HTMLElement && (target.isContentEditable || !!target.closest('input, textarea, select, button, a[href], summary, [role="button"], [role="tabpanel"], [role="textbox"]')))
     || !!document.querySelector('dialog[open]');
   const stopKeyboard = () => { if (!heldKeys.size) return; heldKeys.clear(); cache.setInteracting(pointerInteracting); };
   const windowBlur = () => { pointerInteracting = false; stopKeyboard(); cache.setInteracting(false); };

@@ -49,6 +49,7 @@
   let selectedRyhtiCategories = $state<string[]>([]);
   const changeTheme = (key: string) => {
     themeKey = themeKey === key ? '' : key;
+    if (themeKey) layers.buildings = true;
     selectedRyhtiCategories = catalog?.themes.find(theme => theme.key === themeKey)?.categories.map(category => category.key) ?? [];
   };
   let scene = $state.raw<CitySceneController | null>(null);
@@ -118,6 +119,21 @@
   let following = $state(false);
   let query = $state('');
   let searchOpen = $state(false);
+  const searchTabs = [
+    { key: 'vehicles', label: 'Vehicles' }, { key: 'routes', label: 'Routes' },
+    { key: 'buildings', label: 'Buildings' }, { key: 'stations', label: 'Stations' }
+  ] as const;
+  let searchTab = $state<typeof searchTabs[number]['key']>('vehicles');
+  const navigateSearchTabs = (event: KeyboardEvent) => {
+    const index = searchTabs.findIndex(tab => tab.key === searchTab);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? searchTabs.length - 1
+      : event.key === 'ArrowRight' ? (index + 1) % searchTabs.length
+      : event.key === 'ArrowLeft' ? (index + searchTabs.length - 1) % searchTabs.length : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    searchTab = searchTabs[next].key;
+    void tick().then(() => document.getElementById(`city-search-tab-${searchTab}`)?.focus());
+  };
   const closeSearch = () => { document.getElementById('city-search')?.focus(); searchOpen = false; };
   let routeFilter = $state('');
   let now = $state(Date.now());
@@ -181,10 +197,14 @@
     const timer = setTimeout(() => debouncedQuery = value, 200);
     return () => clearTimeout(timer);
   });
-  let searchEnabled = $derived(!!generation && !!(debouncedQuery || (sceneError && !scene)));
+  let searchEnabled = $derived(searchOpen && searchTab === 'buildings' && !!generation && !!(debouncedQuery || (sceneError && !scene)));
   let searchSignature = $derived(JSON.stringify([generation, debouncedQuery]));
   let pagination = $state<{ signature: string; cursors: (string | null)[] }>({ signature: '', cursors: [null] });
   let cursor = $derived(pagination.signature === searchSignature ? pagination.cursors.at(-1) ?? null : null);
+  const changeSearchPage = (cursors: (string | null)[]) => {
+    document.getElementById(`city-search-panel-${searchTab}`)?.focus({ preventScroll: true });
+    pagination = { signature: searchSignature, cursors };
+  };
   const searchQuery = createQuery(() => {
     const params = new URLSearchParams({ generation, q: debouncedQuery, kind: 'building', limit: '30' });
     if (cursor) params.set('cursor', cursor);
@@ -452,12 +472,32 @@
       {#if searchOpen}
         <div class="panel object-browser search-results" id="city-search-results">
           <div class="panel-heading"><h2>Search results</h2><button class="icon-button" aria-label="Close search results" onclick={closeSearch}>×</button></div>
-          {#if indexState !== 'current'}<p class="panel-note search-status" role="status" data-index-state={indexState}>{indexState === 'loading' ? 'Loading buildings…' : indexMessage}</p>{/if}{#if searchEnabled && searchQuery.isFetching}<p class="panel-note search-status" role="status">Searching…</p>{/if}{#if searchEnabled && searchQuery.error}<p class="notice search-status" role="status">{searchQuery.error.message}</p>{/if}
-          {#if query}<button class="text-button clear-search" onclick={() => { query = ''; document.getElementById('city-search')?.focus(); }}>Clear search</button>{/if}
-        <details open><summary>Vehicle reports <span>{matchingVehicles.length}</span></summary><div class="object-list">{#each matchingVehicles.slice(0, 60) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {vehicleLabel(vehicle, routeName(vehicle.routeId))}</strong><small>{vehicleSourceLabel(vehicle)} · {vehicle.marine ? `MMSI ${vehicle.marine.mmsi}` : vehicle.rail ? `${vehicle.rail.trainNumber} · ${vehicle.rail.destination ?? 'Destination unavailable'}` : `${vehicle.ownerOperatorId}/${vehicle.vehicleId}`} · {trafficIsStale(vehicle, now) ? `stale · ${age(vehicle)}` : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching retained vehicle reports in visible modes / transit route.</p>{/each}{#if matchingVehicles.length > 60}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div></details>
-        <details open={!!query}><summary>Routes <span>{matchingRoutes.length}</span></summary><div class="object-list">{#each matchingRoutes.slice(0, 60) as item (item.routeId)}<button onclick={() => chooseRoute(item.routeId)}><span class="mode-swatch" style:background={MODE_COLOURS[item.mode]}></span><span><strong>Route {item.label} · {label(item.mode)}</strong><small>{item.name} · {item.routeId}</small></span></button>{:else}<p class="panel-note">{routeCatalogLoading ? 'Loading prepared route labels…' : routeCatalog?.reason ?? 'No matching prepared route labels.'}</p>{/each}{#if matchingRoutes.length > 60}<p class="panel-note">First 60 routes. Refine your search.</p>{/if}</div></details>
-        <details open={!!query}><summary>{query ? 'Matching buildings' : sceneError && !scene ? 'Available buildings' : 'Loaded buildings'} <span>{filteredBuildings.length}</span></summary><div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong>{#if buildingAddress(building) && buildingAddress(building) !== buildingName(building)}<small>{buildingAddress(building)}</small>{/if}</span></button>{:else}<p class="panel-note">{query ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}{#if searchEnabled}<div class="search-pagination"><button class="text-button" disabled={!cursor || searchQuery.isFetching} onclick={() => pagination = { signature: searchSignature, cursors: pagination.cursors.slice(0, -1) }}>Previous</button><button class="text-button" disabled={!searchQuery.data?.nextCursor || searchQuery.isFetching} onclick={() => pagination = { signature: searchSignature, cursors: [...(pagination.signature === searchSignature ? pagination.cursors : [null]), searchQuery.data!.nextCursor] }}>Next buildings</button></div>{/if}</div></details>
-        <details open><summary>Stations <span>{matchingStations.length}</span></summary><div class="object-list">{#each matchingStations as station (station.id)}<button class:selected={selected?.kind === 'station' && selected.station.id === station.id} onclick={() => selectObject({ kind: 'station', station })}><span class="station-swatch {station.kind}" aria-hidden="true">{station.kind === 'weather' ? '○' : station.kind === 'rail' ? '▣' : '◇'}</span><span><strong>{station.name}</strong><small>{label(station.kind)} · {station.id}</small></span></button>{:else}<p class="panel-note">{observationLoading ? 'Loading stations…' : 'No matching stations in the available coverage / layers.'}</p>{/each}</div></details>
+          <div class="search-tabs" role="tablist" aria-label="Search categories">
+            {#each searchTabs as tab (tab.key)}<button id={`city-search-tab-${tab.key}`} role="tab" aria-selected={searchTab === tab.key} aria-controls={`city-search-panel-${tab.key}`} tabindex={searchTab === tab.key ? 0 : -1} onclick={() => searchTab = tab.key} onkeydown={navigateSearchTabs}>{tab.label}</button>{/each}
+          </div>
+          {#key `${searchTab}:${query}`}
+            {#each searchTabs as tab (tab.key)}
+              <div class="search-result-panel" id={`city-search-panel-${tab.key}`} role="tabpanel" aria-labelledby={`city-search-tab-${tab.key}`} hidden={searchTab !== tab.key} tabindex="0">
+                {#if searchTab === tab.key}
+                  {#if query}<button class="text-button clear-search" onclick={() => { query = ''; document.getElementById('city-search')?.focus(); }}>Clear search</button>{/if}
+                  {#if searchTab === 'vehicles'}
+                    <p class="panel-note">{matchingVehicles.length} vehicle reports</p>
+                    <div class="object-list">{#each matchingVehicles.slice(0, 60) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {vehicleLabel(vehicle, routeName(vehicle.routeId))}</strong><small>{vehicleSourceLabel(vehicle)} · {vehicle.marine ? `MMSI ${vehicle.marine.mmsi}` : vehicle.rail ? `${vehicle.rail.trainNumber} · ${vehicle.rail.destination ?? 'Destination unavailable'}` : `${vehicle.ownerOperatorId}/${vehicle.vehicleId}`} · {trafficIsStale(vehicle, now) ? `stale · ${age(vehicle)}` : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching retained vehicle reports in visible modes / transit route.</p>{/each}{#if matchingVehicles.length > 60}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div>
+                  {:else if searchTab === 'routes'}
+                    <p class="panel-note">{matchingRoutes.length} routes</p>
+                    <div class="object-list">{#each matchingRoutes.slice(0, 60) as item (item.routeId)}<button onclick={() => chooseRoute(item.routeId)}><span class="mode-swatch" style:background={MODE_COLOURS[item.mode]}></span><span><strong>Route {item.label} · {label(item.mode)}</strong><small>{item.name} · {item.routeId}</small></span></button>{:else}<p class="panel-note">{routeCatalogLoading ? 'Loading prepared route labels…' : routeCatalog?.reason ?? 'No matching prepared route labels.'}</p>{/each}{#if matchingRoutes.length > 60}<p class="panel-note">First 60 routes. Refine your search.</p>{/if}</div>
+                  {:else if searchTab === 'buildings'}
+                    {#if indexState !== 'current'}<p class="panel-note search-status" role="status" data-index-state={indexState}>{indexState === 'loading' ? 'Loading buildings…' : indexMessage}</p>{/if}{#if searchEnabled && searchQuery.isFetching}<p class="panel-note search-status" role="status">Searching…</p>{/if}{#if searchEnabled && searchQuery.error}<p class="notice search-status" role="status">{searchQuery.error.message}</p>{/if}
+                    <p class="panel-note">{filteredBuildings.length} {query ? 'matching buildings' : sceneError && !scene ? 'available buildings' : 'loaded buildings'}</p>
+                    <div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong>{#if buildingAddress(building) && buildingAddress(building) !== buildingName(building)}<small>{buildingAddress(building)}</small>{/if}</span></button>{:else}<p class="panel-note">{query ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}{#if searchEnabled}<div class="search-pagination"><button class="text-button" disabled={!cursor || searchQuery.isFetching} onclick={() => changeSearchPage(pagination.cursors.slice(0, -1))}>Previous</button><button class="text-button" disabled={!searchQuery.data?.nextCursor || searchQuery.isFetching} onclick={() => changeSearchPage([...(pagination.signature === searchSignature ? pagination.cursors : [null]), searchQuery.data!.nextCursor])}>Next buildings</button></div>{/if}</div>
+                  {:else}
+                    <p class="panel-note">{matchingStations.length} stations</p>
+                    <div class="object-list">{#each matchingStations as station (station.id)}<button class:selected={selected?.kind === 'station' && selected.station.id === station.id} onclick={() => selectObject({ kind: 'station', station })}><span class="station-swatch {station.kind}" aria-hidden="true">{station.kind === 'weather' ? '○' : station.kind === 'rail' ? '▣' : '◇'}</span><span><strong>{station.name}</strong><small>{label(station.kind)} · {station.id}</small></span></button>{:else}<p class="panel-note">{observationLoading ? 'Loading stations…' : 'No matching stations in the available coverage / layers.'}</p>{/each}</div>
+                  {/if}
+                {/if}
+              </div>
+            {/each}
+          {/key}
         </div>
       {/if}
     </search>
@@ -640,7 +680,7 @@
     </aside>
     {/if}
     <SensorReadings snapshot={observationSnapshot} {now} loading={observationLoading} error={observationError} onstation={id => { const station = stations.find(item => item.id === id); if (station) selectObject({ kind: 'station', station }); }} />
-    <nav class="camera-presets" aria-label="Camera presets"><span class="tour-label">Take a<br />closer look</span>{#each [{ id: 'city', name: 'City Centre', detail: 'Buildings & urban life' }, { id: 'harbour', name: 'Harbour', detail: 'Ships & waterfront connections' }, { id: 'central', name: 'Central Station', detail: 'Rail & everyday movement' }] as view, index (view.id)}<button class:active={preset === view.id} aria-label={view.name} aria-pressed={preset === view.id} disabled={!scene} onclick={() => choosePreset(view.id as CameraPreset)}><span class="tour-number">0{index + 1}</span><span class="tour-copy"><strong>{view.name}</strong><small>{view.detail}</small></span><span class="tour-arrow" aria-hidden="true">↗</span></button>{/each}</nav>
+    <nav class="camera-presets" aria-label="Camera presets">{#each [{ id: 'city', name: 'City Centre', detail: 'Buildings & urban life' }, { id: 'harbour', name: 'Harbour', detail: 'Ships & waterfront connections' }, { id: 'central', name: 'Central Station', detail: 'Rail & everyday movement' }] as view, index (view.id)}<button class:active={preset === view.id} aria-label={view.name} aria-pressed={preset === view.id} disabled={!scene} onclick={() => choosePreset(view.id as CameraPreset)}><span class="tour-number">0{index + 1}</span><span class="tour-copy"><strong>{view.name}</strong><small>{view.detail}</small></span><span class="tour-arrow" aria-hidden="true">↗</span></button>{/each}</nav>
     <div class="scene-footer"><span class="scene-guidance">{hovered || (keyboardNavigation ? 'WASD to pan · drag to orbit · scroll to zoom' : 'Drag to orbit · scroll to zoom')}</span>{#if stats}<span class="performance" aria-label="Scene performance" data-fps={stats.fps} data-draw-calls={stats.drawCalls} data-geometries={stats.geometries} data-triangles={stats.triangles} data-loaded-chunks={stats.loadedChunks} data-placed-vehicles={stats.vehicles} data-unplaced-vehicles={stats.unplacedVehicles} data-receipt-latency-ms={stats.lastReceiptLatencyMs ?? ''}>{stats.fps} FPS · {stats.drawCalls} draws · {stats.loadedChunks} chunks</span>{/if}<a class="project-copyright" href="https://ai.ro/" target="_blank" rel="noreferrer">© {new Date(now).getFullYear()} ai.ro</a></div>
     {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
     <nav class="mobile-panel-nav" aria-label="City panels">
@@ -661,7 +701,6 @@
     <div class="building-layer-choices" role="group" aria-label={energyGroup ? 'Energy building colours' : 'Building record colours'}>
       {#each buildingLayers.filter(layer => energyGroup === !['ryhti:main_purpose', 'ryhti:permits'].includes(layer.key)) as layer (layer.key)}<button aria-pressed={themeKey === layer.key} disabled={!layer.available} onclick={() => changeTheme(layer.key)}>{layer.label}</button>{/each}
     </div>
-    {#if !layers.buildings}<p class="notice">3D buildings are hidden. Enable them in Map to see this layer.</p>{/if}
     {#if energyGroup && energyLoading}<p class="notice" role="status">Loading available energy themes…</p>{:else if energyGroup && energy.status !== 'ready'}<p class="notice">{energy.status === 'stale' ? 'Dated catalog retained' : 'Energy catalog unavailable'} · {energy.message}</p>{/if}
     {#if !energyGroup && ryhti.status !== 'ready'}<p class="notice">{ryhti.status === 'stale' ? 'Dated catalog retained' : 'Ryhti catalog unavailable'} · {ryhti.message}</p>{/if}
   </div>

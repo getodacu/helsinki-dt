@@ -82,7 +82,7 @@ async (page) => {
     await page.waitForTimeout(1200);
     const flag = page.locator('.station-flag.weather'), before = await flag.getAttribute('style');
     const search = page.getByRole('searchbox');
-    for (const control of [search, temperature, layers.locator('details[name="exploration"]').first().locator(':scope > summary')]) {
+    for (const control of [search, page.getByRole('tabpanel'), temperature, layers.locator('details[name="exploration"]').first().locator(':scope > summary')]) {
       await control.focus(); await page.keyboard.down('w'); await page.waitForTimeout(600); await page.keyboard.up('w');
       check(await flag.getAttribute('style') === before, `Typing in ${await control.getAttribute('id') || 'sensor reading'} pans the camera`);
     }

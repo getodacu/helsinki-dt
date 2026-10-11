@@ -9,8 +9,14 @@
 .navbar-search { position: relative; flex: 1; min-width: 130px; max-width: 440px; margin-left: auto; }
 .navbar-search > input { display: block; width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; background: #ffffff03; border: 1px solid var(--border); font-size: 13px; }
 .navbar-search > input::placeholder { color: var(--muted); }
-.search-results { position: absolute; top: calc(100% + 8px); left: 0; right: 0; max-height: calc(100dvh - 150px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.search-results .panel-heading { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.search-results { position: absolute; top: calc(100% + 8px); left: 0; right: 0; max-height: calc(100dvh - 150px); display: flex; flex-direction: column; overflow: hidden; }
+.search-results .panel-heading { flex-shrink: 0; background: var(--surface); }
+.search-tabs { flex-shrink: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.search-tabs button { min-width: 0; min-height: 44px; padding: 8px 4px; background: transparent; border-radius: 0; font-size: 12px; }
+.search-tabs button[aria-selected=true] { color: var(--teal); background: var(--accent-wash); box-shadow: inset 0 -2px var(--teal); }
+.search-result-panel { flex: 1; min-height: 0; padding: 8px 14px; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.search-result-panel::-webkit-scrollbar { display: none; }
+.search-results .object-list { max-height: none; overflow: visible; margin-top: 0; }
 .live-feed-button { flex-shrink: 0; display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 6px; background: transparent; font-size: 12px; }
 .console-help { flex-shrink: 0; min-height: 44px; width: 44px; background: transparent; border: 1px solid var(--border); font-size: 18px; }
 .header-actions { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
@@ -99,7 +105,6 @@
 .sensor-reading:disabled { opacity: 1; color: var(--muted); cursor: default; }
 .sensor-reading:focus-visible { outline-offset: -3px; }
 .camera-presets { position: absolute; inset: auto 24px 44px; display: flex; align-items: center; gap: 12px; z-index: 3; }
-.tour-label { flex: 0 0 110px; color: var(--muted); font-size: 11px; line-height: 1.6; text-transform: uppercase; letter-spacing: .12em; }
 .camera-presets button { min-width: 0; flex: 1; min-height: 64px; display: flex; gap: 14px; align-items: center; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); text-align: left; }
 .camera-presets button.active { background: #14312ff0; border-color: #79dfce70; }
 .tour-number { color: var(--muted); font-size: 12px; }
@@ -235,7 +240,6 @@
   .mobile-panel-nav svg { width: 22px; height: 22px; }
   .camera-presets { bottom: 104px; left: 16px; right: 16px; gap: 8px; }
   .camera-presets button { min-height: 56px; padding: 8px; gap: 8px; }
-  .tour-label { display: none; }
   .has-open-panel .camera-presets, .has-open-panel .legend-shortcut { display: none; }
   .scene-footer { bottom: 66px; padding-inline: 16px; }
   .performance { display: none; }
