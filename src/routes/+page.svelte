@@ -507,7 +507,7 @@
 <a class="skip-link" href="#city-search">Skip to city search</a>
 <div class="app-shell city-console">
   <header class="masthead">
-    <a class="brand" href="/" aria-label="Helsinki Lens home"><span class="brand-symbol" aria-hidden="true">▥</span><span class="brand-name">HELSINKI <em>LENS</em><small>DIGITAL TWIN</small></span></a>
+    <a class="brand" href="/" aria-label="Helsinki Lens home"><img class="brand-symbol" src="/logo.svg" width="42" height="28" alt="" /><span class="brand-name">HELSINKI LENS<small>DIGITAL TWIN</small></span></a>
     <search class="navbar-search" aria-label="City search" onfocusout={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) searchOpen = false; }}>
       <input id="city-search" type="search" bind:value={query} placeholder="Search vehicles, routes, buildings or stations…" aria-label="Vehicle, route, building, address or station" aria-controls="city-search-results" onfocus={() => searchOpen = true} onclick={() => searchOpen = true} oninput={() => searchOpen = true} />
       {#if searchOpen}
