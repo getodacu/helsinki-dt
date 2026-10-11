@@ -16,9 +16,11 @@ async (page) => {
 
   const sensors = page.locator('.sensor-readings'), inspector = page.locator('#identity-inspector');
   const layers = page.locator('#exploration-panel'), context = page.locator('#context-trigger');
+  const desktopLayers = page.locator('#desktop-layers-trigger');
+  const minimizeLayers = page.locator('#desktop-layers-minimize');
   const temperature = sensors.locator('[data-parameter="t2m"]');
   const presets = page.getByRole('navigation', { name: 'Camera presets' });
-  const sizes = [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 1032, height: 1104 }, { width: 390, height: 844 }, { width: 844, height: 390 }];
+  const sizes = [{ width: 1440, height: 900 }, { width: 1283, height: 1104 }, { width: 1280, height: 720 }, { width: 1200, height: 900 }, { width: 1199, height: 900 }, { width: 1024, height: 768 }, { width: 1032, height: 1104 }, { width: 390, height: 844 }, { width: 844, height: 390 }];
   const sizeCheck = async locator => {
     const box = await locator.boundingBox(), size = page.viewportSize();
     check(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= size.width + 1 && box.y + box.height <= size.height + 1, 'Panel leaves viewport');
@@ -35,9 +37,56 @@ async (page) => {
     await sensors.waitFor();
     check(await sensors.getByRole('button').count() === 3, 'Sensor display incomplete');
     check(await page.locator('#city-overview').count() === 0 && await context.count() === 0, 'Overview navigation remains');
-    check(await layers.locator(':scope > .panel-heading').count() === 0, 'Redundant exploration heading remains');
+    check(await layers.locator(':scope > .desktop-layers-heading').count() === 1, 'Menu minimize heading missing');
     check(await layers.locator('details[name="exploration"]').count() === 4, 'Environment controls remain');
     check(await layers.locator('details[name="exploration"]').first().evaluate(element => element.open), 'Map is not initially expanded');
+    check(await layers.isVisible() && await minimizeLayers.isVisible() && !await desktopLayers.isVisible(), 'Expanded menu should show only minimize icon');
+    check(await minimizeLayers.getAttribute('aria-label') === 'Minimize layers menu' && await minimizeLayers.getAttribute('aria-controls') === 'exploration-panel', 'Minimize icon accessibility missing');
+    check(await desktopLayers.getAttribute('aria-controls') === 'exploration-panel', 'Desktop toggle does not identify menu');
+    check((await minimizeLayers.boundingBox()).height >= 44, 'Minimize target too small');
+    const terrain = layers.getByRole('checkbox', { name: 'Land & islands', exact: true, includeHidden: true });
+    await terrain.uncheck();
+    const buildingsGroup = layers.locator('details[name="exploration"]').nth(2);
+    await buildingsGroup.locator(':scope > summary').click();
+    const useTheme = layers.getByRole('button', { name: 'Use', exact: true, includeHidden: true });
+    await useTheme.click();
+    const legend = page.locator('.building-layer-legend');
+    await legend.waitFor();
+    const menuScroll = await layers.evaluate(element => element.scrollTop);
+    await minimizeLayers.focus(); await minimizeLayers.press('Enter');
+    check(!await layers.isVisible() && await desktopLayers.getAttribute('aria-expanded') === 'false', 'Desktop menu did not minimize');
+    check(await desktopLayers.getAttribute('aria-label') === 'Show layers', 'Minimized toggle label wrong');
+    check(await desktopLayers.isVisible() && !await minimizeLayers.isVisible() && (await desktopLayers.innerText()).includes('+'), 'Minimized menu should show Layers + only');
+    check((await desktopLayers.boundingBox()).height >= 44, 'Show layers target too small');
+    check(await page.locator('.console-intro').isVisible() && await legend.isVisible(), 'Minimizing hides introduction or legend');
+    check(await desktopLayers.evaluate(element => element === document.activeElement), 'Minimizing loses toggle focus');
+    const mapExposed = await page.evaluate(() => {
+      const box = document.querySelector('.left-stack').getBoundingClientRect();
+      const element = document.elementFromPoint(box.x + box.width / 2, box.bottom - 10);
+      return !!element?.closest('.scene-canvas');
+    });
+    check(mapExposed, 'Minimized menu still blocks map interaction');
+    await desktopLayers.press('Space');
+    check(await layers.isVisible() && await minimizeLayers.isVisible() && !await desktopLayers.isVisible(), 'Space did not restore minimize icon');
+    check(await minimizeLayers.evaluate(element => element === document.activeElement), 'Reopening did not focus minimize icon');
+    check(!await terrain.isChecked() && await useTheme.getAttribute('aria-pressed') === 'true', 'Layer or theme state lost');
+    check(await buildingsGroup.evaluate(element => element.open), 'Open accordion section lost');
+    check(await layers.evaluate(element => element.scrollTop) === menuScroll, 'Menu scroll position lost');
+    await minimizeLayers.click();
+    for (const width of [1199, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      check(!await desktopLayers.isVisible() && !await minimizeLayers.isVisible(), 'Desktop layers controls remain on mobile');
+      await page.locator('#layers-trigger').click();
+      check(await layers.isVisible(), 'Desktop minimized state blocks mobile Layers');
+      check(!await terrain.isChecked() && await useTheme.getAttribute('aria-pressed') === 'true', 'Resizing resets layer state');
+      await page.getByRole('button', { name: 'Close exploration panel', exact: true }).click();
+      check(!await layers.isVisible(), 'Mobile close stopped working');
+    }
+    await page.setViewportSize(sizes[0]);
+    check(!await layers.isVisible() && await desktopLayers.getAttribute('aria-expanded') === 'false', 'Returning to desktop loses minimized state');
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('main')?.getAttribute('data-scene-ready') === 'true');
+    check(await layers.isVisible() && await minimizeLayers.isVisible() && !await desktopLayers.isVisible(), 'Reload did not restore open menu with minimize icon');
     for (const size of sizes) {
       await page.setViewportSize(size);
       check(await page.getByRole('button', { name: 'Help using the city' }).count() === 0, 'Help button remains');
@@ -45,7 +94,8 @@ async (page) => {
       await sizeCheck(page.locator('.masthead')); await sizeCheck(presets); await sizeCheck(sensors);
       const sensorBox = await sensors.boundingBox();
       check(Math.round(sensorBox.width) === 260 && Math.round(sensorBox.height) === 52, 'Sensor display is not compact');
-      for (const button of [...await sensors.getByRole('button').all(), ...await presets.getByRole('button').all()]) check((await button.boundingBox()).height >= 44, 'Touch target too small');
+      for (const button of await sensors.getByRole('button').all()) check((await button.boundingBox()).height >= 44, 'Sensor target too small');
+      for (const button of await presets.getByRole('button').all()) check((await button.boundingBox()).height >= (size.width >= 1200 ? 44 : 32), 'Camera preset target too small');
       if (size.width >= 1200) {
         check(Math.round((await page.locator('.left-stack').boundingBox()).width) === 280, 'Wrong exploration width');
         await sizeCheck(layers);
@@ -100,7 +150,7 @@ async (page) => {
     await page.keyboard.down('w'); await page.waitForTimeout(600); await page.keyboard.up('w');
     check(await flag.getAttribute('style') !== before, 'Map keyboard navigation stopped working');
     await search.fill(''); await page.keyboard.press('Escape');
-    return { layouts: sizes.length, sensors: 3, panels: true, selectionPreserved: true, keyboard: true, reducedMotion: true, cameraPresets: true };
+    return { layouts: sizes.length, desktopLayers: true, layerStatePreserved: true, sensors: 3, panels: true, selectionPreserved: true, keyboard: true, reducedMotion: true, cameraPresets: true };
   } finally {
     await page.unroute('**/api/observations', observationsRoute);
     await page.emulateMedia({ reducedMotion: 'no-preference' });

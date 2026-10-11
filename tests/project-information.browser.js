@@ -6,18 +6,55 @@ async (page) => {
   const navigation = page.locator('.header-actions');
   const compactNavigation = page.locator('#project-menu');
   const menuTrigger = page.locator('#project-menu-trigger');
+  const modals = [
+    { key: 'about', id: 'about-project', heading: 'About this project', close: 'Close about this project', width: 1040 },
+    { key: 'collaboration', id: 'collaboration', heading: 'Open for collaboration', close: 'Close collaboration', width: 720 },
+    { key: 'data', id: 'sources', heading: 'Data & Sources', close: 'Close sources', width: 960 }
+  ];
   const openMenu = async () => {
     const compact = page.viewportSize().width < 1200;
     if (compact && !await compactNavigation.evaluate(element => element.matches(':popover-open'))) await menuTrigger.click();
     return compact ? compactNavigation : navigation;
   };
-  const trigger = navigation.getByRole('button', { name: 'Data & sources', exact: true });
-  const dialog = page.locator('#sources');
-  const sections = dialog.getByRole('group', { name: 'Project information sections' });
-  const content = dialog.locator('.drawer-content');
+  const inViewport = async locator => {
+    const box = await locator.boundingBox(), size = page.viewportSize();
+    check(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= size.width + 1 && box.y + box.height <= size.height + 1, 'Content leaves viewport');
+  };
+  const open = async modal => {
+    const button = (await openMenu()).locator(`[data-information-section="${modal.key}"]`);
+    await inViewport(button);
+    check((await button.boundingBox()).height >= 44, 'Header touch target too small');
+    check(await button.getAttribute('aria-controls') === modal.id, 'Header controls the wrong dialog');
+    await button.focus(); await button.press('Enter');
+    const dialog = page.locator(`#${modal.id}`);
+    await dialog.waitFor();
+    check(await page.locator('dialog[open]').count() === 1, 'Multiple dialogs open');
+    check(await dialog.getAttribute('aria-labelledby') === `${modal.id}-heading`, 'Dialog heading is not associated');
+    check(await dialog.getByRole('heading', { name: modal.heading, exact: true }).isVisible(), 'Header opened the wrong dialog');
+    check(await button.getAttribute('aria-expanded') === 'true', 'Open dialog is not exposed by the header');
+    check(await dialog.locator('.information-nav').count() === 0, 'Shared section navigation remains');
+    check(await dialog.locator('.drawer-content').evaluate(element => element.scrollTop) === 0, 'Dialog retains previous scroll offset');
+    check(await dialog.evaluate(element => element.contains(document.activeElement)), 'Focus did not enter the dialog');
+    if (page.viewportSize().width < 1200) check(!await compactNavigation.evaluate(element => element.matches(':popover-open')), 'Compact menu stayed open behind dialog');
+    return dialog;
+  };
+  const close = async (modal, method = 'escape') => {
+    const dialog = page.locator(`#${modal.id}`);
+    if (method === 'button') await dialog.getByRole('button', { name: modal.close, exact: true }).click();
+    else if (method === 'backdrop') await page.mouse.click(2, 2);
+    else await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    const target = page.viewportSize().width < 1200 ? menuTrigger : navigation.locator(`[data-information-section="${modal.key}"]`);
+    check(await target.evaluate(element => element === document.activeElement), 'Opener did not regain focus');
+    check(await navigation.locator('[aria-expanded="true"]').count() === 0, 'Closed dialog remains expanded');
+    check(await page.locator('.observation-station-heading h3').innerText() === 'Helsinki Kaisaniemi', 'Closing the dialog cleared map selection');
+  };
   const observedAt = new Date(Date.now() - 3600_000).toISOString();
   const observations = {
-    generatedAt: new Date().toISOString(), historyHours: 6, observations: [],
+    generatedAt: new Date().toISOString(), historyHours: 6,
+    observations: [{ parameter: 't2m', unit: 'degC', value: 5.2, observedAt, receivedAt: observedAt,
+      stationId: '100971', stationName: 'Helsinki Kaisaniemi', longitude: 24.94, latitude: 60.17,
+      sourceId: 'fmi-weather', quality: null, aggregation: null }],
     sources: [{ id: 'fmi-weather', state: 'stale', message: 'Fixture retained weather observations.',
       provider: 'Finnish Meteorological Institute', url: 'https://opendata.fmi.fi/wfs',
       license: 'CC BY 4.0', attribution: 'Finnish Meteorological Institute; FMI Open Data',
@@ -36,34 +73,19 @@ async (page) => {
     catalog.ryhti.status = 'stale'; catalog.ryhti.message = 'Fixture dated Ryhti catalog retained';
     return route.fulfill({ response, json: catalog });
   };
-  const select = async name => {
-    const button = sections.getByRole('button', { name, exact: true });
-    await button.focus(); await button.press('Enter');
-    await page.waitForFunction(label => document.querySelector('#sources-heading')?.textContent === label, name);
-    check(await button.getAttribute('aria-pressed') === 'true', 'Section selection is not exposed');
-    check(await sections.locator('button[aria-pressed="true"]').count() === 1, 'Multiple sections selected');
-    check(await content.evaluate(element => element.scrollTop) === 0, 'Section retains previous scroll offset');
-  };
-  const inViewport = async locator => {
-    const box = await locator.boundingBox(), size = page.viewportSize();
-    check(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= size.width + 1 && box.y + box.height <= size.height + 1, 'Content leaves viewport');
-  };
   try {
-    if (await dialog.count()) await dialog.getByRole('button', { name: 'Close sources' }).click();
+    if (await page.locator('dialog[open]').count()) await page.keyboard.press('Escape');
     await page.route('**/api/observations', observationsRoute);
     await page.route('**/api/catalog/status', catalogRoute);
     const loadedObservations = page.waitForResponse(response => new URL(response.url()).pathname === '/api/observations');
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.reload();
     await loadedObservations;
-    await trigger.focus(); await trigger.press('Enter');
-    await dialog.waitFor();
+    await page.locator('.sensor-reading[data-parameter="t2m"]').click();
+    await page.locator('#identity-inspector').waitFor();
+    const dialog = await open(modals[2]);
     await page.waitForFunction(() => document.querySelector('.information-status')?.textContent.includes('Fixture retained weather observations.'));
     await page.waitForFunction(() => document.querySelector('.information-status')?.textContent.includes('Energy: unavailable'));
-    check(await sections.getByRole('button', { name: 'Data & Sources', exact: true }).getAttribute('aria-pressed') === 'true', 'Wrong default section');
-    await dialog.getByRole('button', { name: 'Close sources' }).focus();
-    await page.keyboard.press('Tab');
-    check(await sections.getByRole('button', { name: 'Data & Sources', exact: true }).evaluate(element => element === document.activeElement), 'Tab did not reach the section controls');
     check(await dialog.locator('.source-overview article').count() === 5, 'Source overview incomplete');
     check(await dialog.locator('.potential-sources li').count() === 10, 'Potential shortlist incomplete');
     check((await dialog.locator('.potential-sources li').first().innerText()).includes('Allu'), 'Allu is not first');
@@ -85,71 +107,100 @@ async (page) => {
     const sourceText = await dialog.innerText();
     check(!/Juxtaposed weather|Motion buffer:|Exact identifier joins only|Energy months are historical/.test(sourceText), 'Removed source explanations returned');
     check(sourceText.includes('CC BY 4.0') && await dialog.locator('a[href]').count() > 0, 'Attribution or source links lost');
-    await select('About this project');
-    check((await content.innerText()).includes('Planners & public institutions'), 'Project audiences missing');
-    await dialog.getByRole('button', { name: 'Open for collaboration ↗', exact: true }).click();
-    check(await dialog.getByRole('link', { name: 'Let’s talk ↗', exact: true }).getAttribute('href') === 'https://ai.ro/#contact', 'Contact destination incorrect');
-    check(await dialog.getByRole('link', { name: 'Explore ai.ro ↗', exact: true }).getAttribute('href') === 'https://ai.ro/', 'Studio destination incorrect');
-    for (const size of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 1000, height: 450 }]) {
-      await page.setViewportSize(size);
-      for (const name of ['Data & Sources', 'About this project', 'Open for collaboration']) {
-        await select(name);
-        await inViewport(dialog); await inViewport(dialog.locator('.information-footer'));
-        check(await content.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Panel overflows horizontally');
-        for (const button of await sections.getByRole('button').all()) {
-          await inViewport(button);
-          check((await button.boundingBox()).height >= 44, 'Section touch target too small');
-        }
-        await page.screenshot({ path: `output/playwright/project-information-${name.split(' ')[0].toLowerCase()}-${size.width}.png` });
-      }
+    await close(modals[2], 'button');
+    const about = await open(modals[0]);
+    const aboutText = await about.innerText();
+    for (const fact of ['What you can explore', 'How it was built', 'ETRS-GK25', 'N2000', 'SQLite', 'SSE', 'Planners & public institutions', 'Researchers & educators', 'unavailable records remain unavailable']) {
+      check(aboutText.includes(fact), `Project explanation missing: ${fact}`);
     }
-    await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
-    check(await menuTrigger.evaluate(element => element === document.activeElement), 'Hidden desktop opener has no compact focus fallback');
-    for (const [name, heading] of [['About this project', 'About this project'], ['Open for collaboration', 'Open for collaboration'], ['Data & sources', 'Data & Sources']]) {
-      const button = (await openMenu()).locator('.source-button').filter({ hasText: name });
-      await button.focus(); await button.press('Enter'); await dialog.waitFor();
-      check(await dialog.getByRole('heading', { name: heading, exact: true }).isVisible(), 'Compact header opened the wrong section');
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
-      check(await navigation.locator('.source-button').filter({ hasText: name }).evaluate(element => element === document.activeElement), 'Hidden compact opener has no desktop focus fallback');
-      await page.setViewportSize({ width: 1000, height: 450 });
+    check(await about.locator('figure.architecture-diagram').count() === 2, 'Architecture diagrams missing');
+    check(await about.locator('.architecture-flow li').count() === 10, 'Architecture stages missing');
+    for (const figure of await about.locator('figure.architecture-diagram').all()) {
+      check(await figure.getAttribute('aria-labelledby') === await figure.locator('figcaption').getAttribute('id'), 'Diagram caption is not associated');
+      check((await figure.locator('figcaption').innerText()).includes('Reading the flow:'), 'Diagram text equivalent missing');
     }
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await close(modals[0], 'backdrop');
+    const collaboration = await open(modals[1]);
+    check((await collaboration.innerText()).includes('We’ll bring the diagrams.'), 'Collaboration invitation missing');
+    check(await collaboration.locator('.collaboration-capabilities article').count() === 4, 'Collaboration capabilities incomplete');
+    check(await collaboration.getByRole('link', { name: 'Let’s talk ↗', exact: true }).getAttribute('href') === 'https://ai.ro/#contact', 'Contact destination incorrect');
+    check(await collaboration.getByRole('link', { name: 'Explore ai.ro ↗', exact: true }).getAttribute('href') === 'https://ai.ro/', 'Studio destination incorrect');
+    await close(modals[1]);
     const copyright = page.locator('.scene-footer .project-copyright');
     await inViewport(copyright);
     check(await copyright.innerText() === `© ${new Date().getFullYear()} ai.ro`, 'Map copyright year incorrect');
     check(await copyright.getAttribute('href') === 'https://ai.ro/', 'Map copyright destination incorrect');
     check(await copyright.evaluate(element => getComputedStyle(element).pointerEvents) === 'auto', 'Map copyright cannot receive clicks');
-    await trigger.press('Enter'); await dialog.waitFor();
-    check(await sections.getByRole('button', { name: 'Data & Sources', exact: true }).getAttribute('aria-pressed') === 'true', 'Reopening did not reset section');
-    check(await dialog.locator('.information-footer .project-copyright').getAttribute('href') === 'https://ai.ro/', 'Panel copyright destination incorrect');
-    await dialog.getByRole('button', { name: 'Close sources' }).click(); await dialog.waitFor({ state: 'detached' });
-    check(await trigger.evaluate(element => element === document.activeElement), 'Close button did not return focus');
-    check((await navigation.getByRole('button').allTextContents()).map(text => text.trim()).join('|') === 'About this project|Open for collaboration|Data & sources ↗', 'Header menu order differs from Ocean Lens');
+    check((await navigation.getByRole('button').allTextContents()).map(text => text.trim()).join('|') === 'About this project|Open for collaboration|Data & sources ↗', 'Header menu order changed');
     for (const size of [{ width: 1440, height: 1000 }, { width: 928, height: 1104 }, { width: 781, height: 844 }, { width: 390, height: 844 }, { width: 320, height: 568 }, { width: 1000, height: 450 }]) {
       await page.setViewportSize(size);
       await inViewport(size.width < 1200 ? menuTrigger : navigation);
       await inViewport(page.locator('#city-search'));
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Header causes page overflow at ${size.width}×${size.height}`);
-      for (const [name, heading] of [['About this project', 'About this project'], ['Open for collaboration', 'Open for collaboration'], ['Data & sources', 'Data & Sources']]) {
-        const button = (await openMenu()).locator('.source-button').filter({ hasText: name });
-        await inViewport(button);
-        check((await button.boundingBox()).height >= 44, 'Header touch target too small');
-        await button.focus(); await button.press('Enter'); await dialog.waitFor();
-        check(await dialog.getByRole('heading', { name: heading, exact: true }).isVisible(), 'Header opened the wrong section');
-        check(await button.getAttribute('aria-expanded') === 'true', 'Open section is not exposed by the header');
-        await inViewport(dialog); await inViewport(dialog.locator('.information-footer'));
-        await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
-        check(await (size.width < 1200 ? menuTrigger : button).evaluate(element => element === document.activeElement), 'Header opener did not regain focus');
+      for (const modal of modals) {
+        const dialog = await open(modal), content = dialog.locator('.drawer-content');
+        await inViewport(dialog); await inViewport(dialog.locator('.drawer-heading')); await inViewport(dialog.locator('.information-footer'));
+        const box = await dialog.boundingBox();
+        check(box.width <= modal.width + 1, 'Dialog exceeds its maximum width');
+        check(Math.abs(box.x - (size.width - box.width) / 2) < 2 && Math.abs(box.y - (size.height - box.height) / 2) < 2, 'Dialog is not centered');
+        if (size.width <= 780) check(Math.abs(box.x - 8) < 1, 'Phone dialog does not have 8px outer margins');
+        check(await content.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Dialog overflows horizontally');
+        const closeButton = dialog.getByRole('button', { name: modal.close, exact: true });
+        const closeBox = await closeButton.boundingBox();
+        check(closeBox.height >= 44 && closeBox.width >= 44, 'Close touch target too small');
+        await closeButton.focus(); await page.keyboard.press('Shift+Tab');
+        // Native dialogs keep the page inert; Chromium may visit browser chrome at a Tab boundary.
+        if (!await page.evaluate(() => document.hasFocus())) await page.keyboard.press('Shift+Tab');
+        check(await dialog.locator('.information-footer .project-copyright').evaluate(element => element === document.activeElement), `Reverse Tab escaped ${modal.id} at ${size.width}×${size.height}: ${await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 200))}`);
+        await page.keyboard.press('Tab');
+        if (!await page.evaluate(() => document.hasFocus())) await page.keyboard.press('Tab');
+        check(await closeButton.evaluate(element => element === document.activeElement), `Tab did not wrap to ${modal.id} close button at ${size.width}×${size.height}`);
+        check(await dialog.locator('.information-footer .project-copyright').getAttribute('href') === 'https://ai.ro/', 'Dialog copyright destination incorrect');
+        await page.screenshot({ path: `output/playwright/project-information-${modal.key}-${size.width}.png` });
+        if (modal.key === 'about') {
+          for (const [index, figure] of (await dialog.locator('figure.architecture-diagram').all()).entries()) {
+            await figure.scrollIntoViewIfNeeded();
+            check(await figure.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Diagram overflows horizontally');
+            const stages = await figure.locator('.architecture-flow li').evaluateAll(elements => elements.map(element => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width }; }));
+            if (size.width <= 780) check(stages.every(stage => Math.abs(stage.x - stages[0].x) < 1) && stages[4].y > stages[0].y, 'Phone diagram stages are not stacked');
+            else check(stages.every(stage => Math.abs(stage.y - stages[0].y) < 1), 'Wide diagram stages are not connected in a row');
+            await page.screenshot({ path: `output/playwright/project-architecture-${index + 1}-${size.width}.png` });
+          }
+        }
+        if (modal.key === 'collaboration') {
+          for (const link of await dialog.locator('.information-actions a').all()) {
+            await link.scrollIntoViewIfNeeded();
+            check((await link.boundingBox()).height >= 44, 'Contact touch target too small');
+          }
+        }
+        await content.evaluate(element => element.scrollTop = element.scrollHeight);
+        check(await content.evaluate(element => element.scrollHeight <= element.clientHeight || element.scrollTop > 0), 'Long dialog body does not scroll');
+        await inViewport(closeButton);
+        await close(modal, 'button');
+        await open(modal); await close(modal, 'backdrop');
+        await open(modal); await close(modal);
       }
       await inViewport(copyright);
       await page.screenshot({ path: `output/playwright/project-menu-${size.width}.png` });
     }
-    return { projectSections: 3, provenance: true, outages: true, keyboardFocus: true, compactMenu: true, viewports: 6 };
+    // Closing after a responsive layout change must find a visible focus target.
+    for (const modal of modals) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await open(modal);
+      await page.setViewportSize({ width: 1000, height: 450 });
+      await close(modal);
+      await open(modal);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await close(modal);
+    }
+    return { projectModals: 3, diagrams: 2, provenance: true, outages: true, keyboardFocus: true, dismissal: true, freshScroll: true, compactMenu: true, viewports: 6 };
+  } catch (error) {
+    await page.screenshot({ path: 'output/playwright/project-information-failure.png' });
+    throw error;
   } finally {
     await page.unroute('**/api/observations', observationsRoute);
     await page.unroute('**/api/catalog/status', catalogRoute);
-    if (await dialog.count()) await dialog.getByRole('button', { name: 'Close sources' }).click();
+    if (await page.locator('dialog[open]').count()) await page.keyboard.press('Escape');
     if (viewport) await page.setViewportSize(viewport);
     await page.reload();
   }

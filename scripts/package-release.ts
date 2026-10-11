@@ -121,7 +121,8 @@ export async function packageRelease(root = resolve('.'), output = resolve('.cac
   const staging = join(output, '.staging-' + process.pid);
   await mkdir(staging, { recursive: true });
   try {
-    for (const path of ['build', 'docs', 'package.json', 'package-lock.json', 'README.md', '.env.example', '.nvmrc']) await cp(join(root, path), join(staging, path), { recursive: true, errorOnExist: true, force: false });
+    await mkdir(join(staging, 'scripts'));
+    for (const path of ['scripts/check-requirements.mjs', 'build', 'docs', 'package.json', 'package-lock.json', 'README.md', '.env.example', '.nvmrc']) await cp(join(root, path), join(staging, path), { recursive: true, errorOnExist: true, force: false });
     const entityDirectory = join(staging, 'server/data/entities');
     await mkdir(entityDirectory, { recursive: true });
     for (const name of ['manifest.json', entityCatalog.generation + '.sqlite']) {

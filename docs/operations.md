@@ -42,7 +42,7 @@ mkdir -p .cache/energy/runtime
 npm start
 ```
 
-`npm start` is exactly `node --env-file-if-exists=.env build/index.js`. The build requires locked production dependencies but no Java or source downloads at runtime. The runtime bundle cannot run preparation/build/test commands; use the source checkout for those. The process must read `build/`, the lockfile and `static/data` plus `server/data/entities/`, and write `.cache/energy/runtime/`. Keep its working directory at the release root; relative server paths resolve there.
+`npm start` checks Node/npm through `node --import ./scripts/check-requirements.mjs --env-file-if-exists=.env build/index.js`; the requirements checker is included in the release bundle. The build requires locked production dependencies but no Java or source downloads at runtime. The runtime bundle cannot run preparation/build/test commands; use the source checkout for those. The process must read `build/`, the lockfile and `static/data` plus `server/data/entities/`, and write `.cache/energy/runtime/`. Keep its working directory at the release root; relative server paths resolve there.
 
 | Environment | Meaning |
 | --- | --- |
@@ -53,6 +53,25 @@ npm start
 | `PROTOCOL_HEADER` | Behind a trusted proxy, set to `x-forwarded-proto` and have the proxy replace that header. Leave unset for direct HTTP. |
 
 Environment variables supplied by the process manager override values in `.env`. The project defines no API-key variables. The installed adapter's origin/proxy contract was checked against adapter-node **6.0.0**, `src/handler.js:19` and `src/index.js:10` in its pinned source; it derives the request host from forwarded headers or Host and has no runtime `ORIGIN` variable in this version. Keep the Node port private behind a proxy and accept forwarded headers only from that proxy.
+
+## Systemd on alpha
+
+For the prepared source checkout at `/home/radu/projects/helsinki-dt`, use [helsinki-lens.service](../deploy/helsinki-lens.service). It runs as `radu` with `/usr/local/bin/node`, starts at boot and restarts on failure. Its loopback port `3011` matches the deployed environment. Systemd supplies the production/proxy settings; Node loads any other settings from the existing `.env`. The 45-second stop timeout allows the adapter's 30-second graceful shutdown.
+
+From that source checkout, build before installing the service:
+
+```sh
+npm run build
+sudo install -m 644 deploy/helsinki-lens.service /etc/systemd/system/helsinki-lens.service
+sudo systemd-analyze verify /etc/systemd/system/helsinki-lens.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now helsinki-lens.service
+curl --fail --max-time 5 http://127.0.0.1:3011/ >/dev/null
+```
+
+Point the Cloudflare Tunnel public hostname `helsinki.ai.ro` to `http://127.0.0.1:3011` on alpha. Preserve the public `Host` header and forward `X-Forwarded-Proto: https`. Apply the SSE requirements below to `/api/traffic/stream`.
+
+After rebuilding, use `sudo systemctl restart helsinki-lens.service`. Inspect state with `systemctl status helsinki-lens.service` and logs with `journalctl -u helsinki-lens.service -n 50 --no-pager`. Keep the prepared datasets, private entity database and runtime caches in place during restarts.
 
 ## Reverse proxy and SSE
 

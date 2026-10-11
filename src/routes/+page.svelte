@@ -10,7 +10,6 @@
   import RailStationBoard from '#lib/components/RailStationBoard.svelte';
   import { RAIL_CATEGORIES, vehicleLabel, railJourneyUrl, type RailStation, type RailJourney, type RailResult } from '#lib/rail.ts';
   import { vehicleVisible } from '#lib/live-fleet.ts';
-  import { stationVisible } from '#lib/station-flags.ts';
   import { onMount, tick } from 'svelte';
   import { browser } from '$app/env';
   import { createQuery, createQueries } from '@tanstack/svelte-query';
@@ -65,13 +64,8 @@
   let trafficError = $state('');
   let ready = $state(false);
   let mapLoad = $state.raw<SceneLoadState>({ phase: 'discovering', completed: 0, total: 0, failed: 0, cacheIssue: '', background: { phase: 'idle', completed: 0, total: 0, failed: 0 } });
-  let sourceOpen = $state(false);
-  let informationSection = $state<'data' | 'about' | 'collaboration'>('data');
-  const informationSections = [
-    { key: 'data', label: 'Data & Sources' },
-    { key: 'about', label: 'About this project' },
-    { key: 'collaboration', label: 'Open for collaboration' }
-  ] as const;
+  type InformationModal = 'data' | 'about' | 'collaboration';
+  let informationModal = $state<InformationModal | null>(null);
   const potentialSources = [
     { name: 'Allu street works & public-space permits',
       url: 'https://kartta.hel.fi/paikkatietohakemisto/pth/?id=28',
@@ -118,11 +112,12 @@
   let following = $state(false);
   let query = $state('');
   let searchOpen = $state(false);
+  let searchRouteNotice = $state<{ query: string; routeId: string } | null>(null);
   const searchTabs = [
-    { key: 'vehicles', label: 'Vehicles' }, { key: 'routes', label: 'Routes' },
+    { key: 'all', label: 'All' }, { key: 'vehicles', label: 'Vehicles' }, { key: 'routes', label: 'Routes' },
     { key: 'buildings', label: 'Buildings' }, { key: 'stations', label: 'Stations' }
   ] as const;
-  let searchTab = $state<typeof searchTabs[number]['key']>('vehicles');
+  let searchTab = $state<typeof searchTabs[number]['key']>('all');
   const navigateSearchTabs = (event: KeyboardEvent) => {
     const index = searchTabs.findIndex(tab => tab.key === searchTab);
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? searchTabs.length - 1
@@ -148,6 +143,7 @@
   let routeCatalog = $state.raw<RouteCatalog | null>(null);
   let routeCatalogLoading = $state(true);
   let activePanel = $state<'layers' | 'inspect' | 'legend' | null>(null);
+  let desktopLayersOpen = $state(true);
   let panelTrigger: HTMLElement | null = null;
   let stats = $state.raw<SceneStats | null>(null);
   let traffic = $state.raw<TrafficSnapshot>({ type: 'snapshot', generatedAt: new Date().toISOString(), vehicles: [],
@@ -196,10 +192,16 @@
     const timer = setTimeout(() => debouncedQuery = value, 200);
     return () => clearTimeout(timer);
   });
-  let searchEnabled = $derived(searchOpen && searchTab === 'buildings' && !!generation && !!(debouncedQuery || (sceneError && !scene)));
+  let searchEnabled = $derived(searchOpen && (searchTab === 'all' || searchTab === 'buildings') && !!generation
+    && query.trim() === debouncedQuery && !!(debouncedQuery || (searchTab === 'buildings' && sceneError && !scene)));
   let searchSignature = $derived(JSON.stringify([generation, debouncedQuery]));
   let pagination = $state<{ signature: string; cursors: (string | null)[] }>({ signature: '', cursors: [null] });
-  let cursor = $derived(pagination.signature === searchSignature ? pagination.cursors.at(-1) ?? null : null);
+  let cursor = $derived(searchTab === 'buildings' && pagination.signature === searchSignature ? pagination.cursors.at(-1) ?? null : null);
+  const viewAllSearchResults = (category: Exclude<typeof searchTabs[number]['key'], 'all'>) => {
+    if (category === 'buildings') pagination = { signature: searchSignature, cursors: [null] };
+    document.getElementById(`city-search-tab-${category}`)?.focus();
+    searchTab = category;
+  };
   const changeSearchPage = (cursors: (string | null)[]) => {
     document.getElementById(`city-search-panel-${searchTab}`)?.focus({ preventScroll: true });
     pagination = { signature: searchSignature, cursors };
@@ -224,7 +226,9 @@
   let detailRyhti = $derived<RyhtiCatalogState>(detail ? { ...detail.ryhti, status: ryhti.status, message: ryhti.message, attemptedAt: ryhti.attemptedAt }
     : { status: 'unavailable', catalog: null, message: detailQuery.error?.message ?? null, attemptedAt: null });
   let indexedBuildings = $derived([...new Map([...buildings, ...(detail?.members ?? [])].map(building => [building.id, building])).values()]);
-  let filteredBuildings = $derived(searchEnabled ? searchQuery.data?.buildings ?? [] : buildings);
+  let searchResults = $derived(searchEnabled && searchQuery.data?.generation === generation ? searchQuery.data : null);
+  let buildingSearchPending = $derived(!!query.trim() && (query.trim() !== debouncedQuery || (searchEnabled && searchQuery.isPending)));
+  let filteredBuildings = $derived(query.trim() || searchEnabled ? searchResults?.buildings ?? [] : buildings);
   // Stable manifest groups retain cached theme values when adjacent chunks enter or leave the view.
   let themeGroupKey = $derived.by(() => {
     if (!generation || !activeThemeSummary || !city || !layers.buildings) return '[]';
@@ -258,17 +262,19 @@
   let routes = $derived(routeCatalog?.routes ?? []);
   const routeName = (id: string | null) => traffic.vehicles.find(vehicle => vehicle.routeId === id && vehicle.rail)?.rail?.label ?? routes.find(item => item.routeId === id)?.label ?? id ?? '';
   let availableVehicles = $derived(traffic.vehicles.filter(vehicle => !trafficShouldRemove(vehicle, now)));
-  let visibleVehicles = $derived(availableVehicles.filter(vehicle => vehicleVisible(vehicle, layers, routeFilter || null))
-    .sort((a, b) => a.mode.localeCompare(b.mode) || vehicleLabel(a, routeName(a.routeId)).localeCompare(vehicleLabel(b, routeName(b.routeId))) || a.id.localeCompare(b.id)));
-  let matchingVehicles = $derived(visibleVehicles.filter(vehicle => !query || matchesVehicle(vehicle, query, routeName(vehicle.routeId))));
-  let matchingRoutes = $derived(routes.filter(item => (!routeFilter || item.routeId === routeFilter) && layers[item.mode]
-    && (!query || searchText(`${item.routeId} ${item.label} ${item.name}`).includes(searchText(query)))));
+  const compareVehicles = (a: Vehicle, b: Vehicle) => a.mode.localeCompare(b.mode)
+    || vehicleLabel(a, routeName(a.routeId)).localeCompare(vehicleLabel(b, routeName(b.routeId))) || a.id.localeCompare(b.id);
+  let visibleVehicles = $derived(availableVehicles.filter(vehicle => vehicleVisible(vehicle, layers, routeFilter || null)).sort(compareVehicles));
+  let matchingVehicles = $derived(availableVehicles.filter(vehicle => !query || matchesVehicle(vehicle, query, routeName(vehicle.routeId))).sort(compareVehicles));
+  let matchingRoutes = $derived(routes.filter(item => !query || searchText(`${item.routeId} ${item.label} ${item.name}`).includes(searchText(query))));
   let observationStations = $derived(observationSnapshot ? groupObservationStations(observationSnapshot) : []);
   let stations = $derived<SceneStation[]>([...observationStations.map(station => ({ id: station.id, name: station.name,
     longitude: station.longitude, latitude: station.latitude, kind: (station.sourceId === 'fmi-air-quality' ? 'air-quality' : 'weather') as SceneStation['kind'], sourceIds: [station.sourceId] })),
     ...(railStations?.data ?? []).map(station => ({ id: `rail:${station.code}`, name: station.name, longitude: station.longitude, latitude: station.latitude, kind: 'rail' as const, sourceIds: ['digitraffic'] }))]);
-  let matchingStations = $derived(stations.filter(station => stationVisible(station, layers)
-    && (!query || searchText(`${station.id} ${station.name} ${station.id === 'rail:HKI' ? 'Helsinki Central' : ''}`).includes(searchText(query)))));
+  let matchingStations = $derived(stations.filter(station => !query
+    || searchText(`${station.id} ${station.name} ${station.id === 'rail:HKI' ? 'Helsinki Central' : ''}`).includes(searchText(query))));
+  let searchResultCounts = $derived({ vehicles: matchingVehicles.length, routes: matchingRoutes.length,
+    buildings: filteredBuildings.length, stations: matchingStations.length });
   let staleCount = $derived(visibleVehicles.filter(vehicle => trafficIsStale(vehicle, now)).length);
   let hslLive = $derived(browserConnected && traffic.status.state === 'live');
   let railLive = $derived(browserConnected && traffic.sources?.rail?.state === 'live');
@@ -312,6 +318,16 @@
     selected = selection; selectionMessage = message;
   };
   const selectObject = (selection: Selection) => {
+    searchRouteNotice = null;
+    if (selection.kind === 'vehicle') {
+      const vehicle = selection.vehicle;
+      layers[vehicle.mode] = true;
+      if (vehicle.mode === 'train') layers[vehicle.rail?.category ?? 'other'] = true;
+      if (vehicle.mode !== 'ship' && routeFilter && vehicle.routeId !== routeFilter) routeFilter = '';
+    } else if (selection.kind === 'building') layers.buildings = true;
+    else if (selection.station.kind === 'rail') layers.railStations = true;
+    else if (selection.station.kind === 'weather') layers.weather = true;
+    else if (selection.station.kind === 'air-quality') layers.airQuality = true;
     if (activePanel !== 'inspect') panelTrigger = document.activeElement as HTMLElement | null;
     if (scene && ready) scene.select(selection);
     else setSelection(selection, sceneError ? '3D rendering unavailable. Showing available source metadata.' : 'Map loading. Showing source metadata.');
@@ -327,8 +343,12 @@
         .find(element => element?.isConnected && element.getClientRects().length)?.focus({ preventScroll: true });
     });
   };
+  const setDesktopLayersOpen = (open: boolean) => {
+    desktopLayersOpen = open;
+    void tick().then(() => document.getElementById(open ? 'desktop-layers-minimize' : 'desktop-layers-trigger')?.focus({ preventScroll: true }));
+  };
   function showDialog(dialog: HTMLDialogElement) {
-    const trigger = document.activeElement as HTMLElement | null, section = informationSection;
+    const trigger = document.activeElement as HTMLElement | null, section = informationModal;
     dialog.showModal();
     return { destroy() {
       dialog.close();
@@ -340,21 +360,25 @@
   }
   const choosePreset = (value: CameraPreset) => { preset = value; following = false; scene?.preset(value); };
   const chooseRoute = (id: string) => {
-    searchOpen = false;
+    const item = routes.find(item => item.routeId === id);
+    if (item) layers[item.mode] = true;
     routeFilter = id;
-    const vehicle = availableVehicles.find(vehicle => vehicle.routeId === id && layers[vehicle.mode]);
+    const vehicle = availableVehicles.find(vehicle => vehicle.routeId === id);
     if (vehicle) selectObject({ kind: 'vehicle', vehicle });
-    else selectionMessage = 'No current vehicle report for this route. No journey shape can be inferred.';
+    else { searchRouteNotice = { query, routeId: id }; searchOpen = true; }
   };
-  const openSources = (section: typeof informationSection = 'data') => {
+  const openInformation = (section: InformationModal = 'data') => {
     const menu = document.getElementById('project-menu');
     if (menu?.matches(':popover-open')) { menu.hidePopover(); document.getElementById('project-menu-trigger')?.focus(); }
-    informationSection = section; sourceOpen = true;
+    searchOpen = false;
+    informationModal = section;
   };
-  const showInformationSection = (section: typeof informationSection) => {
-    informationSection = section;
-    document.querySelector('#sources .drawer-content')?.scrollTo({ top: 0 });
-  };
+  function dismissInformationBackdrop(event: PointerEvent) {
+    const dialog = event.currentTarget as HTMLDialogElement;
+    if (event.target !== dialog) return;
+    const bounds = dialog.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+  }
   $effect(() => {
     const url = journeyUrl;
     route = null; railJourney = null; routeError = ''; routeLoading = !!url;
@@ -461,6 +485,23 @@
   });
 </script>
 
+{#snippet searchCategory(category: Exclude<typeof searchTabs[number]['key'], 'all'>, limit: number)}
+  {#if category === 'vehicles'}
+    <p class="panel-note">{matchingVehicles.length} vehicle reports</p>
+    <div class="object-list">{#each matchingVehicles.slice(0, limit) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {vehicleLabel(vehicle, routeName(vehicle.routeId))}</strong><small>{vehicleSourceLabel(vehicle)} · {vehicle.marine ? `MMSI ${vehicle.marine.mmsi}` : vehicle.rail ? `${vehicle.rail.trainNumber} · ${vehicle.rail.destination ?? 'Destination unavailable'}` : `${vehicle.ownerOperatorId}/${vehicle.vehicleId}`} · {trafficIsStale(vehicle, now) ? `stale · ${age(vehicle)}` : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching retained vehicle reports.</p>{/each}{#if limit === 60 && matchingVehicles.length > limit}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div>
+  {:else if category === 'routes'}
+    <p class="panel-note">{matchingRoutes.length} routes</p>
+    <div class="object-list">{#each matchingRoutes.slice(0, limit) as item (item.routeId)}<button onclick={() => chooseRoute(item.routeId)}><span class="mode-swatch" style:background={MODE_COLOURS[item.mode]}></span><span><strong>Route {item.label} · {label(item.mode)}</strong><small>{item.name} · {item.routeId}</small></span></button>{:else}<p class="panel-note">{routeCatalogLoading ? 'Loading prepared route labels…' : routeCatalog?.reason ?? 'No matching prepared route labels.'}</p>{/each}{#if limit === 60 && matchingRoutes.length > limit}<p class="panel-note">First 60 routes. Refine your search.</p>{/if}</div>
+  {:else if category === 'buildings'}
+    {#if indexState !== 'current'}<p class="panel-note search-status" role="status" data-index-state={indexState}>{indexState === 'loading' ? 'Loading buildings…' : indexMessage}</p>{/if}{#if buildingSearchPending || (searchEnabled && searchQuery.isFetching)}<p class="panel-note search-status" role="status">Searching…</p>{/if}{#if searchEnabled && searchQuery.error}<p class="notice search-status" role="status">{searchQuery.error.message}</p>{/if}
+    {#if !buildingSearchPending && !(searchEnabled && searchQuery.error)}<p class="panel-note">{filteredBuildings.length} {query.trim() ? 'matching buildings on this page' : sceneError && !scene ? 'available buildings' : 'loaded buildings'}</p>{/if}
+    <div class="object-list building-list">{#each filteredBuildings.slice(0, limit) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong>{#if buildingAddress(building) && buildingAddress(building) !== buildingName(building)}<small>{buildingAddress(building)}</small>{/if}</span></button>{:else}{#if !buildingSearchPending && !(searchEnabled && searchQuery.error) && indexState !== 'loading' && (!query.trim() || searchEnabled)}<p class="panel-note">{query.trim() ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/if}{/each}{#if limit === 60 && filteredBuildings.length > limit}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}{#if category === 'buildings' && searchTab === 'buildings' && searchEnabled}<div class="search-pagination"><button class="text-button" disabled={!cursor || buildingSearchPending || searchQuery.isFetching} onclick={() => changeSearchPage(pagination.cursors.slice(0, -1))}>Previous</button><button class="text-button" disabled={!searchResults?.nextCursor || buildingSearchPending || searchQuery.isFetching} onclick={() => changeSearchPage([...(pagination.signature === searchSignature ? pagination.cursors : [null]), searchResults!.nextCursor])}>Next buildings</button></div>{/if}</div>
+  {:else}
+    <p class="panel-note">{matchingStations.length} stations</p>
+    <div class="object-list">{#each matchingStations.slice(0, limit) as station (station.id)}<button class:selected={selected?.kind === 'station' && selected.station.id === station.id} onclick={() => selectObject({ kind: 'station', station })}><span class="station-swatch {station.kind}" aria-hidden="true">{station.kind === 'weather' ? '○' : station.kind === 'rail' ? '▣' : '◇'}</span><span><strong>{station.name}</strong><small>{label(station.kind)} · {station.id}</small></span></button>{:else}<p class="panel-note">{observationLoading ? 'Loading stations…' : 'No matching stations in the available coverage.'}</p>{/each}</div>
+  {/if}
+{/snippet}
+
 <svelte:head><title>Helsinki Lens · Digital Twin</title><meta name="description" content="Inspect central Helsinki buildings, live HSL, rail and AIS ship reports and dated environmental station observations." /></svelte:head>
 <svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !document.querySelector('dialog[open]') && !document.querySelector('[popover]:popover-open')) { if (searchOpen) { event.preventDefault(); closeSearch(); } else if (activePanel && window.matchMedia('(max-width: 1199px)').matches) { event.preventDefault(); setActivePanel(null); } else clearSelection(); } }} onpointerdown={event => { if (searchOpen && event.target instanceof Element && !event.target.closest('.navbar-search')) searchOpen = false; }} />
 <a class="skip-link" href="#city-search">Skip to city search</a>
@@ -468,7 +509,7 @@
   <header class="masthead">
     <a class="brand" href="/" aria-label="Helsinki Lens home"><span class="brand-symbol" aria-hidden="true">▥</span><span class="brand-name">HELSINKI <em>LENS</em><small>DIGITAL TWIN</small></span></a>
     <search class="navbar-search" aria-label="City search" onfocusout={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) searchOpen = false; }}>
-      <input id="city-search" type="search" bind:value={query} placeholder="Find a building, route or station…" aria-label="Vehicle, route, building, address or station" aria-controls="city-search-results" onfocus={() => searchOpen = true} onclick={() => searchOpen = true} oninput={() => searchOpen = true} />
+      <input id="city-search" type="search" bind:value={query} placeholder="Search vehicles, routes, buildings or stations…" aria-label="Vehicle, route, building, address or station" aria-controls="city-search-results" onfocus={() => searchOpen = true} onclick={() => searchOpen = true} oninput={() => searchOpen = true} />
       {#if searchOpen}
         <div class="panel object-browser search-results" id="city-search-results">
           <div class="panel-heading"><h2>Search results</h2><button class="icon-button" aria-label="Close search results" onclick={closeSearch}>×</button></div>
@@ -480,19 +521,23 @@
               <div class="search-result-panel" id={`city-search-panel-${tab.key}`} role="tabpanel" aria-labelledby={`city-search-tab-${tab.key}`} hidden={searchTab !== tab.key} tabindex="0">
                 {#if searchTab === tab.key}
                   {#if query}<button class="text-button clear-search" onclick={() => { query = ''; document.getElementById('city-search')?.focus(); }}>Clear search</button>{/if}
-                  {#if searchTab === 'vehicles'}
-                    <p class="panel-note">{matchingVehicles.length} vehicle reports</p>
-                    <div class="object-list">{#each matchingVehicles.slice(0, 60) as vehicle (vehicle.id)}<button class:selected={selected?.kind === 'vehicle' && selected.vehicle.id === vehicle.id} onclick={() => selectObject({ kind: 'vehicle', vehicle })}><span class="mode-swatch" style:background={MODE_COLOURS[vehicle.mode]}></span><span><strong>{label(vehicle.mode)} · {vehicleLabel(vehicle, routeName(vehicle.routeId))}</strong><small>{vehicleSourceLabel(vehicle)} · {vehicle.marine ? `MMSI ${vehicle.marine.mmsi}` : vehicle.rail ? `${vehicle.rail.trainNumber} · ${vehicle.rail.destination ?? 'Destination unavailable'}` : `${vehicle.ownerOperatorId}/${vehicle.vehicleId}`} · {trafficIsStale(vehicle, now) ? `stale · ${age(vehicle)}` : age(vehicle)}</small></span></button>{:else}<p class="panel-note">No matching retained vehicle reports in visible modes / transit route.</p>{/each}{#if matchingVehicles.length > 60}<p class="panel-note">First 60 results. Refine your search.</p>{/if}</div>
-                  {:else if searchTab === 'routes'}
-                    <p class="panel-note">{matchingRoutes.length} routes</p>
-                    <div class="object-list">{#each matchingRoutes.slice(0, 60) as item (item.routeId)}<button onclick={() => chooseRoute(item.routeId)}><span class="mode-swatch" style:background={MODE_COLOURS[item.mode]}></span><span><strong>Route {item.label} · {label(item.mode)}</strong><small>{item.name} · {item.routeId}</small></span></button>{:else}<p class="panel-note">{routeCatalogLoading ? 'Loading prepared route labels…' : routeCatalog?.reason ?? 'No matching prepared route labels.'}</p>{/each}{#if matchingRoutes.length > 60}<p class="panel-note">First 60 routes. Refine your search.</p>{/if}</div>
-                  {:else if searchTab === 'buildings'}
-                    {#if indexState !== 'current'}<p class="panel-note search-status" role="status" data-index-state={indexState}>{indexState === 'loading' ? 'Loading buildings…' : indexMessage}</p>{/if}{#if searchEnabled && searchQuery.isFetching}<p class="panel-note search-status" role="status">Searching…</p>{/if}{#if searchEnabled && searchQuery.error}<p class="notice search-status" role="status">{searchQuery.error.message}</p>{/if}
-                    <p class="panel-note">{filteredBuildings.length} {query ? 'matching buildings' : sceneError && !scene ? 'available buildings' : 'loaded buildings'}</p>
-                    <div class="object-list building-list">{#each filteredBuildings.slice(0, 60) as building (building.id)}<button class:selected={selected?.kind === 'building' && selected.building.id === building.id} onclick={() => selectObject({ kind: 'building', building })}><span><strong>{buildingName(building)}</strong>{#if buildingAddress(building) && buildingAddress(building) !== buildingName(building)}<small>{buildingAddress(building)}</small>{/if}</span></button>{:else}<p class="panel-note">{query ? 'No matching prepared building or address.' : 'Buildings appear as the district loads.'}</p>{/each}{#if filteredBuildings.length > 60}<p class="panel-note">First 60 buildings. Refine your search.</p>{/if}{#if searchEnabled}<div class="search-pagination"><button class="text-button" disabled={!cursor || searchQuery.isFetching} onclick={() => changeSearchPage(pagination.cursors.slice(0, -1))}>Previous</button><button class="text-button" disabled={!searchQuery.data?.nextCursor || searchQuery.isFetching} onclick={() => changeSearchPage([...(pagination.signature === searchSignature ? pagination.cursors : [null]), searchQuery.data!.nextCursor])}>Next buildings</button></div>{/if}</div>
+                  {#if searchRouteNotice?.query === query && (searchTab === 'all' || searchTab === 'routes')}
+                    <p class="notice" role="status">No current vehicle report for route {routeName(searchRouteNotice.routeId)}.</p>
+                  {/if}
+                  {#if searchTab === 'all'}
+                    {#each searchTabs as category (category.key)}
+                      {#if category.key !== 'all'}
+                        <section class="search-result-group" aria-labelledby={`city-search-group-${category.key}`}>
+                          <h3 id={`city-search-group-${category.key}`}>{category.label}</h3>
+                          {@render searchCategory(category.key, 5)}
+                          {#if searchResultCounts[category.key] > 5 || (category.key === 'buildings' && searchResults?.nextCursor)}
+                            <button class="text-button" onclick={() => viewAllSearchResults(category.key)}>View all {category.label.toLowerCase()}</button>
+                          {/if}
+                        </section>
+                      {/if}
+                    {/each}
                   {:else}
-                    <p class="panel-note">{matchingStations.length} stations</p>
-                    <div class="object-list">{#each matchingStations as station (station.id)}<button class:selected={selected?.kind === 'station' && selected.station.id === station.id} onclick={() => selectObject({ kind: 'station', station })}><span class="station-swatch {station.kind}" aria-hidden="true">{station.kind === 'weather' ? '○' : station.kind === 'rail' ? '▣' : '◇'}</span><span><strong>{station.name}</strong><small>{label(station.kind)} · {station.id}</small></span></button>{:else}<p class="panel-note">{observationLoading ? 'Loading stations…' : 'No matching stations in the available coverage / layers.'}</p>{/each}</div>
+                    {@render searchCategory(searchTab, searchTab === 'stations' ? matchingStations.length : 60)}
                   {/if}
                 {/if}
               </div>
@@ -508,9 +553,9 @@
       {#if trafficError}<p class="panel-note">{trafficError}</p>{/if}
     </div>
     {#snippet projectLinks()}
-      <button class="source-button" data-information-section="about" onclick={() => openSources('about')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'about'} aria-controls="sources">About this project</button>
-      <button class="source-button collaboration-button" data-information-section="collaboration" onclick={() => openSources('collaboration')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'collaboration'} aria-controls="sources">Open for collaboration</button>
-      <button class="source-button" data-information-section="data" onclick={() => openSources()} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'data'} aria-controls="sources">Data & sources <span aria-hidden="true">↗</span></button>
+      <button class="source-button" data-information-section="about" onclick={() => openInformation('about')} aria-haspopup="dialog" aria-expanded={informationModal === 'about'} aria-controls="about-project">About this project</button>
+      <button class="source-button collaboration-button" data-information-section="collaboration" onclick={() => openInformation('collaboration')} aria-haspopup="dialog" aria-expanded={informationModal === 'collaboration'} aria-controls="collaboration">Open for collaboration</button>
+      <button class="source-button" data-information-section="data" onclick={() => openInformation()} aria-haspopup="dialog" aria-expanded={informationModal === 'data'} aria-controls="sources">Data & sources <span aria-hidden="true">↗</span></button>
     {/snippet}
     <nav class="header-actions" aria-label="Project information">{@render projectLinks()}</nav>
     <button id="project-menu-trigger" class="project-menu-trigger" popovertarget="project-menu" aria-label="Project information menu">···</button>
@@ -547,12 +592,13 @@
           : `Caching area on the server: ${mapLoad.background.completed.toLocaleString()} / ${mapLoad.background.total.toLocaleString()}`}
       </div>
     {/if}
-    {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={() => openSources()}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
+    {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={() => openInformation()}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
     <aside class="left-stack" class:mobile-active={activePanel === 'layers' || activePanel === 'legend'} class:legend-active={activePanel === 'legend'} aria-label="Explore the city">
       <div class="mobile-sheet-heading"><strong>{activePanel === 'legend' ? legendLabel : 'Explore the layers'}</strong>{#if legendVisible && activePanel === 'layers'}<button class="text-button" onclick={() => setActivePanel('legend')}>View legend</button>{/if}<button class="icon-button" aria-label="Close exploration panel" onclick={() => setActivePanel(null)}>×</button></div>
       <div class="console-intro"><span class="eyebrow">60° N / 24° E · HELSINKI, FINLAND</span><h1>A city of<br />connections<span>.</span></h1><p>Explore Helsinki.<br />One city. Connected perspectives.</p></div>
-      <section class="panel layers-panel exploration-content" id="exploration-panel" aria-labelledby="exploration-heading">
-        <h2 id="exploration-heading" tabindex="-1">Explore the layers</h2>
+      <button id="desktop-layers-trigger" class="desktop-layers-toggle" type="button" hidden={desktopLayersOpen} aria-label="Show layers" aria-expanded="false" aria-controls="exploration-panel" onclick={() => setDesktopLayersOpen(true)}><ConsoleIcon name="layers" /><span>Layers</span><span aria-hidden="true">+</span></button>
+      <section class="panel layers-panel exploration-content" class:desktop-collapsed={!desktopLayersOpen} id="exploration-panel" aria-labelledby="exploration-heading">
+        <div class="panel-heading desktop-layers-heading"><h2 id="exploration-heading" tabindex="-1">Explore the layers</h2><button id="desktop-layers-minimize" class="icon-button" type="button" aria-label="Minimize layers menu" title="Minimize layers menu" aria-expanded="true" aria-controls="exploration-panel" onclick={() => setDesktopLayersOpen(false)}><span aria-hidden="true">−</span></button></div>
         <details name="exploration" open><summary><ConsoleIcon name="explore" /><span>Map<small>The city in three dimensions</small></span></summary>
           <div class="layer-list">{#each appearanceLayers as layer (layer.key)}<label class="layer-control"><ConsoleIcon name={layer.key} /><span>{layer.label}</span><input type="checkbox" bind:checked={layers[layer.key]} /></label>{/each}</div>
           {#if layers.imagery && appearanceStatus}<p class="panel-note group-note" role="status">{appearanceStatus}</p>{/if}
@@ -566,7 +612,7 @@
           {#if railStationsError}<p class="panel-note">{railStationsError}</p>{/if}
           <div class="rail-summary marine-summary"><strong>Ships · {marineState}</strong><span>{freshMarine.length} fresh reports · {marineVehicles.length - freshMarine.length} stale reports</span>{#if !marineVehicles.length}<span>No retained reports in this coverage.</span>{/if}</div>
           {#if marineSource?.error}<p class="notice">{marineSource.error}</p>{/if}
-          <label class="filter-label">Transit route filter<select bind:value={routeFilter}><option value="">All received routes</option>{#each [...new Set(availableVehicles.flatMap(vehicle => vehicle.routeId === null ? [] : [vehicle.routeId]))].sort() as id (id)}<option value={id}>{routeName(id)} · {id}</option>{/each}</select></label>
+          <label class="filter-label">Transit route filter<select bind:value={routeFilter}><option value="">All received routes</option>{#if routeFilter && !availableVehicles.some(vehicle => vehicle.routeId === routeFilter)}<option value={routeFilter}>{routeName(routeFilter)} · {routeFilter}</option>{/if}{#each [...new Set(availableVehicles.flatMap(vehicle => vehicle.routeId === null ? [] : [vehicle.routeId]))].sort() as id (id)}<option value={id}>{routeName(id)} · {id}</option>{/each}</select></label>
           {#if routeFilter}<button class="text-button" onclick={() => routeFilter = ''}>Clear route filter</button>{/if}
           </div>
     <section class="panel feed-panel" aria-label="Traffic status"><div class="panel-heading"><h2>Reported traffic</h2><span class:connected={currentFeed} class="status-dot"></span></div>
@@ -642,7 +688,7 @@
               <details class="console-source-details"><summary>Source identifiers</summary><dl class="properties">
                 {#each [['Building ID', selected.building.id], ['CityGML ID', selected.building.gmlId], ['VTJ-PRT', selected.building.vtjPrt], ['RATU', selected.building.ratu], ['Source', selected.building.sourceId]].filter(([, value]) => knownValue(value)) as [name, value] (name)}<div><dt>{name}</dt><dd>{value}</dd></div>{/each}
               </dl></details>
-              <button class="text-button" onclick={() => openSources()}>Data coverage & sources ↗</button>
+              <button class="text-button" onclick={() => openInformation()}>Data coverage & sources ↗</button>
             </div>
           {:else if selected?.kind === 'vehicle'}
             {#snippet vehicleFollow()}
@@ -682,7 +728,7 @@
     </aside>
     {/if}
     <SensorReadings snapshot={observationSnapshot} {now} loading={observationLoading} error={observationError} onstation={id => { const station = stations.find(item => item.id === id); if (station) selectObject({ kind: 'station', station }); }} />
-    <nav class="camera-presets" aria-label="Camera presets">{#each [{ id: 'city', name: 'City Centre', detail: 'Buildings & urban life' }, { id: 'harbour', name: 'Harbour', detail: 'Ships & waterfront connections' }, { id: 'central', name: 'Central Station', detail: 'Rail & everyday movement' }] as view, index (view.id)}<button class:active={preset === view.id} aria-label={view.name} aria-pressed={preset === view.id} disabled={!scene} onclick={() => choosePreset(view.id as CameraPreset)}><span class="tour-number">0{index + 1}</span><span class="tour-copy"><strong>{view.name}</strong><small>{view.detail}</small></span><span class="tour-arrow" aria-hidden="true">↗</span></button>{/each}</nav>
+    <nav class="camera-presets" aria-label="Camera presets">{#each [{ id: 'city', name: 'City Centre' }, { id: 'harbour', name: 'Harbour' }, { id: 'central', name: 'Central Station' }] as view (view.id)}<button class:active={preset === view.id} aria-label={view.name} aria-pressed={preset === view.id} disabled={!scene} onclick={() => choosePreset(view.id as CameraPreset)}>{view.name}</button>{/each}</nav>
     <div class="scene-footer"><span class="scene-guidance">{hovered || (keyboardNavigation ? 'WASD to pan · drag to orbit · scroll to zoom' : 'Drag to orbit · scroll to zoom')}</span>{#if stats}<span class="performance" aria-label="Scene performance" data-fps={stats.fps} data-draw-calls={stats.drawCalls} data-geometries={stats.geometries} data-triangles={stats.triangles} data-loaded-chunks={stats.loadedChunks} data-placed-vehicles={stats.vehicles} data-unplaced-vehicles={stats.unplacedVehicles} data-receipt-latency-ms={stats.lastReceiptLatencyMs ?? ''}>{stats.fps} FPS · {stats.drawCalls} draws · {stats.loadedChunks} chunks</span>{/if}<a class="project-copyright" href="https://ai.ro/" target="_blank" rel="noreferrer">© {new Date(now).getFullYear()} ai.ro</a></div>
     {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
     <nav class="mobile-panel-nav" aria-label="City panels">
@@ -707,14 +753,109 @@
     {#if !energyGroup && ryhti.status !== 'ready'}<p class="notice">{ryhti.status === 'stale' ? 'Dated catalog retained' : 'Ryhti catalog unavailable'} · {ryhti.message}</p>{/if}
   </div>
 {/snippet}
-{#if sourceOpen}
-  <dialog class="source-drawer project-information" id="sources" aria-labelledby="sources-heading" use:showDialog onclose={() => sourceOpen = false}>
-    <div class="drawer-heading"><div><span class="eyebrow">HELSINKI LENS / AN AI.RO PROJECT</span><h2 id="sources-heading">{informationSections.find(section => section.key === informationSection)?.label}</h2></div><button class="icon-button" aria-label="Close sources" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
-    <div class="information-nav" role="group" aria-label="Project information sections">
-      {#each informationSections as section (section.key)}<button type="button" aria-pressed={informationSection === section.key} aria-controls="project-information-content" onclick={() => showInformationSection(section.key)}>{section.label}</button>{/each}
+{#snippet informationHeading(id: string, title: string, closeLabel: string)}
+  <div class="drawer-heading"><div><span class="eyebrow">HELSINKI LENS / AN AI.RO PROJECT</span><h2 {id}>{title}</h2></div><button type="button" class="icon-button" aria-label={closeLabel} onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
+{/snippet}
+{#snippet informationFooter()}
+  <footer class="information-footer"><a class="project-copyright" href="https://ai.ro/" target="_blank" rel="noreferrer">© {new Date(now).getFullYear()} ai.ro</a><span>Source data and photographs retain their own attribution and licences.</span></footer>
+{/snippet}
+{#if informationModal === 'about'}
+  <dialog class="project-information about-modal" id="about-project" aria-labelledby="about-project-heading" use:showDialog onclose={() => informationModal = null} onpointerdown={dismissInformationBackdrop}>
+    {@render informationHeading('about-project-heading', 'About this project', 'Close about this project')}
+    <div class="drawer-content">
+      <div class="information-intro project-hero"><span class="eyebrow">ONE CITY. CONNECTED PERSPECTIVES.</span><h3>A city you can explore.<br />Connections you can inspect.</h3><p>Helsinki Lens is an interactive 3D city explorer by <a href="https://ai.ro/" target="_blank" rel="noreferrer">ai.ro</a>. It brings buildings, moving transport, environmental observations and energy records into one geographic view. The map gives you the context; the inspectors give you the evidence.</p><p>This exploratory digital twin connects public information to real places. You can move from a city-wide view to a building, a tram journey or a station reading, with source identities, dates and gaps close at hand.</p><ul class="project-stack" aria-label="Technology stack"><li>Svelte 5 / SvelteKit</li><li>Three.js</li><li>Node.js</li><li>SQLite</li><li>proj4</li></ul></div>
+
+      <section class="project-section" aria-labelledby="project-explore-heading">
+        <h3 id="project-explore-heading">What you can explore</h3>
+        <div class="information-grid">
+          <article><h4>The built city</h4><p>Navigate aerial imagery, terrain and textured 3D buildings. Search an address, select a building and inspect its identifiers, available register facts, permits and attributed photographs.</p></article>
+          <article><h4>Movement & connection</h4><p>Follow reported HSL trams, buses and ferries, Fintraffic trains and AIS ships. Inspect matched scheduled journeys, routes and stops, or open station departure boards and harbour cameras.</p></article>
+          <article><h4>Environmental context</h4><p>Inspect Kaisaniemi weather and Mannerheimintie nitrogen dioxide observations, including recent station histories. Each reading keeps its measurement time, unit and freshness.</p></article>
+          <article><h4>Energy & sunlight</h4><p>Explore building themes and compatible energy histories. Measured property electricity, modeled building demand and annual incoming solar radiation remain separate quantities with their own coverage.</p></article>
+        </div>
+      </section>
+
+      <section class="project-section" aria-labelledby="project-built-heading">
+        <h3 id="project-built-heading">How it was built</h3>
+        <p>The engineering starts with the sources: their geometry, identifiers, coordinate systems, dates and licences. Preparation scripts convert and validate municipal data, route indexes and building records before publishing a compatible set for the application.</p>
+        <ol class="project-method">
+          <li><strong>Put the city on common ground.</strong> ETRS-GK25 coordinates become a local 3D scene in metres; elevations retain the N2000 height datum. Imagery, terrain and models keep their calibrated placement.</li>
+          <li><strong>Connect records through identity.</strong> Building identifiers link compatible register, energy and solar records. Missing or ambiguous matches stay visible rather than becoming invented values.</li>
+          <li><strong>Publish validated generations.</strong> Prepared assets and the private SQLite read database carry matching dataset generations. Manifest pointers change after successful publication; failed refreshes retain the previous valid data.</li>
+          <li><strong>Bring the changing city alongside it.</strong> The Node server shares live transport connections, retrieves observations and caches municipal imagery and models. The browser combines these services with the prepared city.</li>
+        </ol>
+      </section>
+
+      <section class="project-section" aria-labelledby="project-architecture-heading">
+        <h3 id="project-architecture-heading">The system architecture</h3>
+        <p>Prepared datasets, live reports and municipal map assets take different paths into the same view.</p>
+        <figure class="architecture-diagram" aria-labelledby="system-architecture-caption">
+          <ol class="architecture-flow">
+            <li><span class="stage-number" aria-hidden="true">01</span><strong>Public datasets</strong><small>City geometry, building records, energy and routes</small></li>
+            <li><span class="stage-number" aria-hidden="true">02</span><strong>Preparation</strong><small>Convert, align, validate and join identifiers</small></li>
+            <li><span class="stage-number" aria-hidden="true">03</span><strong>Prepared data</strong><small>Versioned assets + private SQLite</small></li>
+            <li><span class="stage-number" aria-hidden="true">04</span><strong>Node server</strong><small>SvelteKit APIs, queries and shared services</small></li>
+            <li><span class="stage-number" aria-hidden="true">05</span><strong>Browser</strong><small>Svelte interface + Three.js scene</small></li>
+          </ol>
+          <div class="architecture-inputs">
+            <div><span class="eyebrow">LIVE TRANSPORT</span><strong>MQTT / REST → server → SSE</strong><p>Shared HSL, rail and AIS services send snapshots and updates to connected browsers.</p></div>
+            <div><span class="eyebrow">OBSERVATIONS</span><strong>Provider APIs → server → browser</strong><p>Weather, air quality and measured electricity use separate bounded services.</p></div>
+            <div><span class="eyebrow">IMAGERY & MODELS</span><strong>Municipal assets → disk cache → browser</strong><p>Visible imagery and textured buildings pass through the shared city-asset API.</p></div>
+          </div>
+          <figcaption id="system-architecture-caption">Reading the flow: preparation publishes reusable assets and a private database. SvelteKit serves metadata through APIs and prepared geometry through static files. Live services and the map cache supply the changing reports and visible municipal assets.</figcaption>
+        </figure>
+      </section>
+
+      <section class="project-section" aria-labelledby="project-rendering-heading">
+        <h3 id="project-rendering-heading">From a camera move to a city view</h3>
+        <figure class="architecture-diagram exploration-diagram" aria-labelledby="exploration-architecture-caption">
+          <ol class="architecture-flow">
+            <li><span class="stage-number" aria-hidden="true">01</span><strong>Camera & layers</strong><small>Your view and enabled layers set the request</small></li>
+            <li><span class="stage-number" aria-hidden="true">02</span><strong>Discover the view</strong><small>Find assets in the visible area</small></li>
+            <li><span class="stage-number" aria-hidden="true">03</span><strong>Load within limits</strong><small>Bounded requests, deadlines and cache reuse</small></li>
+            <li><span class="stage-number" aria-hidden="true">04</span><strong>Render detail</strong><small>Progressive loading and distance-based detail</small></li>
+            <li><span class="stage-number" aria-hidden="true">05</span><strong>Pick & inspect</strong><small>Connect a visible object to its source records</small></li>
+          </ol>
+          <p class="architecture-release"><strong>Offscreen assets no longer needed → release GPU resources.</strong> The server disk cache, optional browser cache and graphics memory have separate lifetimes.</p>
+          <figcaption id="exploration-architecture-caption">Reading the flow: camera position and layers drive asset discovery. Downloads arrive progressively, detail adapts to distance, and selection connects the rendered city with metadata. Offscreen resources are released as exploration continues.</figcaption>
+        </figure>
+        <p>Search and scene picking use the same selection contract. A selected building can request finer nearby detail; metadata search and inspection also remain available when WebGL cannot render the city.</p>
+      </section>
+
+      <section class="project-section" aria-labelledby="project-use-cases-heading">
+        <h3 id="project-use-cases-heading">Questions you can bring to the map</h3>
+        <div class="information-grid">
+          <article><h4>Planners & public institutions</h4><p>Explore a station or harbour alongside its surrounding buildings and reported movement. Use the shared view to frame a discussion and identify the source evidence it needs.</p></article>
+          <article><h4>Building owners & teams</h4><p>Find a property, review its available records and inspect energy coverage. Compare the meaning, dates and boundaries of measurements and modeled values before drawing conclusions.</p></article>
+          <article><h4>Researchers & educators</h4><p>Trace a transport report from provider to map, explain coordinate alignment, or investigate how missing records and dataset vintages affect a spatial analysis.</p></article>
+          <article><h4>Communities & curious people</h4><p>Follow a tram’s reported journey, look inside the data behind a familiar street, or explore the harbour through ships and cameras.</p></article>
+        </div>
+      </section>
+      <section class="information-note" aria-labelledby="project-coverage-heading"><h3 id="project-coverage-heading">What the view covers</h3><p>The prepared area extends from Lauttasaari and Munkkiniemi through Pasila/Käpylä to Herttoniemi. It is a bounded view of Helsinki, with different coverage and dates for each layer. Weather and air-quality readings describe their stations; energy models are estimates, and incoming sunlight is not generated electricity. Live reports retain their source timestamps, and unavailable records remain unavailable.</p><p>Data & sources in the header provides the current statuses, licences and detailed provenance.</p></section>
+      <div class="information-actions"><a href="https://ai.ro/" target="_blank" rel="noreferrer">Explore ai.ro ↗</a></div>
     </div>
-    <div class="drawer-content" id="project-information-content">
-      {#if informationSection === 'data'}
+    {@render informationFooter()}
+  </dialog>
+{:else if informationModal === 'collaboration'}
+  <dialog class="project-information collaboration-modal" id="collaboration" aria-labelledby="collaboration-heading" use:showDialog onclose={() => informationModal = null} onpointerdown={dismissInformationBackdrop}>
+    {@render informationHeading('collaboration-heading', 'Open for collaboration', 'Close collaboration')}
+    <div class="drawer-content">
+      <div class="information-intro collaboration-hero"><span class="eyebrow">AI.RO / RESEARCH & ENGINEERING</span><h3>Bring a tricky question.<br />We’ll bring the diagrams.</h3><p>Preferably a question that has survived at least one spreadsheet. <a href="https://ai.ro/" target="_blank" rel="noreferrer">ai.ro</a> works with businesses, researchers, public institutions and domain experts to turn useful questions into practical tools.</p><p>Helsinki Lens puts a city in the browser. Your challenge can come from any industry; a harbour is optional.</p></div>
+      <div class="information-grid collaboration-capabilities">
+        <article><h4>Digital twins & data explorers</h4><p>Give spatial or operational data somewhere useful to live. Build an interactive view your team can inspect together. Dramatic camera angles included where appropriate.</p></article>
+        <article><h4>Knowledge & domain assistants</h4><p>Connect documents, data and expertise to answers with sources. For when “someone definitely knows this” has become your search strategy.</p></article>
+        <article><h4>Workflow automation</h4><p>Make document processing, reporting and repetitive work easier, with human review where it matters. Let the humans keep the interesting problems.</p></article>
+        <article><h4>Research & focused prototypes</h4><p>Test an idea with representative data and clear evaluation criteria. Find out what works before the prototype develops a five-year roadmap.</p></article>
+      </div>
+      <section class="information-note"><h4>A good place to start</h4><p>Bring a problem worth solving, your domain knowledge and some representative data. We’ll define a focused question, build something you can inspect and agree on what success looks like.</p><p>A polished slide deck is optional. A useful question is doing most of the work.</p></section>
+      <div class="information-actions"><a class="information-contact" href="https://ai.ro/#contact" target="_blank" rel="noreferrer">Let’s talk ↗</a><a href="https://ai.ro/" target="_blank" rel="noreferrer">Explore ai.ro ↗</a></div>
+    </div>
+    {@render informationFooter()}
+  </dialog>
+{:else if informationModal === 'data'}
+  <dialog class="project-information sources-modal" id="sources" aria-labelledby="sources-heading" use:showDialog onclose={() => informationModal = null} onpointerdown={dismissInformationBackdrop}>
+    {@render informationHeading('sources-heading', 'Data & Sources', 'Close sources')}
+    <div class="drawer-content">
         <div class="information-intro"><span class="eyebrow">PUBLIC DATA. SHARED CONTEXT.</span><h3>A city, with its sources in view.</h3><p>Helsinki Lens brings public city models, transport reports, station observations and building records together. Each source has its own coverage, date and interpretation.</p></div>
         <div class="information-grid source-overview">
           <article><h4>City models & imagery</h4><p>City of Helsinki terrain, streets, semantic buildings and textured 3D models, with 2025 aerial imagery. Prepared coverage extends from Lauttasaari and Munkkiniemi through Pasila/Käpylä to Herttoniemi.</p><a href="https://kartta.hel.fi/3d/" target="_blank" rel="noreferrer">© City of Helsinki · CC BY 4.0 ↗</a></article>
@@ -745,29 +886,8 @@
       <h3>Foundation source probes · historical</h3><p class="panel-note">Recorded {formatDate(sample.manifest?.generatedAt)}</p>{#each Object.entries(sample.manifest?.gates ?? {}) as [name, gate] (name)}<details class="gate-row"><summary><span>{label(name)}</span><span class="badge {gate.status}">historical {gate.status}</span></summary>{#each gate.evidence as evidence, index (index)}<p class="panel-note">{evidence}</p>{/each}{#if gate.nextAction}<p class="notice">Next: {gate.nextAction}</p>{/if}</details>{/each}
       {#if stats}<p class="panel-note">Renderer: {stats.geometries} geometries · {stats.triangles.toLocaleString()} triangles · {stats.vehicles} placed vehicles.</p>{/if}
         </details>
-      {:else if informationSection === 'about'}
-        <div class="information-intro"><span class="eyebrow">ONE CITY. CONNECTED PERSPECTIVES.</span><h3>See the city.<br />Explore the connections.</h3><p>Helsinki Lens is an interactive city explorer by <a href="https://ai.ro/" target="_blank" rel="noreferrer">ai.ro</a>. It connects Helsinki’s buildings, mobility, environmental observations and energy information in a shared 3D view, with the evidence behind each layer close at hand.</p></div>
-        <div class="information-grid">
-          <article><h4>Planners & public institutions</h4><p>Explore the built environment alongside movement and environmental context, and find questions worth investigating together.</p></article>
-          <article><h4>Researchers & educators</h4><p>Inspect patterns, compare sources and discuss how data dates, coverage and methods shape what a city view can tell us.</p></article>
-          <article><h4>Building owners & teams</h4><p>Bring building records and available energy information into the same conversation, with source identities and missing values visible.</p></article>
-          <article><h4>Communities & curious people</h4><p>Look closer at familiar streets, follow reported transport and discover the public information behind the city around you.</p></article>
-        </div>
-        <section class="information-note"><h4>A shared starting point</h4><p>This is an exploratory prototype covering a prepared area of Helsinki, rather than the whole city or Finland. Sources have different dates and levels of detail; some records are incomplete or unavailable. Station readings describe their locations, modeled energy and solar values are estimates, and vehicle reports retain their source timestamps. Local knowledge and domain expertise give these layers their context.</p></section>
-        <div class="information-actions"><a href="https://ai.ro/" target="_blank" rel="noreferrer">Explore ai.ro ↗</a><button type="button" onclick={() => showInformationSection('data')}>Data & Sources ↗</button><button type="button" onclick={() => showInformationSection('collaboration')}>Open for collaboration ↗</button></div>
-      {:else}
-        <div class="information-intro"><span class="eyebrow">AI.RO / RESEARCH & ENGINEERING</span><h3>Bring a useful question.<br />Let’s explore it together.</h3><p><a href="https://ai.ro/" target="_blank" rel="noreferrer">ai.ro</a> welcomes collaboration with businesses, researchers, public institutions and domain experts. Helsinki Lens is one example of how places, data and practical tools can meet; your challenge can come from any industry.</p></div>
-        <div class="information-grid">
-          <article><h4>Digital twins & data explorers</h4><p>Connect spatial or operational data in interactive views that help teams inspect a place, understand a system and discuss possibilities.</p></article>
-          <article><h4>Knowledge & domain assistants</h4><p>Make documents, data and team expertise easier to find and use, with answers connected to their sources.</p></article>
-          <article><h4>Workflow automation</h4><p>Make document processing, reporting and repetitive work easier, with human review where the task needs it.</p></article>
-          <article><h4>Research & focused prototypes</h4><p>Test an idea with representative data, clear evaluation criteria and outcomes you can inspect before expanding its scope.</p></article>
-        </div>
-        <section class="information-note"><h4>A useful first step</h4><p>Bring your domain context, representative data and a problem worth solving. Together, we can define a focused question, build something useful and establish how to evaluate it.</p></section>
-        <div class="information-actions"><a class="information-contact" href="https://ai.ro/#contact" target="_blank" rel="noreferrer">Let’s talk ↗</a><a href="https://ai.ro/" target="_blank" rel="noreferrer">Explore ai.ro ↗</a></div>
-      {/if}
     </div>
-    <footer class="information-footer"><a class="project-copyright" href="https://ai.ro/" target="_blank" rel="noreferrer">© {new Date(now).getFullYear()} ai.ro</a><span>Source data and photographs retain their own attribution and licences.</span></footer>
+    {@render informationFooter()}
   </dialog>
 {/if}
 

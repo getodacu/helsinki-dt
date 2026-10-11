@@ -158,6 +158,16 @@ export function panKeyboardCamera(camera: THREE.PerspectiveCamera, target: THREE
   camera.position.add(shift); target.add(shift);
 }
 
+/** Frame one selected entity without changing the compass direction. */
+export function frameSelection(camera: THREE.PerspectiveCamera, target: THREE.Vector3, point: THREE.Vector3) {
+  const offset = camera.position.clone().sub(target); offset.y = 0;
+  if (!offset.lengthSq()) offset.set(.48, 0, .85);
+  offset.normalize().multiplyScalar(400);
+  target.copy(point); camera.position.copy(point).add(offset);
+  // shortcut: 350m clears the validated 300m city roofs; revisit if taller assets are accepted.
+  camera.position.y = Math.max(350, point.y + 400);
+}
+
 export type VehicleFollowCamera = {
   heading: number; startedAt: number; cameraFrom: THREE.Vector3; targetFrom: THREE.Vector3;
 };
@@ -452,6 +462,34 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     if (followId) callbacks.onCameraInteraction();
     selected = selection; followId = null; refreshHighlights(); callbacks.onSelection(selection, message);
   };
+  const selectAndFocus = (selection: Selection | null) => {
+    if (selection && !initiallyReady) return;
+    let point: THREE.Vector3 | null = null;
+    if (selection?.kind === 'building') {
+      const building = selection.building;
+      if (!manifest.chunks.some(chunk => chunk.id === building.chunkRef)) { select(null, 'This building is outside the available city coverage.'); return; }
+      identities.set(building.id, building);
+      const [x, , z] = wgs84ToScene(building.longitude, building.latitude);
+      point = new THREE.Vector3(x, sampleTerrainHeight(base.terrain, x, z) ?? 0, z);
+    } else if (selection?.kind === 'vehicle') {
+      const now = Date.now(), vehicle = fleet.motion.tracks.get(selection.vehicle.id)?.vehicle ?? selection.vehicle;
+      selection = { kind: 'vehicle', vehicle, removed: trafficShouldRemove(vehicle, now) };
+      const position = fleet.motion.position(vehicle.id, now, reducedMotion || (vehicle.mode === 'ship' && (marinePaused || marineSourcePaused)));
+      if (position) {
+        const height = vehicle.mode === 'ferry' || vehicle.mode === 'ship' ? base.waterLevel : sampleTerrainHeight(base.terrain, position.x, position.z);
+        if (height !== null) point = new THREE.Vector3(position.x, height, position.z);
+      }
+    } else if (selection?.kind === 'station') {
+      const [x, , z] = wgs84ToScene(selection.station.longitude, selection.station.latitude);
+      const height = sampleTerrainHeight(base.terrain, x, z);
+      if (height !== null) point = new THREE.Vector3(x, height, z);
+    }
+    select(selection);
+    if (!point) return;
+    stopKeyboard(); controls.enableDamping = false; controls.update();
+    frameSelection(camera, controls.target, point);
+    controls.update(); controls.enableDamping = !reducedMotion; requestViewUpdate();
+  };
   let down: { x: number; y: number } | null = null, hoverAt = 0;
   const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; };
   const pointerUp = (event: PointerEvent) => { if (down && initiallyReady && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 5) select(pick(event)); down = null; };
@@ -565,35 +603,18 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
         selected = vehicle ? { kind: 'vehicle', vehicle, removed: trafficShouldRemove(vehicle, now) } : { ...selected, removed: true };
         if (selected.removed) followId = null; callbacks.onSelection(selected); }
     },
-    select(selection: Selection | null) {
-      if (selection && !initiallyReady) return;
-      if (selection?.kind === 'building') {
-        const building = selection.building;
-        if (!manifest.chunks.some(chunk => chunk.id === building.chunkRef)) { select(null, 'This building is outside the available city coverage.'); return; }
-        identities.set(building.id, building); select(selection);
-        const [x, , z] = wgs84ToScene(building.longitude, building.latitude);
-        const offset = camera.position.clone().sub(controls.target); controls.target.set(x, sampleTerrainHeight(base.terrain, x, z) ?? 0, z);
-        camera.position.copy(controls.target).add(offset); controls.update(); requestViewUpdate();
-      } else if (selection?.kind === 'vehicle') {
-        const vehicle = fleet.motion.tracks.get(selection.vehicle.id)?.vehicle;
-        if (vehicle) select({ kind: 'vehicle', vehicle });
-      } else select(selection);
-    },
+    select: selectAndFocus,
     selectStation(id: string) {
-      if (!initiallyReady) return;
       const station = stations.find(station => station.id === id);
-      if (station) select({ kind: 'station', station });
+      if (station) selectAndFocus({ kind: 'station', station });
     },
     selectBuilding(id: string) {
       if (!initiallyReady) return;
       const building = identities.get(id);
-      if (!building || !manifest.chunks.some(chunk => chunk.id === building.chunkRef)) { select(null, 'This building is outside the available city coverage.'); return; }
-      select({ kind: 'building', building });
-      const [x, , z] = wgs84ToScene(building.longitude, building.latitude);
-      const offset = camera.position.clone().sub(controls.target); controls.target.set(x, sampleTerrainHeight(base.terrain, x, z) ?? 0, z);
-      camera.position.copy(controls.target).add(offset); controls.update(); requestViewUpdate();
+      if (!building) { select(null, 'This building is outside the available city coverage.'); return; }
+      selectAndFocus({ kind: 'building', building });
     },
-    selectVehicle(id: string) { if (!initiallyReady) return; const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) select({ kind: 'vehicle', vehicle }); },
+    selectVehicle(id: string) { const vehicle = fleet.motion.tracks.get(id)?.vehicle; if (vehicle) selectAndFocus({ kind: 'vehicle', vehicle }); },
     setRoutes(routes: RouteCatalog['routes']) { flags.setRoutes(routes); },
     setKeyboardNavigation(enabled: boolean) { keyboardNavigation = enabled; if (!enabled) stopKeyboard(); },
     followVehicle(id: string | null) {

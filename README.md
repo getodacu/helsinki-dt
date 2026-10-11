@@ -2,6 +2,12 @@
 
 Helsinki Lens is a 3D view of central Helsinki combining selectable buildings, live HSL trams, buses and ferries, Fintraffic trains and AIS ships, scheduled routes, station weather and air quality, and verified building energy and solar records. Building inspectors include available Ryhti register facts, permits and attributed Wikimedia photographs; traffic and harbour cameras open from map markers. It keeps original building identifiers, source attribution and data age visible. Displayed times use `Europe/Helsinki`.
 
+[![Helsinki Lens demo: navigate the 3D city, follow a live tram, inspect a building, explore solar colouring and select a harbour ship.](docs/demo/helsinki-lens-preview.gif)](docs/demo/helsinki-lens-demo.mp4)
+
+[Watch the full walkthrough (35 seconds)](docs/demo/helsinki-lens-demo.mp4) · [Try the live preview](https://helsinki.ai.ro)
+
+Navigate Helsinki in 3D, follow live transport, inspect building details, explore solar potential and discover ships in the harbour.
+
 The map covers the prepared release area, WGS84 `[24.86, 60.135, 25.06, 60.225]` in west, south, east, north order. It is a bounded city view, not a complete Finland dataset. Missing readings remain missing; prepared samples never replace live feeds during an outage.
 
 Coverage extends through Lauttasaari, Munkkiniemi, Pasila/Käpylä and Herttoniemi while the opening view remains City Centre. The lower-left scale shows metres or kilometres at the view centre and updates with zoom and rotation. Zooming out reaches an 18 km camera distance; foreground assets still load by view.
@@ -22,10 +28,45 @@ Coverage extends through Lauttasaari, Munkkiniemi, Pasila/Käpylä and Herttonie
 - [Building photographs](#building-photographs)
 - [Ryhti building register](#ryhti-building-register)
 - [Source evidence and development notes](#source-evidence-and-development-notes)
+- [License](#license)
 
 ## First run
 
-Use **Node 24 and npm 11**; `.nvmrc` selects Node 24 and `package-lock.json` pins dependencies. Source preparation also requires **Java 17+ and `unzip`**. Its pinned CityGML converter is downloaded into the ignored `.cache/` directory. Blender is only needed to regenerate vehicle models, not to run the application. Use a browser with WebGL for the 3D scene.
+Use a Linux/macOS source checkout (WSL on Windows) with these prerequisites:
+
+| Requirement | Used by |
+| --- | --- |
+| **Node 24 and npm 11+** | All npm scripts. `.nvmrc` selects Node 24; `package-lock.json` pins dependencies. |
+| **Java/JDK 17+** | `data:prepare` and `data:probe` with `all`, `geometry` or `energy` (including the default probe). |
+| **`unzip` on `PATH`** | The same geometry commands, to extract the pinned CityGML converter into the ignored `.cache/` directory. |
+| **Internet access and a writable checkout** | Source downloads and generated datasets/caches. See provider access below. |
+
+If using nvm, run `nvm install && nvm use` from the checkout to select Node 24. Install Java and `unzip` before preparing data. On Debian/Ubuntu:
+
+```sh
+sudo apt-get update
+sudo apt-get install openjdk-17-jdk unzip
+```
+
+On macOS with Homebrew:
+
+```sh
+brew install openjdk@17 unzip
+export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+Keep the Java environment exports in your shell configuration for future sessions. The converter uses `$JAVA_HOME/bin/java` when `JAVA_HOME` is set; otherwise it uses `java` on `PATH`. An invalid or outdated `JAVA_HOME` must be corrected or unset even if another Java installation is on `PATH`.
+
+Verify all local prerequisites before downloading data:
+
+```sh
+node scripts/check-requirements.mjs
+```
+
+This exits **0** on success or **1** with the missing requirements and how to fix them. Every npm script also checks Node/npm before starting; geometry commands check Java and `unzip` before source downloads or publication. Transit/observation-only probes, other preparation commands, builds and normal serving do not require Java or `unzip`.
+
+Blender is only needed to regenerate vehicle models, not to run the application. Use a browser with WebGL for the 3D scene.
 
 Run all commands from the source checkout root:
 
@@ -48,7 +89,7 @@ npm run rail:prepare
 npm run entities:prepare
 ```
 
-Inspect each command's result before continuing. `data:prepare` exit **2** means a usable foundation sample was published with explicit open source gates; inspect `.cache/task-a/latest-preparation.json` and the reported gates. Exit **1** means preparation failed and the previous published sample was retained. Historical foundation gates and the later verified energy catalog have separate evidence; see [data access](docs/data-access.md) and [energy/solar evidence](docs/energy-solar-evidence.md).
+Inspect each command's result before continuing. A prerequisite failure exits **1** before preparation starts and leaves existing data untouched. `data:prepare` exit **2** means a usable foundation sample was published with explicit open source gates; inspect `.cache/task-a/latest-preparation.json` and the reported gates. Exit **1** means preparation failed and the previous published sample was retained. Historical foundation gates and the later verified energy catalog have separate evidence; see [data access](docs/data-access.md) and [energy/solar evidence](docs/energy-solar-evidence.md).
 
 `energy:prepare` must run after **every** `city:prepare`, even when the upstream semantic tileset checksum is unchanged. The energy catalog must match the exact prepared city generation. `routes:prepare` uses the HSL GTFS ZIP downloaded by foundation preparation. `rail:prepare` downloads the independent Digitraffic GTFS archive. Ryhti is optional on first installation; once published, it must be re-prepared after a city refresh before importing entities.
 
@@ -122,12 +163,12 @@ Exploration sits to the left of the desktop map. A compact top-right display sho
 
 Below 1200px, **Layers** and **Inspect** use one shared panel; **Explore** closes it. Inspect appears only while an object is selected. Below 780px the header uses two rows and the panel becomes a sheet above bottom navigation. Closing an inspection sheet or pressing Escape once preserves selection; **Clear selection** removes it separately. Guided camera cards collapse while a compact panel is open. Use the **Legend** shortcut for expanded legends in the shared panel.
 
-The header links **About this project**, **Open for collaboration** and **Data & sources** open a shared dialog with project information, collaboration details, source status and attribution. On compact screens they sit inside the **···** menu.
+The header buttons **About this project**, **Open for collaboration** and **Data & sources** open distinct centered modals. About explains the project, engineering, system architecture and 3D exploration with responsive diagrams and practical use cases. Collaboration introduces ways to work with ai.ro; Data & sources retains live status, provenance and attribution. On compact screens the buttons sit inside the **···** menu. Escape, the close button or a backdrop click closes each modal and returns focus to its opener.
 
 Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Drag to orbit and scroll to zoom. Keyboard navigation pauses in interactive controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow.
 
 Choose the numbered **City Centre**, **Harbour** or **Central Station** cards for existing camera views. The header live dot opens separate HSL, rail and AIS statuses and report times. Search has **Vehicles**, **Routes**, **Buildings** and **Stations** tabs. The query filters the selected tab, which is remembered until reload. Lists scroll by mouse, touch or keyboard with the scrollbar hidden. Buildings shows loaded identities with an empty query, searches prepared metadata/addresses when typing, and retains a server-backed list if WebGL is unavailable. Building search requests run only while its tab is open. Search and scene picking use the same selection contract. On desktop, Escape clears selection. Search results, popovers and dialogs handle Escape before the map.
-Selecting a building opens its source identifiers and compatible energy/solar records. Selection and hover tint the displayed building, with selection taking precedence. Selecting a vehicle shows its real report age, deviation and exact scheduled journey when available, without moving the camera. Verified routes use an outlined line and stop markers with names on hover, keyboard focus or touch focus. A chevron ahead of the selected vehicle shows a reported heading or a bearing from accepted movement; it pulses while moving and stays static with reduced motion. Unknown direction, stale reports and hidden vehicles suppress the cue. AIS ships have no scheduled route mapping. Following ends when you interact with the camera. Weather and air-quality inspectors show the station name, station ID and a recent six-hour history for each available parameter. Each history retains its latest reading, unit, observation time and freshness; source diagnostics remain in **Data & sources**. Inspecting history does not change current traffic into historical playback. **Data & sources** explains dates, coverage, attribution and gaps. Search/inspection provide a metadata fallback when WebGL is unavailable.
+Selecting a building opens its source identifiers and compatible energy/solar records. Selection and hover tint the displayed building, with selection taking precedence. Choosing a building, vehicle or station from search selects and highlights it, opens its inspector, closes search and instantly zooms to its location while keeping the compass direction. Choosing the same result again recenters it; selections made while the map is loading zoom when it becomes ready. Vehicles use their displayed position; reports without a usable map position still open their details. Direct map clicks preserve the current camera view, and vehicle following remains a separate action. Selecting a vehicle shows its real report age, deviation and exact scheduled journey when available. Verified routes use an outlined line and stop markers with names on hover, keyboard focus or touch focus. A chevron ahead of the selected vehicle shows a reported heading or a bearing from accepted movement; it pulses while moving and stays static with reduced motion. Unknown direction, stale reports and hidden vehicles suppress the cue. AIS ships have no scheduled route mapping. Following ends when you interact with the camera. Weather and air-quality inspectors show the station name, station ID and a recent six-hour history for each available parameter. Each history retains its latest reading, unit, observation time and freshness; source diagnostics remain in **Data & sources**. Inspecting history does not change current traffic into historical playback. **Data & sources** explains dates, coverage, attribution and gaps. Search/inspection provide a metadata fallback when WebGL is unavailable.
 
 ### Map appearance and loading
 
@@ -315,7 +356,7 @@ npm start
 
 Keep the process working directory at the project or extracted release root so file readers resolve the correct data. Give it access to prepared assets and write permission for both runtime cache directories.
 
-For a transferable release, run `npm run release:package` after building. It checks the private database checksum and source generations, active source checksums, city/energy compatibility, HSL route availability, the validated rail index and equality between prepared data and `build/client/data`. Output lives under `.cache/task-e/releases/helsinki-lens-<version>-<content-hash>/`; `release.json` records file and data checksums. Archive unused old generations before the final build, since the build's static inventory and packaged files must stay consistent.
+For a transferable release, run `npm run release:package` after building. It includes the startup requirements checker and checks the private database checksum and source generations, active source checksums, city/energy compatibility, HSL route availability, the validated rail index and equality between prepared data and `build/client/data`. Output lives under `.cache/task-e/releases/helsinki-lens-<version>-<content-hash>/`; `release.json` records file and data checksums. Archive unused old generations before the final build, since the build's static inventory and packaged files must stay consistent.
 
 The bundle includes `build/`, the active private SQLite database and manifest under `server/data/entities/`, npm manifests/lockfile, `.nvmrc`, `.env.example`, dependency notices and documentation. It contains a relative `static/data` symlink to `build/client/data`; preserve it when copying or archiving. It excludes `.env`, credentials, `node_modules`, raw downloads and runtime caches. It serves prepared assets and cannot run source preparation, rebuilds, tests or the cache CLI.
 
@@ -450,3 +491,11 @@ Use these references when changing adapters, coordinates or deployment behavior:
 - [Implementation plan](docs/implementation-plan.md) and the milestone specifications in `docs/milestones/` for the original acceptance criteria.
 
 ExcelJS's UUID override is scoped to 11.1.1 for GHSA-w5hq-g745-h8pq; its workbook write/read regression covers the existing CommonJS usage. Keep the lockfile and installed versions aligned when changing dependencies. Capacity, source availability and browser behavior beyond the recorded verification remain workload/device dependent; full-detail municipal cache size is still unmeasured.
+
+## License
+
+Helsinki Lens's original code, documentation and vehicle models are licensed under the [Apache License, Version 2.0](LICENSE). Copyright © 2026 Radu Boncea. See [NOTICE](NOTICE) for project attribution.
+
+You may use, modify and distribute the project, including commercially, subject to the license. Redistributed versions must include the license, preserve required copyright and attribution notices, retain applicable NOTICE credits and mark modified files. Attribution may appear in accompanying files or documentation; a visible website credit is welcome but not required.
+
+Third-party datasets, imagery, photographs, media and dependencies retain their respective licenses and attribution requirements. See [Data access and source gates](docs/data-access.md), [Building photographs](#building-photographs) and the source credits shown in the app.

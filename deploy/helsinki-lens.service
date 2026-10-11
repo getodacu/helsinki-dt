@@ -1,0 +1,22 @@
+[Unit]
+Description=Helsinki Lens digital twin
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=radu
+Group=radu
+WorkingDirectory=/home/radu/projects/helsinki-dt
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3011
+Environment=PROTOCOL_HEADER=x-forwarded-proto
+Environment=SHUTDOWN_TIMEOUT=30
+ExecStart=/usr/local/bin/node --env-file-if-exists=/home/radu/projects/helsinki-dt/.env /home/radu/projects/helsinki-dt/build/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

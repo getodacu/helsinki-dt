@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { INITIAL_LAYERS, mapClippingPlanes, measureCompassRotation, measureGroundScale, panKeyboardCamera, frameVehicleFollow, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
+import { INITIAL_LAYERS, mapClippingPlanes, measureCompassRotation, measureGroundScale, panKeyboardCamera, frameSelection, frameVehicleFollow, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
 import { buildingIdForTriangle } from '../src/lib/data/geometry.ts';
 import type { BuildingChunk } from '../src/lib/types.ts';
 import type { RouteContext } from '../src/lib/route-context.ts';
@@ -261,4 +261,31 @@ test('vehicle follow holds its viewing direction without a heading and snaps for
   assert.equal(follow.heading, 0);
   assert.deepEqual(target, new THREE.Vector3(10, 8.5, 20));
   assert.deepEqual(camera.position, new THREE.Vector3(10, 408.5, 420));
+});
+
+
+test('entity framing centres the point at a close distance and preserves compass direction', () => {
+  for (const offset of [new THREE.Vector3(1000, 1450, 2000), new THREE.Vector3(-120, 20, 0), new THREE.Vector3(0, 50, -90)]) {
+    for (const height of [-100, 0, 300]) {
+      const camera = new THREE.PerspectiveCamera(), target = new THREE.Vector3(20, 8, 30);
+      camera.position.copy(target).add(offset);
+      const compass = measureCompassRotation(camera, target), point = new THREE.Vector3(120, height, -140);
+      frameSelection(camera, target, point);
+      assert.deepEqual(target, point);
+      assert.ok(Math.abs(Math.hypot(camera.position.x - target.x, camera.position.z - target.z) - 400) < 1e-9);
+      assert.equal(camera.position.y, Math.max(350, height + 400));
+      assert.ok(Math.abs(measureCompassRotation(camera, target) - compass) < 1e-9);
+      const framed = camera.position.clone(); frameSelection(camera, target, point);
+      assert.ok(camera.position.distanceTo(framed) < 1e-9);
+    }
+  }
+});
+
+test('entity framing uses the city heading when the entry camera is directly above its target', () => {
+  const camera = new THREE.PerspectiveCamera(), target = new THREE.Vector3(); camera.position.set(0, 1000, 0);
+  frameSelection(camera, target, new THREE.Vector3(10, 8, 20));
+  assert.deepEqual(target, new THREE.Vector3(10, 8, 20));
+  assert.equal(camera.position.y, 408);
+  assert.ok(Math.abs(Math.hypot(camera.position.x - 10, camera.position.z - 20) - 400) < 1e-9);
+  assert.ok(Math.abs((camera.position.x - 10) / (camera.position.z - 20) - .48 / .85) < 1e-9);
 });
