@@ -2,6 +2,14 @@
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   const viewport = page.viewportSize(), inspector = page.locator('#identity-inspector');
+  const inspectorChrome = async title => {
+    check(await inspector.locator(':scope > .mobile-sheet-heading').count() === 1, 'Non-observation mobile heading removed');
+    const heading = inspector.locator(':scope > .panel-heading');
+    check((await heading.innerText()).includes(title), 'Non-observation heading lost');
+    check(await inspector.evaluate(element => getComputedStyle(element).scrollbarWidth === 'none' && getComputedStyle(element, '::-webkit-scrollbar').display === 'none'), 'Non-observation scrollbar remains');
+    check(await heading.evaluate(element => getComputedStyle(element).borderBottomWidth !== '0px'), 'Non-observation divider removed');
+    check(!await inspector.evaluate(element => element.classList.contains('observation-inspector')), 'Non-observation inspector simplified');
+  };
   const snapshot = await (await page.request.get(new URL('/api/traffic', page.url()).href)).json();
   const trafficRoute = route => {
     const fresh = JSON.parse(JSON.stringify(snapshot), (key, value) => typeof value === 'string' && /At$/.test(key) && Number.isFinite(Date.parse(value)) ? new Date(Date.now() - 1000).toISOString() : value);
@@ -36,6 +44,7 @@ async (page) => {
     check(await filter.inputValue() === '', 'Route filter did not clear');
     const vehicle = page.locator('.vehicle-flag').filter({ has: page.locator('strong') }).filter({ hasText: /^\d/ }).first();
     await vehicle.focus(); await vehicle.press('Enter'); await inspector.waitFor();
+    await inspectorChrome('Vehicle information');
     check(await inspector.locator('.vehicle-itinerary').isVisible(), 'Itinerary lost');
     const follow = inspector.locator('.vehicle-follow');
     check(!await follow.isDisabled(), 'Fresh vehicle follow disabled'); await follow.click();
@@ -46,10 +55,12 @@ async (page) => {
     await page.getByRole('tab', { name: 'Stations', exact: true }).click();
     await page.locator('.search-results').getByRole('button', { name: /^Helsinki asema rail/ }).click();
     await inspector.getByText('No upcoming passenger departures reported.', { exact: true }).waitFor();
+    await inspectorChrome('Station departures');
     check((await inspector.innerText()).includes('Helsinki time'), 'Departure time attribution lost');
     await page.route(/\/api\/entities\/building\/[^/]+\?/, detailRoute);
     await page.route(/\/api\/energy\?/, energyRoute);
     await search.fill('Mannerheimintie'); await page.getByRole('tab', { name: 'Buildings', exact: true }).click(); await page.locator('.search-results .building-list > button').first().click();
+    await inspectorChrome('Building');
     await inspector.getByRole('button', { name: 'View electricity history', exact: true }).click();
     const history = page.locator('.energy-history-dialog'); await history.waitFor();
     check(await history.locator('.monthly-chart').isVisible(), 'Electricity history chart missing');

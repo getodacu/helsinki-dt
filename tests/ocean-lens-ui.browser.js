@@ -2,11 +2,23 @@
 async (page) => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   const original = page.viewportSize();
+  const snapshot = await (await page.request.get(new URL('/api/observations', page.url()).href)).json();
+  const observationsRoute = route => {
+    const time = new Date(Date.now() - 120_000).toISOString();
+    const observations = [['t2m', 'degC', 6.5], ['ws_10min', 'm/s', 2.9], ['NO2_PT1H_avg', 'ug/m3', 15.2]].map(([parameter, unit, value]) => ({
+      parameter, unit, value, observedAt: time, receivedAt: time, quality: null, aggregation: null,
+      stationId: parameter === 'NO2_PT1H_avg' ? '100742' : '100971',
+      stationName: parameter === 'NO2_PT1H_avg' ? 'Helsinki Mannerheimintie' : 'Helsinki Kaisaniemi',
+      longitude: 24.94, latitude: 60.17, sourceId: parameter === 'NO2_PT1H_avg' ? 'fmi-air-quality' : 'fmi-weather'
+    }));
+    return route.fulfill({ json: { ...snapshot, observations, sources: snapshot.sources.map(source => ({ ...source, state: 'current', lastError: null })) } });
+  };
+
   const sensors = page.locator('.sensor-readings'), inspector = page.locator('#identity-inspector');
   const layers = page.locator('#exploration-panel'), context = page.locator('#context-trigger');
   const temperature = sensors.locator('[data-parameter="t2m"]');
   const presets = page.getByRole('navigation', { name: 'Camera presets' });
-  const sizes = [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 955, height: 1104 }, { width: 390, height: 844 }, { width: 844, height: 390 }];
+  const sizes = [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 1032, height: 1104 }, { width: 390, height: 844 }, { width: 844, height: 390 }];
   const sizeCheck = async locator => {
     const box = await locator.boundingBox(), size = page.viewportSize();
     check(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= size.width + 1 && box.y + box.height <= size.height + 1, 'Panel leaves viewport');
@@ -17,6 +29,7 @@ async (page) => {
     check(a && b && (a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y), 'Sensor display overlaps an open panel');
   };
   try {
+    await page.route('**/api/observations', observationsRoute);
     await page.setViewportSize(sizes[0]); await page.reload();
     await page.waitForFunction(() => document.querySelector('main')?.getAttribute('data-scene-ready') === 'true');
     await sensors.waitFor();
@@ -27,6 +40,7 @@ async (page) => {
     check(await layers.locator('details[name="exploration"]').first().evaluate(element => element.open), 'Map is not initially expanded');
     for (const size of sizes) {
       await page.setViewportSize(size);
+      check(await page.getByRole('button', { name: 'Help using the city' }).count() === 0, 'Help button remains');
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Page overflows');
       await sizeCheck(page.locator('.masthead')); await sizeCheck(presets); await sizeCheck(sensors);
       const sensorBox = await sensors.boundingBox();
@@ -48,7 +62,7 @@ async (page) => {
       if (size.width >= 1200) check(Math.round((await page.locator('.right-stack').boundingBox()).width) === 340, 'Wrong inspector width');
       else {
         check(await context.innerText() === 'Inspect', 'Inspection navigation missing');
-        await page.getByRole('button', { name: 'Close inspector sheet' }).click();
+        await page.locator('#context-trigger').click();
         check(!await inspector.isVisible(), 'Closing sheet failed');
         check(await temperature.evaluate(element => element === document.activeElement), 'Sensor opener focus not restored');
         await context.click(); check((await inspector.innerText()).includes('Helsinki Kaisaniemi'), 'Selection not retained');
@@ -67,10 +81,6 @@ async (page) => {
     check(await page.locator('#inspection-heading').evaluate(element => element === document.activeElement), 'Retained station inspector not focused');
     await page.locator('#project-menu-trigger').click(); await page.keyboard.press('Escape');
     check(await inspector.isVisible(), 'Project popover Escape closed inspection');
-    await page.getByRole('button', { name: 'Help using the city' }).click();
-    check(await page.locator('dialog[open]').count() === 1, 'Help dialog missing');
-    await page.keyboard.press('Escape');
-    check(await page.getByRole('button', { name: 'Help using the city' }).evaluate(element => element === document.activeElement), 'Help focus not restored');
     await page.setViewportSize(sizes[0]);
     await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
     for (const name of ['Harbour', 'Central Station', 'City Centre']) {
@@ -92,6 +102,7 @@ async (page) => {
     await search.fill(''); await page.keyboard.press('Escape');
     return { layouts: sizes.length, sensors: 3, panels: true, selectionPreserved: true, keyboard: true, reducedMotion: true, cameraPresets: true };
   } finally {
+    await page.unroute('**/api/observations', observationsRoute);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.setViewportSize(original); await page.reload();
   }

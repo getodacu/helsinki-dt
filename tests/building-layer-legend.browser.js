@@ -132,7 +132,7 @@ async (page) => {
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#context-trigger').click();
-    await page.getByRole('button', { name: 'Close inspector sheet' }).click();
+    await page.locator('#context-trigger').click();
     check(!await page.locator('#identity-inspector').isVisible(), 'Inspector sheet remains open');
     await page.locator('#context-trigger').click();
     check((await page.locator('#identity-inspector').innerText()).includes('Helsinki Mannerheimintie'), 'Closing sheet cleared selection');

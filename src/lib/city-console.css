@@ -18,7 +18,6 @@
 .search-result-panel::-webkit-scrollbar { display: none; }
 .search-results .object-list { max-height: none; overflow: visible; margin-top: 0; }
 .live-feed-button { flex-shrink: 0; display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 6px; background: transparent; font-size: 12px; }
-.console-help { flex-shrink: 0; min-height: 44px; width: 44px; background: transparent; border: 1px solid var(--border); font-size: 18px; }
 .header-actions { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
 .source-button { min-height: 44px; padding: 0; background: transparent; color: var(--text); font-size: 12px; font-weight: 500; white-space: nowrap; }
 .source-button:hover { color: var(--teal); }
@@ -79,7 +78,12 @@
 .theme-limits { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
 .legend-no-data { display: flex; gap: 7px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
 .legend-shortcut { display: none; }
-.inspector { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.inspector { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.inspector::-webkit-scrollbar { display: none; }
+.observation-station-heading { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+.observation-station-heading h3 { flex: 1; min-width: 0; margin: 0; }
+.observation-inspector .properties > div { border-bottom: 0; }
+.observation-inspector .history-section { border-top: 0; }
 .inspector > .panel-heading { position: sticky; top: 0; z-index: 2; background: var(--surface); }
 .console-inspector-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin: 12px 0; }
 .console-inspector-tabs button { min-height: 44px; padding: 8px 12px; color: var(--muted); background: transparent; border-bottom: 2px solid transparent; font-size: 13px; }
@@ -137,13 +141,8 @@
 .coverage-notice span { display: block; font-size: 11px; }
 .scene-error { color: #e1c69f; }
 .mobile-panel-nav, .mobile-sheet-heading { display: none; }
-.tool-dialog, .source-drawer { padding: 0; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
-.tool-dialog { margin: auto; width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow: auto; }
-.tool-dialog::backdrop, .source-drawer::backdrop { background: #00121c99; }
-.console-instructions { margin: 0 0 8px; }
-.console-instructions > div { padding: 9px 0; border-bottom: 1px solid var(--border); }
-.console-instructions dt { font-size: 13px; font-weight: 500; }
-.console-instructions dd { margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.source-drawer { padding: 0; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.source-drawer::backdrop { background: #00121c99; }
 .source-drawer { position: fixed; inset: 18px 18px 18px auto; margin: 0; width: min(740px, calc(100vw - 36px)); height: calc(100dvh - 36px); max-height: calc(100dvh - 36px); display: flex; flex-direction: column; }
 .drawer-heading { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .drawer-heading h2 { font-weight: 500; margin-top: 6px; }
@@ -252,14 +251,13 @@
   .route-stop-marker { width: 44px; height: 44px; }
 }
 @media (max-width: 779px) {
-  .masthead { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; grid-template-rows: 44px 44px; height: 106px; flex-basis: 106px; gap: 4px; padding: 4px 8px 10px; }
+  .masthead { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-rows: 44px 44px; height: 106px; flex-basis: 106px; gap: 4px; padding: 4px 8px 10px; }
   .brand { gap: 6px; }
   .brand-symbol { font-size: 26px; }
   .brand-name { font-size: 13px; }
   .brand-name small { font-size: 8px; }
   .navbar-search { grid-column: 1 / -1; grid-row: 2; width: 100%; max-width: none; min-width: 0; }
-  .console-help { grid-column: 3; grid-row: 1; }
-  .project-menu-trigger { grid-column: 4; grid-row: 1; }
+  .project-menu-trigger { grid-column: 3; grid-row: 1; }
   .live-feed-button { grid-column: 2; grid-row: 1; font-size: 11px; }
   .search-results { max-height: calc(100dvh - 190px); }
   .project-menu, .live-feed-popover { top: 52px; right: 8px; }

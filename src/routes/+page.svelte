@@ -42,7 +42,6 @@
     { key: 'imagery', label: 'Aerial imagery' }, { key: 'buildings', label: '3D buildings' },
     { key: 'terrain', label: 'Land & islands' }, { key: 'roads', label: 'Roads & rail' }
   ] as const;
-  let helpOpen = $state(false);
   let buildingTab = $state<'overview' | 'details'>('overview');
   let themeKey = $state('');
   let city = $state.raw<{ manifest: CityManifest; base: CityBase; cache: CityAssetCache } | null>(null);
@@ -290,6 +289,7 @@
   const currentRailDelay = (vehicle: Vehicle) => vehicle.rail?.timetableAt && now - Date.parse(vehicle.rail.timetableAt) < 60_000 && !vehicle.rail.timetableStale ? vehicle.delaySeconds : null;
   let railDelayed = $derived(freshRail.filter(vehicle => (currentRailDelay(vehicle) ?? 0) > 60).length);
   let railUnknown = $derived(freshRail.filter(vehicle => currentRailDelay(vehicle) === null).length);
+  let observationInspector = $derived(selected?.kind === 'station' && (selected.station.kind === 'weather' || selected.station.kind === 'air-quality'));
   let selectedStation = $derived.by(() => { const selection = selected; return selection?.kind === 'station' ? observationStations.find(station => station.id === selection.station.id) : null; });
   let selectedStationParameters = $derived(OBSERVATION_PARAMETERS.filter(parameter => selectedStation?.parameters.includes(parameter.id)));
   let itinerary = $derived(selected?.kind === 'vehicle' && ['train', 'tram', 'bus'].includes(selected.vehicle.mode)
@@ -507,7 +507,6 @@
       {#each liveFeeds as feed (feed.name)}<div class="live-feed-row"><strong><span class:connected={feed.live} class="status-dot" aria-hidden="true"></span>{feed.name}</strong><span>{feed.state}</span><small>Last report: {feed.lastAt ? formatDate(feed.lastAt) : 'No report yet'}</small>{#if feed.error}<p>{feed.error}</p>{/if}</div>{/each}
       {#if trafficError}<p class="panel-note">{trafficError}</p>{/if}
     </div>
-    <button class="console-help" aria-label="Help using the city" onclick={() => helpOpen = true}>?</button>
     {#snippet projectLinks()}
       <button class="source-button" data-information-section="about" onclick={() => openSources('about')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'about'} aria-controls="sources">About this project</button>
       <button class="source-button collaboration-button" data-information-section="collaboration" onclick={() => openSources('collaboration')} aria-haspopup="dialog" aria-expanded={sourceOpen && informationSection === 'collaboration'} aria-controls="sources">Open for collaboration</button>
@@ -611,8 +610,10 @@
     {#if legendVisible}<button id="legend-trigger" class="legend-shortcut" aria-expanded={activePanel === 'legend'} aria-controls="building-legend-body" onclick={() => setActivePanel(activePanel === 'legend' ? null : 'legend')}>{legendLabel}<span>Legend ↗</span></button>{/if}
     {#if selected}
     <aside class="right-stack" class:mobile-active={activePanel === 'inspect'} aria-label="Map information">
-      <section class="panel inspector" id="identity-inspector" aria-label="Inspector">
+      <section class="panel inspector" class:observation-inspector={observationInspector} id="identity-inspector" aria-label="Inspector">
+        {#if !observationInspector}
         <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setActivePanel(null)}>×</button></div><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || selected.station.kind === 'rail' ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
+        {/if}
         {#if selected.kind === 'building'}
           {#key selected.building.id}<BuildingPhoto building={selected.building} {generation} base={city?.base} cache={city?.cache} />{/key}
         {/if}
@@ -666,7 +667,8 @@
           {:else if selected?.kind === 'station' && selected.station.kind === 'rail'}
             <RailStationBoard station={selected.station} vehicles={availableVehicles} ontrain={(vehicle: Vehicle) => { layers.train = true; layers[vehicle.rail?.category ?? 'other'] = true; routeFilter = ''; selectObject({ kind: 'vehicle', vehicle }); }} />
           {:else if selected?.kind === 'station'}
-            <span class="eyebrow">{selected.station.kind === 'weather' ? 'WEATHER' : 'AIR QUALITY'} / STATION</span><h3>{selected.station.name}</h3>
+            <span class="eyebrow">{selected.station.kind === 'weather' ? 'WEATHER' : 'AIR QUALITY'} / STATION</span>
+            <div class="observation-station-heading"><h3 id="inspection-heading" tabindex="-1">{selected.station.name}</h3><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
             <dl class="properties"><div><dt>Station ID</dt><dd>{selected.station.id}</dd></div></dl>
             {#key selected.station.id}
               {#each selectedStationParameters as parameter (parameter.id)}
@@ -705,16 +707,6 @@
     {#if !energyGroup && ryhti.status !== 'ready'}<p class="notice">{ryhti.status === 'stale' ? 'Dated catalog retained' : 'Ryhti catalog unavailable'} · {ryhti.message}</p>{/if}
   </div>
 {/snippet}
-{#if helpOpen}
-  <dialog class="tool-dialog city-console" aria-labelledby="help-heading" use:showDialog onclose={() => helpOpen = false}>
-    <div class="panel-heading"><h2 id="help-heading">Getting around</h2><button class="icon-button" aria-label="Close help" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
-    <div class="layer-list"><dl class="console-instructions"><div><dt>Look around</dt><dd>Drag to orbit. Scroll or pinch to zoom.</dd></div><div><dt>Move across the city</dt><dd>Use W, A, S and D, or right-drag. On a touch screen, drag with two fingers.</dd></div><div><dt>Inspect a place</dt><dd>Select a building, vehicle or station. Escape closes your selection.</dd></div><div><dt>Find something</dt><dd>Search an address, route, vehicle or station above.</dd></div></dl>
-            <label class="layer-control"><input type="checkbox" bind:checked={keyboardNavigation} /><span>WASD navigation</span></label>
-            <button class="follow-button" disabled={!scene} onclick={() => choosePreset('city')}>Return to City Centre <span>↗</span></button>
-            <button class="text-button" onclick={() => openSources()}>About the data & sources ↗</button>
-</div>
-  </dialog>
-{/if}
 {#if sourceOpen}
   <dialog class="source-drawer project-information" id="sources" aria-labelledby="sources-heading" use:showDialog onclose={() => sourceOpen = false}>
     <div class="drawer-heading"><div><span class="eyebrow">HELSINKI LENS / AN AI.RO PROJECT</span><h2 id="sources-heading">{informationSections.find(section => section.key === informationSection)?.label}</h2></div><button class="icon-button" aria-label="Close sources" onclick={event => event.currentTarget.closest('dialog')?.close()}>×</button></div>
