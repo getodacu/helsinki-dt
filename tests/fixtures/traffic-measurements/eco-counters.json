@@ -1,0 +1,930 @@
+{
+  "count": 40,
+  "next": null,
+  "previous": null,
+  "results": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "id": 100008544,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.88743,
+            60.195717
+          ]
+        },
+        "properties": {
+          "id": 100008544,
+          "name": "Munkkiniemi ET",
+          "source": "EcoCounter",
+          "sourceId": 100008544,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100008545,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.887291,
+            60.19607
+          ]
+        },
+        "properties": {
+          "id": 100008545,
+          "name": "Munkkiniemi PO",
+          "source": "EcoCounter",
+          "sourceId": 100008545,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100008546,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.94062,
+            60.17813
+          ]
+        },
+        "properties": {
+          "id": 100008546,
+          "name": "Kaisaniemi",
+          "source": "EcoCounter",
+          "sourceId": 100008546,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100010296,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.950104,
+            60.175865
+          ]
+        },
+        "properties": {
+          "id": 100010296,
+          "name": "Pitkäsilta/LÄ",
+          "source": "EcoCounter",
+          "sourceId": 100010296,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100010337,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.931064092728704,
+            60.18005365925852
+          ]
+        },
+        "properties": {
+          "id": 100010337,
+          "name": "Ooppera",
+          "source": "EcoCounter",
+          "sourceId": 100010337,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100010338,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            0.0,
+            0.0
+          ]
+        },
+        "properties": {
+          "id": 100010338,
+          "name": "Vaihtolaskin Zelt GW 02",
+          "source": "EcoCounter",
+          "sourceId": 100010338,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016105,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.914066,
+            60.17639
+          ]
+        },
+        "properties": {
+          "id": 100016105,
+          "name": "Merikannontie",
+          "source": "EcoCounter",
+          "sourceId": 100016105,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016106,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.95029569566346,
+            60.17678800062438
+          ]
+        },
+        "properties": {
+          "id": 100016106,
+          "name": "Pitkäsilta/IT",
+          "source": "EcoCounter",
+          "sourceId": 100016106,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016107,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.893665910203715,
+            60.16150150968766
+          ]
+        },
+        "properties": {
+          "id": 100016107,
+          "name": "Lauttasaaren silta etelä",
+          "source": "EcoCounter",
+          "sourceId": 100016107,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016108,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.893678426742554,
+            60.161678559595615
+          ]
+        },
+        "properties": {
+          "id": 100016108,
+          "name": "Lauttasaaren silta pohjoinen",
+          "source": "EcoCounter",
+          "sourceId": 100016108,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016667,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.94585,
+            60.168934
+          ]
+        },
+        "properties": {
+          "id": 100016667,
+          "name": "4_Aleksanterinkatu",
+          "source": "EcoCounter",
+          "sourceId": 100016667,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016668,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.946460547290823,
+            60.16102510532733
+          ]
+        },
+        "properties": {
+          "id": 100016668,
+          "name": "8_Korkevuorenkatu",
+          "source": "EcoCounter",
+          "sourceId": 100016668,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016669,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.940344,
+            60.16891
+          ]
+        },
+        "properties": {
+          "id": 100016669,
+          "name": "3_Vanha Ylioppilastalo",
+          "source": "EcoCounter",
+          "sourceId": 100016669,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016670,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.94723,
+            60.16716
+          ]
+        },
+        "properties": {
+          "id": 100016670,
+          "name": "5_Eteläesplanadi",
+          "source": "EcoCounter",
+          "sourceId": 100016670,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016671,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.009561657643648,
+            60.250313466426675
+          ]
+        },
+        "properties": {
+          "id": 100016671,
+          "name": "7_Malmin Bussiterm.",
+          "source": "EcoCounter",
+          "sourceId": 100016671,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016672,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.944177985125865,
+            60.16440625545769
+          ]
+        },
+        "properties": {
+          "id": 100016672,
+          "name": "1_Itäkeskus_14.2_varalaskin",
+          "source": "EcoCounter",
+          "sourceId": 100016672,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016673,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.938332378733325,
+            60.16958184935728
+          ]
+        },
+        "properties": {
+          "id": 100016673,
+          "name": "2_Forumin tunneli",
+          "source": "EcoCounter",
+          "sourceId": 100016673,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100016674,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.934399,
+            60.16616
+          ]
+        },
+        "properties": {
+          "id": 100016674,
+          "name": "6_Fredrikinkatu",
+          "source": "EcoCounter",
+          "sourceId": 100016674,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100020770,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.079972,
+            60.211485
+          ]
+        },
+        "properties": {
+          "id": 100020770,
+          "name": "5.1_Itäkeskus",
+          "source": "EcoCounter",
+          "sourceId": 100020770,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100020818,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.9026,
+            60.21559
+          ]
+        },
+        "properties": {
+          "id": 100020818,
+          "name": "Huopalahti",
+          "source": "EcoCounter",
+          "sourceId": 100020818,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100020819,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.8734193382263,
+            60.187746782261
+          ]
+        },
+        "properties": {
+          "id": 100020819,
+          "name": "Kuusisaarentie",
+          "source": "EcoCounter",
+          "sourceId": 100020819,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100020820,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.9939792690277,
+            60.1855357884049
+          ]
+        },
+        "properties": {
+          "id": 100020820,
+          "name": "Kulosaaren silta et.",
+          "source": "EcoCounter",
+          "sourceId": 100020820,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100020821,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.99388,
+            60.18606
+          ]
+        },
+        "properties": {
+          "id": 100020821,
+          "name": "Kulosaaren silta po.",
+          "source": "EcoCounter",
+          "sourceId": 100020821,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100020822,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.93381178392156,
+            60.20033064154501
+          ]
+        },
+        "properties": {
+          "id": 100020822,
+          "name": "Ratapihantie",
+          "source": "EcoCounter",
+          "sourceId": 100020822,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100029822,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.9498504493158,
+            60.1861595522331
+          ]
+        },
+        "properties": {
+          "id": 100029822,
+          "name": "Spare_Pyro-Box",
+          "source": "EcoCounter",
+          "sourceId": 100029822,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100040158,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.94544,
+            60.1672
+          ]
+        },
+        "properties": {
+          "id": 100040158,
+          "name": "Eteläesplanadi",
+          "source": "EcoCounter",
+          "sourceId": 100040158,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100040159,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.943887255441755,
+            60.21878635392895
+          ]
+        },
+        "properties": {
+          "id": 100040159,
+          "name": "Käpylä",
+          "source": "EcoCounter",
+          "sourceId": 100040159,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100041187,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.99661,
+            60.22475
+          ]
+        },
+        "properties": {
+          "id": 100041187,
+          "name": "Viikki",
+          "source": "EcoCounter",
+          "sourceId": 100041187,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100041188,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.941860252497083,
+            60.17055741604037
+          ]
+        },
+        "properties": {
+          "id": 100041188,
+          "name": "Kaivokatu",
+          "source": "EcoCounter",
+          "sourceId": 100041188,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100041189,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.924816648058606,
+            60.19123564231468
+          ]
+        },
+        "properties": {
+          "id": 100041189,
+          "name": "Auroran silta",
+          "source": "EcoCounter",
+          "sourceId": 100041189,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100045588,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.99061,
+            60.21101
+          ]
+        },
+        "properties": {
+          "id": 100045588,
+          "name": "Lammassaari",
+          "source": "EcoCounter",
+          "sourceId": 100045588,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100053012,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.011003870091972,
+            60.152223939891
+          ]
+        },
+        "properties": {
+          "id": 100053012,
+          "name": "Vasikkasaari",
+          "source": "EcoCounter",
+          "sourceId": 100053012,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100054773,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            -2.29522,
+            48.6675
+          ]
+        },
+        "properties": {
+          "id": 100054773,
+          "name": "Logger",
+          "source": "EcoCounter",
+          "sourceId": 100054773,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 100133755,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.799972156986225,
+            60.17491800326973
+          ]
+        },
+        "properties": {
+          "id": 100133755,
+          "name": "Espoonlahti_Clone",
+          "source": "EcoCounter",
+          "sourceId": 100133755,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 300017352,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.948368668556217,
+            60.16559921753681
+          ]
+        },
+        "properties": {
+          "id": 300017352,
+          "name": "0_Erottaja 2",
+          "source": "EcoCounter",
+          "sourceId": 300017352,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 300029123,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            29.738895893096927,
+            62.597725907837436
+          ]
+        },
+        "properties": {
+          "id": 300029123,
+          "name": "DGP22050097",
+          "source": "EcoCounter",
+          "sourceId": 300029123,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 300048239,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.92606,
+            60.16933
+          ]
+        },
+        "properties": {
+          "id": 300048239,
+          "name": "Baana",
+          "source": "EcoCounter",
+          "sourceId": 300048239,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 300048240,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.025889611585757,
+            60.22283091043033
+          ]
+        },
+        "properties": {
+          "id": 300048240,
+          "name": "Viikin Baana",
+          "source": "EcoCounter",
+          "sourceId": 300048240,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 300060423,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.893665910203715,
+            60.16150150968766
+          ]
+        },
+        "properties": {
+          "id": 300060423,
+          "name": "Formula : Lauttasaaren silta etelä",
+          "source": "EcoCounter",
+          "sourceId": 300060423,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 300060424,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.893678426742554,
+            60.161678559595615
+          ]
+        },
+        "properties": {
+          "id": 300060424,
+          "name": "Formula : Lauttasaaren silta pohjoinen",
+          "source": "EcoCounter",
+          "sourceId": 300060424,
+          "classifying": true,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      }
+    ]
+  }
+}

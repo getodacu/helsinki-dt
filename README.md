@@ -1,6 +1,6 @@
 # Helsinki Lens
 
-Helsinki Lens is a 3D view of central Helsinki combining selectable buildings, live HSL trams, buses and ferries, Fintraffic trains and AIS ships, scheduled routes, station weather and air quality, and verified building energy and solar records. Building inspectors include available Ryhti register facts, permits and attributed Wikimedia photographs; traffic and harbour cameras open from map markers. It keeps original building identifiers, source attribution and data age visible. Displayed times use `Europe/Helsinki`.
+Helsinki Lens is a 3D view of central Helsinki combining selectable buildings, live HSL trams, buses and ferries, Fintraffic trains and AIS ships, scheduled routes, fixed-counter traffic measurements for vehicles, cycling and walking, station weather and air quality, and verified building energy and solar records. Building inspectors include available Ryhti register facts, permits and attributed Wikimedia photographs; traffic and harbour cameras open from map markers. It keeps original building identifiers, source attribution and data age visible. Displayed times use `Europe/Helsinki`.
 
 [![Helsinki Lens demo: navigate the 3D city, follow a live tram, inspect a building, explore solar colouring and select a harbour ship.](docs/demo/helsinki-lens-preview.gif)](docs/demo/helsinki-lens-demo.mp4)
 
@@ -116,6 +116,7 @@ flowchart LR
     Rail[Fintraffic rail positions and timetables] --> App
     AIS[Fintraffic AIS REST and MQTT] --> App
     Observations[FMI and HSY station observations] --> App
+    Counters[City of Helsinki LIDO-TIKU measurements] --> App
     Nuuka[Nuuka property electricity] --> App
     App --> Browser[Svelte UI and Three.js scene]
 ```
@@ -124,7 +125,7 @@ Preparation converts and validates source data once, publishes immutable generat
 
 Browsers load prepared `/data/` geometry and its visible-chunk metadata, then request visible municipal imagery and textured buildings through `/api/city-asset`. The Node server validates and caches these municipal assets on disk for all visitors. Browser Cache Storage is an optional additional cache; it is independent of the server cache and of GPU resources.
 
-Each Node process shares demand-driven HSL and marine MQTT connections and one Digitraffic rail position poll across its browsers, forwarding combined snapshots/updates through SSE. Marine positions also use bounded REST bootstrap/recovery. Station observations and measured electricity use separate server services. A small entity catalog summary supplies themes and source status. Building search, inspection and theme values use SQLite-backed APIs; TanStack Svelte Query caches bounded responses by dataset generation. Run one application process; multiple workers would need shared live-feed coordination.
+Each Node process shares demand-driven HSL and marine MQTT connections and one Digitraffic rail position poll across its browsers, forwarding combined snapshots/updates through SSE. Marine positions also use bounded REST bootstrap/recovery. Station observations, measured electricity and LIDO-TIKU traffic measurements use separate server services. Traffic measurements refresh every five minutes from startup into a shared process-memory cache; snapshot and counter-detail API reads use that cache. A small entity catalog summary supplies themes and source status. Building search, inspection and theme values use SQLite-backed APIs; TanStack Svelte Query caches bounded responses by dataset generation. Run one application process; multiple workers would need shared live-feed coordination.
 
 Geometry uses metres. Source ETRS-GK25/EPSG:3879 coordinates become local Three.js `[east, elevation, -north]` coordinates around longitude 24.952, latitude 60.1695, elevation 0. Heights retain the N2000 datum; projection does not perform a vertical datum conversion. See [data contracts](docs/data-contracts.md) and [coordinate controls](docs/coordinate-controls-evidence.md).
 
@@ -163,7 +164,7 @@ Exploration sits to the left of the desktop map. A compact top-right display sho
 
 Below 1200px, **Layers** and **Inspect** use one shared panel; **Explore** closes it. Inspect appears only while an object is selected. Below 780px the header uses two rows and the panel becomes a sheet above bottom navigation. Closing an inspection sheet or pressing Escape once preserves selection; **Clear selection** removes it separately. Guided camera cards collapse while a compact panel is open. Use the **Legend** shortcut for expanded legends in the shared panel.
 
-The header buttons **About this project**, **Open for collaboration** and **Data & sources** open distinct centered modals. About explains the project, engineering, system architecture and 3D exploration with responsive diagrams and practical use cases. Collaboration introduces ways to work with ai.ro; Data & sources retains live status, provenance and attribution. On compact screens the buttons sit inside the **···** menu. Escape, the close button or a backdrop click closes each modal and returns focus to its opener.
+The header buttons **About this project**, **Open for collaboration** and **Data & sources** open distinct centered modals. About explains the project, engineering, system architecture and 3D exploration with responsive diagrams and practical use cases. Collaboration introduces ways to work with ai.ro; Data & sources retains live status, provenance and attribution, including a traffic-measurement overview and source diagnostics. On compact screens the buttons sit inside the **···** menu. Escape, the close button or a backdrop click closes each modal and returns focus to its opener.
 
 Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Drag to orbit and scroll to zoom. Keyboard navigation pauses in interactive controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow.
 
@@ -284,6 +285,16 @@ Ships have their own toggle and remain visible independently of transit route fi
 
 Marine positions use a 10-second buffer of received reports for display and never extrapolate beyond the last accepted report. Freshness is measured from the provider's position time: moving or unknown-status ships become stale at two minutes and are removed after ten; anchored/moored ships with valid speed at or below 0.5 knots become stale at ten minutes and are removed after thirty. See [marine contracts](docs/data-contracts.md), [access and source evidence](docs/data-access.md), and [Task F results](docs/milestone-results/F.md) for source clocks, limits and dated verification.
 
+### Traffic measurements
+
+The **Traffic measurements** layer is enabled by default under **Transport**. Choose **Vehicles**, **Cycling** or **Walking** to show fixed counters with valid counts for that mode within the last 24 hours. Select a marker or find a counter under **Stations** to inspect its latest interval count, measurement time, calculated hourly equivalent, maximum observed hourly equivalent in the window, and direction/class breakdown with km/h speeds where supplied. Counters at the same location keep separate identities; their inspector buttons open keyboard-accessible recent-history charts.
+
+Counts preserve their original interval: 19 vehicles in 15 minutes becomes an hourly equivalent of 76/h, not a measured one-hour total. The maximum is taken from available complete interval counts; partial source/history failures label it as an observed maximum. Charts preserve measured zeroes, missing readings and gaps. Unknown classes and incomplete or conflicting aggregates cannot create active counter markers.
+
+The source is the **City of Helsinki LIDO-TIKU API**, attributed under CC BY 4.0. Counter locations are filtered to the prepared map bounds. Sparse instrumented locations do not establish traffic on every street, and source publication delays vary. Provider metadata such as `dataReceived` or a missing catalog observation date does not replace actual observation timestamps when deciding whether a counter has recent counts.
+
+The server checks measurements every five minutes and counter metadata daily, independently of browsers. Browser polling pauses when the layer is disabled or the page is hidden; opening **Data & sources** reuses the existing snapshot without another upstream request. Retained readings keep their original measurement/retrieval times and partial-data notices, and expire from the active view after 24 hours. No API key, new environment variable or preparation command is needed; the Node server needs outbound HTTPS to `lidotiku.api.hel.fi`. Cache state is in memory and warms again after restart. See [data access](docs/data-access.md) and [data contracts](docs/data-contracts.md) for source references, endpoints and limits.
+
 ### Weather and air quality
 
 Weather uses Kaisaniemi station **100971**; air quality uses Mannerheimintie station **100742** through FMI/HSY. Requests cover a fixed recent six-hour window. The process shares requests and becomes eligible to refresh weather every five minutes and air quality every fifteen minutes. These intervals are not claims about provider publication cadence.
@@ -316,6 +327,8 @@ Coverage is incomplete by design. The dated 8 October 2026 release evidence reco
 | `POST /api/city-cache` | Start/resume automatic overview warming. |
 | `GET /api/traffic` | Current vehicle snapshot and dated feed status. |
 | `GET /api/traffic/stream` | SSE snapshots, updates, removals, status and 15-second heartbeat. |
+| `GET /api/traffic-measurements` | Cached fixed-area/latest-24-hour counter snapshot, summaries and independent source states; no query parameters. |
+| `GET /api/traffic-measurements/counters/:id` | Cached latest-24-hour counts, speeds, summaries and window for an active counter. URL-encode the source-scoped ID, such as `HEL LAM:6373`; no query parameters. Invalid IDs/parameters return 400, counters without complete recent counts 404, and unavailable/warming data 503. |
 | `GET /api/rail/stations` | Passenger railway stations within the prepared city bounds and dated source status. |
 | `GET /api/rail/stations/:code/departures` | Next passenger departures for a known station in city coverage. |
 | `GET /api/rail/trains/:date/:number` | Dated train timetable and available prepared route; date is `YYYY-MM-DD`. |

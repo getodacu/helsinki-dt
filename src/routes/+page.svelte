@@ -27,6 +27,9 @@
   import BuildingEnergy from '#lib/components/BuildingEnergy.svelte';
   import { ENERGY_COLOURS, NO_ENERGY_COLOUR, humanizeEnergyUsage, closestHeatDemandTheme } from '#lib/energy-display.ts';
   import type { EnergyCatalogState } from '#lib/energy-types.ts';
+  import TrafficCounterDetails from '#lib/components/TrafficCounterDetails.svelte';
+  import { MEASUREMENT_REFRESH_MS, MEASUREMENT_MODES, trafficCounterStations, activeTrafficCounters,
+    type TrafficMeasurementSnapshot, type MeasurementMode } from '#lib/traffic-measurements.ts';
   import StationHistory from '#lib/components/StationHistory.svelte';
   import { loadCityManifest, loadCityBase, type CityManifest, type CityBase } from '#lib/city-assets.ts';
   import { CityAssetCache } from '#lib/city-cache.ts';
@@ -91,10 +94,6 @@
       url: 'https://luontotieto.syke.fi/en/aineisto/tulvavaaravyohykkeet-perusskenaariot-flood-hazard-zones-basic-scenarios-2/',
       description: 'Modeled flood probability and depth zones around the waterfront.',
       limitation: 'Scenario maps are not live forecasts or building-level assessments. Sustained API use needs a SYKE application identifier.' },
-    { name: 'Walking, cycling & vehicle counters',
-      url: 'https://hri.fi/data/en/dataset/helsingin-liikennemittausten-tilastorajapinta',
-      description: 'Measured activity and historical patterns at instrumented streets.',
-      limitation: 'Sparse sensor locations cannot describe activity across the whole city. Access and freshness need verification.' },
     { name: 'Linked Events',
       url: 'https://www.hel.fi/en/business-and-work/helsinki-tourism-and-event-data',
       description: 'Time-filtered events and their venues alongside transport and city context.',
@@ -131,6 +130,19 @@
   const closeSearch = () => { document.getElementById('city-search')?.focus(); searchOpen = false; };
   let routeFilter = $state('');
   let now = $state(Date.now());
+  let measurementSnapshot = $state.raw<TrafficMeasurementSnapshot | null>(null);
+  let measurementMode = $state<MeasurementMode>('vehicles');
+  let measurementLoading = $state(true);
+  let measurementError = $state('');
+  let activeCounters = $derived(activeTrafficCounters(measurementSnapshot, now));
+  let counterStations = $derived(trafficCounterStations(measurementSnapshot, measurementMode, now));
+  let measurementState = $derived(measurementSnapshot?.state === 'ready' && !counterStations.length ? 'dated' : measurementSnapshot?.state ?? 'unavailable');
+  let measurementSourceState = $derived(measurementLoading ? 'loading' : measurementError
+    ? measurementSnapshot ? 'partial' : 'unavailable'
+    : measurementSnapshot?.state === 'ready' && !activeCounters.length ? 'dated' : measurementSnapshot?.state ?? 'unavailable');
+  let measurementNotice = $state('');
+  let selectedCounter = $derived.by(() => { const selection = selected; return selection?.kind === 'station' && selection.station.kind === 'traffic-counter'
+    ? activeCounters.find(counter => `traffic:${counter.id}` === selection.station.id) ?? null : null; });
   let observationSnapshot = $state.raw<ObservationSnapshot | null>(null);
   let observationLoading = $state(true);
   let observationError = $state('');
@@ -270,9 +282,11 @@
   let observationStations = $derived(observationSnapshot ? groupObservationStations(observationSnapshot) : []);
   let stations = $derived<SceneStation[]>([...observationStations.map(station => ({ id: station.id, name: station.name,
     longitude: station.longitude, latitude: station.latitude, kind: (station.sourceId === 'fmi-air-quality' ? 'air-quality' : 'weather') as SceneStation['kind'], sourceIds: [station.sourceId] })),
-    ...(railStations?.data ?? []).map(station => ({ id: `rail:${station.code}`, name: station.name, longitude: station.longitude, latitude: station.latitude, kind: 'rail' as const, sourceIds: ['digitraffic'] }))]);
-  let matchingStations = $derived(stations.filter(station => !query
-    || searchText(`${station.id} ${station.name} ${station.id === 'rail:HKI' ? 'Helsinki Central' : ''}`).includes(searchText(query))));
+    ...(railStations?.data ?? []).map(station => ({ id: `rail:${station.code}`, name: station.name, longitude: station.longitude, latitude: station.latitude, kind: 'rail' as const, sourceIds: ['digitraffic'] })), ...counterStations]);
+  let searchableStations = $derived<SceneStation[]>([...stations.filter(station => station.kind !== 'traffic-counter'),
+    ...activeCounters.map(counter => ({ id: `traffic:${counter.id}`, name: counter.name, longitude: counter.longitude, latitude: counter.latitude, kind: 'traffic-counter' as const, sourceIds: [counter.source] }))]);
+  let matchingStations = $derived(searchableStations.filter(station => !query
+    || searchText(`${station.id} ${station.name} ${station.sourceIds.join(' ')} ${station.id === 'rail:HKI' ? 'Helsinki Central' : ''}`).includes(searchText(query))));
   let searchResultCounts = $derived({ vehicles: matchingVehicles.length, routes: matchingRoutes.length,
     buildings: filteredBuildings.length, stations: matchingStations.length });
   let staleCount = $derived(visibleVehicles.filter(vehicle => trafficIsStale(vehicle, now)).length);
@@ -318,6 +332,7 @@
     selected = selection; selectionMessage = message;
   };
   const selectObject = (selection: Selection) => {
+    measurementNotice = '';
     searchRouteNotice = null;
     if (selection.kind === 'vehicle') {
       const vehicle = selection.vehicle;
@@ -328,6 +343,11 @@
     else if (selection.station.kind === 'rail') layers.railStations = true;
     else if (selection.station.kind === 'weather') layers.weather = true;
     else if (selection.station.kind === 'air-quality') layers.airQuality = true;
+    else if (selection.station.kind === 'traffic-counter') {
+      layers.trafficMeasurements = true;
+      const counter = activeCounters.find(counter => `traffic:${counter.id}` === selection.station.id);
+      if (counter && !counter.modes.includes(measurementMode)) measurementMode = counter.modes[0] ?? 'vehicles';
+    }
     if (activePanel !== 'inspect') panelTrigger = document.activeElement as HTMLElement | null;
     if (scene && ready) scene.select(selection);
     else setSelection(selection, sceneError ? '3D rendering unavailable. Showing available source metadata.' : 'Map loading. Showing source metadata.');
@@ -402,6 +422,38 @@
     void refresh(); const timer = rail ? setInterval(() => void refresh(), 30_000) : null;
     document.addEventListener('visibilitychange', visibility);
     return () => { disposed = true; request?.abort(); if (timer) clearInterval(timer); document.removeEventListener('visibilitychange', visibility); };
+  });
+  $effect(() => {
+    const selection = selected;
+    if (selection?.kind === 'station' && selection.station.kind === 'traffic-counter' && measurementSnapshot?.state !== 'loading'
+      && !counterStations.some(station => station.id === selection.station.id)) {
+      clearSelection(); measurementNotice = 'Selected counter has no valid measurement for this mode in the last 24 hours.';
+    }
+  });
+  $effect(() => {
+    const enabled = layers.trafficMeasurements;
+    let disposed = false, request: AbortController | null = null, timer: ReturnType<typeof setTimeout> | undefined;
+    if (!enabled) { measurementLoading = false; return; }
+    async function refresh() {
+      if (disposed || document.hidden || request) return;
+      clearTimeout(timer);
+      const attempt = new AbortController(); request = attempt;
+      let delay = MEASUREMENT_REFRESH_MS;
+      try {
+        const response = await fetch('/api/traffic-measurements', { cache: 'no-store', signal: AbortSignal.any([attempt.signal, AbortSignal.timeout(20_000)]) });
+        if (!response.ok) throw new Error(`Traffic measurements unavailable (${response.status})`);
+        const value = await response.json() as TrafficMeasurementSnapshot;
+        if (!Array.isArray(value.counters) || !Array.isArray(value.summaries) || !Array.isArray(value.sources) || !Number.isFinite(Date.parse(value.generatedAt))) throw new Error('Invalid traffic measurements');
+        if (!disposed && !attempt.signal.aborted) { measurementSnapshot = value; measurementError = ''; measurementLoading = value.state === 'loading'; }
+        const expiry = Math.min(...value.summaries.flatMap(summary => [Date.parse(summary.latest.observedAt), Date.parse(summary.maximum.observedAt)]).map(time => time + 24 * 3600_000));
+        delay = value.state === 'loading' ? 5_000 : Math.max(1000, Math.min(MEASUREMENT_REFRESH_MS, expiry - Date.now() + 1));
+      } catch (failure) { if (!disposed && !attempt.signal.aborted) { measurementError = failure instanceof Error ? failure.message : 'Traffic measurements unavailable'; measurementLoading = false;
+        if (measurementSnapshot) measurementSnapshot = { ...measurementSnapshot, state: 'partial', summaries: measurementSnapshot.summaries.map(summary => ({ ...summary, partial: true })) }; } }
+      finally { if (request === attempt) { request = null; if (!disposed && !document.hidden) timer = setTimeout(() => void refresh(), delay); } }
+    }
+    const visibility = () => { clearTimeout(timer); if (document.hidden) { request?.abort(); request = null; } else void refresh(); };
+    void refresh(); document.addEventListener('visibilitychange', visibility);
+    return () => { disposed = true; request?.abort(); clearTimeout(timer); document.removeEventListener('visibilitychange', visibility); };
   });
   onMount(() => {
     const lifetime = new AbortController();
@@ -605,6 +657,15 @@
         </details>
         <details name="exploration"><summary><ConsoleIcon name="transport" /><span>Transport<small>Movement &amp; connection</small></span></summary>
     <div class="layer-list">{#each modes as mode (mode)}<label class="layer-control"><input type="checkbox" aria-label={modeNames[mode]} bind:checked={layers[mode]} /><span class="mode-swatch" style:background={MODE_COLOURS[mode]}></span><span class="mode-label">{modeNames[mode]}</span><small aria-label={`${availableVehicles.filter(vehicle => vehicle.mode === mode).length} reports`}>{availableVehicles.filter(vehicle => vehicle.mode === mode).length}</small></label>{/each}
+          <label class="layer-control"><input type="checkbox" bind:checked={layers.trafficMeasurements} /><span class="station-swatch traffic-counter" aria-hidden="true">●</span><span>Traffic measurements</span><small>{counterStations.length}</small></label>
+          {#if layers.trafficMeasurements}
+            <div class="measurement-controls">
+              <label class="filter-label">Measurement mode<select bind:value={measurementMode}>{#each MEASUREMENT_MODES as mode (mode.key)}<option value={mode.key}>{mode.label}</option>{/each}</select></label>
+              <p class="panel-note" role="status">{measurementLoading ? 'Loading traffic measurements…' : measurementError || measurementSnapshot?.error || `Measurements · ${measurementState} · ${counterStations.length} counters`}</p>
+              {#if measurementSnapshot?.sources.some(source => source.error)}<p class="panel-note">Some sources are unavailable or partial. Retained readings keep their original dates.</p>{/if}
+              {#if measurementNotice}<p class="panel-note" role="status">{measurementNotice}</p>{/if}
+            </div>
+          {/if}
           <label class="layer-control"><input type="checkbox" bind:checked={layers.railStations} /><span class="station-swatch rail" aria-hidden="true">▣</span><span>Rail stations</span></label>
           {#if layers.train}<details class="rail-filters"><summary>Train categories</summary>{#each RAIL_CATEGORIES as category (category)}<label class="layer-control"><input type="checkbox" bind:checked={layers[category]} /><span>{label(category)}</span></label>{/each}</details>{/if}
           <div class="rail-summary"><strong>Rail · {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'}</strong><span>{freshRail.length} fresh · {railVehicles.length - freshRail.length} stale</span><span>{railDelayed} delayed · {railUnknown} delay unknown</span></div>
@@ -656,9 +717,11 @@
     {#if legendVisible}<button id="legend-trigger" class="legend-shortcut" aria-expanded={activePanel === 'legend'} aria-controls="building-legend-body" onclick={() => setActivePanel(activePanel === 'legend' ? null : 'legend')}>{legendLabel}<span>Legend ↗</span></button>{/if}
     {#if selected}
     <aside class="right-stack" class:mobile-active={activePanel === 'inspect'} aria-label="Map information">
-      <section class="panel inspector" class:observation-inspector={observationInspector} id="identity-inspector" aria-label="Inspector">
-        {#if !observationInspector}
-        <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setActivePanel(null)}>×</button></div><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || selected.station.kind === 'rail' ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
+      <section class="panel inspector" class:observation-inspector={observationInspector} class:traffic-inspector={!!selectedCounter} id="identity-inspector" aria-label="Inspector">
+        {#if selectedCounter}
+        <div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name="traffic-measurement" />{selectedCounter.source} · counter {selectedCounter.upstreamId}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
+        {:else if !observationInspector}
+        <div class="mobile-sheet-heading"><strong>Inspect</strong><button class="icon-button" aria-label="Close inspector sheet" onclick={() => setActivePanel(null)}>×</button></div><div class="panel-heading"><h2 id="inspection-heading" tabindex="-1"><ConsoleIcon name={selected.kind === 'building' ? 'buildings' : selected.kind === 'vehicle' || (selected.station.kind === 'rail' || selected.station.kind === 'traffic-counter') ? 'transport' : 'environment'} />{selected.kind === 'building' ? 'Building' : selected.kind === 'vehicle' ? 'Vehicle information' : selected.station.kind === 'rail' ? 'Station departures' : selected.station.kind === 'traffic-counter' ? 'Traffic measurements' : 'Station observations'}</h2><button class="icon-button" aria-label="Clear selection" onclick={() => clearSelection()}>×</button></div>
         {/if}
         {#if selected.kind === 'building'}
           {#key selected.building.id}<BuildingPhoto building={selected.building} {generation} base={city?.base} cache={city?.cache} />{/key}
@@ -710,6 +773,8 @@
             {@render vehicleFollow()}
             {/if}
             {#if itinerary}<VehicleItinerary {itinerary} loading={routeLoading} error={routeError} />{/if}
+          {:else if selectedCounter}
+            <TrafficCounterDetails counter={selectedCounter} counters={activeCounters.filter(counter => counter.modes.includes(measurementMode))} mode={measurementMode} {now} enabled={layers.trafficMeasurements} summaries={measurementSnapshot?.summaries ?? []} panel={activePanel} />
           {:else if selected?.kind === 'station' && selected.station.kind === 'rail'}
             <RailStationBoard station={selected.station} vehicles={availableVehicles} ontrain={(vehicle: Vehicle) => { layers.train = true; layers[vehicle.rail?.category ?? 'other'] = true; routeFilter = ''; selectObject({ kind: 'vehicle', vehicle }); }} />
           {:else if selected?.kind === 'station'}
@@ -763,13 +828,13 @@
   <dialog class="project-information about-modal" id="about-project" aria-labelledby="about-project-heading" use:showDialog onclose={() => informationModal = null} onpointerdown={dismissInformationBackdrop}>
     {@render informationHeading('about-project-heading', 'About this project', 'Close about this project')}
     <div class="drawer-content">
-      <div class="information-intro project-hero"><span class="eyebrow">ONE CITY. CONNECTED PERSPECTIVES.</span><h3>A city you can explore.<br />Connections you can inspect.</h3><p>Helsinki Lens is an interactive 3D city explorer by <a href="https://ai.ro/" target="_blank" rel="noreferrer">ai.ro</a>. It brings buildings, moving transport, environmental observations and energy records into one geographic view. The map gives you the context; the inspectors give you the evidence.</p><p>This exploratory digital twin connects public information to real places. You can move from a city-wide view to a building, a tram journey or a station reading, with source identities, dates and gaps close at hand.</p><ul class="project-stack" aria-label="Technology stack"><li>Svelte 5 / SvelteKit</li><li>Three.js</li><li>Node.js</li><li>SQLite</li><li>proj4</li></ul></div>
+      <div class="information-intro project-hero"><span class="eyebrow">ONE CITY. CONNECTED PERSPECTIVES.</span><h3>A city you can explore.<br />Connections you can inspect.</h3><p>Helsinki Lens is an interactive 3D city explorer by <a href="https://ai.ro/" target="_blank" rel="noreferrer">ai.ro</a>. It brings buildings, moving transport, traffic measurements, environmental observations and energy records into one geographic view. The map gives you the context; the inspectors give you the evidence.</p><p>This exploratory digital twin connects public information to real places. You can move from a city-wide view to a building, a tram journey, a traffic counter or a station reading, with source identities, dates and gaps close at hand.</p><ul class="project-stack" aria-label="Technology stack"><li>Svelte 5 / SvelteKit</li><li>Three.js</li><li>Node.js</li><li>SQLite</li><li>proj4</li></ul></div>
 
       <section class="project-section" aria-labelledby="project-explore-heading">
         <h3 id="project-explore-heading">What you can explore</h3>
         <div class="information-grid">
           <article><h4>The built city</h4><p>Navigate aerial imagery, terrain and textured 3D buildings. Search an address, select a building and inspect its identifiers, available register facts, permits and attributed photographs.</p></article>
-          <article><h4>Movement & connection</h4><p>Follow reported HSL trams, buses and ferries, Fintraffic trains and AIS ships. Inspect matched scheduled journeys, routes and stops, or open station departure boards and harbour cameras.</p></article>
+          <article><h4>Movement & connection</h4><p>Follow reported HSL trams, buses and ferries, Fintraffic trains and AIS ships. Inspect matched scheduled journeys, routes and stops, or open station departure boards and harbour cameras. Explore City of Helsinki traffic measurements for vehicles, cycling and walking at fixed counters, with recent counts, histories and speeds where available.</p></article>
           <article><h4>Environmental context</h4><p>Inspect Kaisaniemi weather and Mannerheimintie nitrogen dioxide observations, including recent station histories. Each reading keeps its measurement time, unit and freshness.</p></article>
           <article><h4>Energy & sunlight</h4><p>Explore building themes and compatible energy histories. Measured property electricity, modeled building demand and annual incoming solar radiation remain separate quantities with their own coverage.</p></article>
         </div>
@@ -782,7 +847,7 @@
           <li><strong>Put the city on common ground.</strong> ETRS-GK25 coordinates become a local 3D scene in metres; elevations retain the N2000 height datum. Imagery, terrain and models keep their calibrated placement.</li>
           <li><strong>Connect records through identity.</strong> Building identifiers link compatible register, energy and solar records. Missing or ambiguous matches stay visible rather than becoming invented values.</li>
           <li><strong>Publish validated generations.</strong> Prepared assets and the private SQLite read database carry matching dataset generations. Manifest pointers change after successful publication; failed refreshes retain the previous valid data.</li>
-          <li><strong>Bring the changing city alongside it.</strong> The Node server shares live transport connections, retrieves observations and caches municipal imagery and models. The browser combines these services with the prepared city.</li>
+          <li><strong>Bring the changing city alongside it.</strong> The Node server shares live transport connections, retrieves station observations and LIDO-TIKU traffic measurements, and caches municipal imagery and models. The browser combines these services with the prepared city.</li>
         </ol>
       </section>
 
@@ -799,7 +864,7 @@
           </ol>
           <div class="architecture-inputs">
             <div><span class="eyebrow">LIVE TRANSPORT</span><strong>MQTT / REST → server → SSE</strong><p>Shared HSL, rail and AIS services send snapshots and updates to connected browsers.</p></div>
-            <div><span class="eyebrow">OBSERVATIONS</span><strong>Provider APIs → server → browser</strong><p>Weather, air quality and measured electricity use separate bounded services.</p></div>
+            <div><span class="eyebrow">OBSERVATIONS</span><strong>Provider APIs → server → browser</strong><p>Weather, air quality, measured electricity and LIDO-TIKU traffic measurements use separate bounded services. Traffic counters refresh through a shared server cache every five minutes.</p></div>
             <div><span class="eyebrow">IMAGERY & MODELS</span><strong>Municipal assets → disk cache → browser</strong><p>Visible imagery and textured buildings pass through the shared city-asset API.</p></div>
           </div>
           <figcaption id="system-architecture-caption">Reading the flow: preparation publishes reusable assets and a private database. SvelteKit serves metadata through APIs and prepared geometry through static files. Live services and the map cache supply the changing reports and visible municipal assets.</figcaption>
@@ -831,7 +896,7 @@
           <article><h4>Communities & curious people</h4><p>Follow a tram’s reported journey, look inside the data behind a familiar street, or explore the harbour through ships and cameras.</p></article>
         </div>
       </section>
-      <section class="information-note" aria-labelledby="project-coverage-heading"><h3 id="project-coverage-heading">What the view covers</h3><p>The prepared area extends from Lauttasaari and Munkkiniemi through Pasila/Käpylä to Herttoniemi. It is a bounded view of Helsinki, with different coverage and dates for each layer. Weather and air-quality readings describe their stations; energy models are estimates, and incoming sunlight is not generated electricity. Live reports retain their source timestamps, and unavailable records remain unavailable.</p><p>Data & sources in the header provides the current statuses, licences and detailed provenance.</p></section>
+      <section class="information-note" aria-labelledby="project-coverage-heading"><h3 id="project-coverage-heading">What the view covers</h3><p>The prepared area extends from Lauttasaari and Munkkiniemi through Pasila/Käpylä to Herttoniemi. It is a bounded view of Helsinki, with different coverage and dates for each layer. Traffic measurements cover sparse fixed counters with valid counts in the last 24 hours; publication delays vary by source. Weather and air-quality readings describe their stations; energy models are estimates, and incoming sunlight is not generated electricity. Live reports retain their source timestamps, and unavailable records remain unavailable.</p><p>Data & sources in the header provides the current statuses, licences and detailed provenance.</p></section>
       <div class="information-actions"><a href="https://ai.ro/" target="_blank" rel="noreferrer">Explore ai.ro ↗</a></div>
     </div>
     {@render informationFooter()}
@@ -856,21 +921,27 @@
   <dialog class="project-information sources-modal" id="sources" aria-labelledby="sources-heading" use:showDialog onclose={() => informationModal = null} onpointerdown={dismissInformationBackdrop}>
     {@render informationHeading('sources-heading', 'Data & Sources', 'Close sources')}
     <div class="drawer-content">
-        <div class="information-intro"><span class="eyebrow">PUBLIC DATA. SHARED CONTEXT.</span><h3>A city, with its sources in view.</h3><p>Helsinki Lens brings public city models, transport reports, station observations and building records together. Each source has its own coverage, date and interpretation.</p></div>
+        <div class="information-intro"><span class="eyebrow">PUBLIC DATA. SHARED CONTEXT.</span><h3>A city, with its sources in view.</h3><p>Helsinki Lens brings public city models, transport reports, traffic measurements, station observations and building records together. Each source has its own coverage, date and interpretation.</p></div>
         <div class="information-grid source-overview">
           <article><h4>City models & imagery</h4><p>City of Helsinki terrain, streets, semantic buildings and textured 3D models, with 2025 aerial imagery. Prepared coverage extends from Lauttasaari and Munkkiniemi through Pasila/Käpylä to Herttoniemi.</p><a href="https://kartta.hel.fi/3d/" target="_blank" rel="noreferrer">© City of Helsinki · CC BY 4.0 ↗</a></article>
           <article><h4>Transport</h4><p>Reported HSL tram, bus and ferry positions; Fintraffic rail and AIS ship reports; prepared routes and timetables. Source timestamps distinguish recent reports from retained positions.</p><a href="https://digitransit.fi/en/developers/apis/" target="_blank" rel="noreferrer">HSL / Digitransit ↗</a><a href="https://www.digitraffic.fi/en/" target="_blank" rel="noreferrer">Fintraffic / Digitraffic · CC BY 4.0 ↗</a></article>
+          <article><h4>Traffic measurements</h4><p>City of Helsinki LIDO-TIKU counts for vehicles, cycling and walking at fixed counters, with speeds where available. Explore valid counts from the last 24 hours; sparse coverage and publication delays vary by source.</p><a href="https://hri.fi/data/en/dataset/helsingin-liikennemittausten-tilastorajapinta" target="_blank" rel="noreferrer">City of Helsinki · CC BY 4.0 · HRI dataset ↗</a><a href="https://lidotiku.api.hel.fi/api/" target="_blank" rel="noreferrer">LIDO-TIKU API ↗</a></article>
           <article><h4>Environment</h4><p>FMI weather observations at Helsinki Kaisaniemi and HSY air-quality observations via FMI at Mannerheimintie. Current air-quality coverage is one station’s nitrogen dioxide reading.</p><a href="https://en.ilmatieteenlaitos.fi/open-data" target="_blank" rel="noreferrer">FMI / HSY · CC BY 4.0 ↗</a></article>
           <article><h4>Building records & energy</h4><p>Ryhti building and permit records, Nuuka property electricity, modeled building demand and annual solar radiation. Property measurements, modeled demand and incoming sunlight describe different things; coverage varies by building.</p><a href="https://ryhti.syke.fi/en/" target="_blank" rel="noreferrer">Ryhti / SYKE ↗</a><a href="https://helsinki-openapi.nuuka.cloud/swagger/Nuuka%20Open%20API/swagger.json" target="_blank" rel="noreferrer">Nuuka source reference ↗</a></article>
           <article class="information-wide"><h4>Cameras & photographs</h4><p>Six selected Fintraffic road-weather cameras show dated snapshots. Port of Helsinki cameras provide harbour views; the Vuosaari camera is outside the map’s prepared area. Some building photos are matched through Wikidata identifiers and supplied by Wikimedia Commons.</p><p>Camera availability depends on its provider. Building photographs retain their author, source page and individual licence in the inspector; port-camera media follows the provider’s terms.</p><a href="https://www.digitraffic.fi/en/road-traffic/" target="_blank" rel="noreferrer">Road cameras · Fintraffic · CC BY 4.0 ↗</a><a href="https://www.portofhelsinki.fi/en/about-us/port-of-helsinki/web-camera-south-harbour/" target="_blank" rel="noreferrer">Port of Helsinki cameras ↗</a><a href="https://commons.wikimedia.org/" target="_blank" rel="noreferrer">Wikimedia Commons · per-photo licences ↗</a></article>
         </div>
-        <section class="information-status" aria-label="Current data status"><h3>Current data status</h3><p>HSL: {hslLive ? 'connected' : traffic.status.state} · Rail: {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'} · Ships: {marineState}</p><p>Energy: {energyLoading ? 'loading' : energy.status} · Ryhti: {ryhtiLoading ? 'loading' : ryhti.status}</p>{#each observationSnapshot?.sources ?? [] as source (source.id)}<p>{source.provider}: {source.state} · {source.message}</p>{/each}{#if observationError}<p class="notice">Observation refresh unavailable · {observationError}</p>{/if}<p>Expand the source details below for timestamps, outages, individual licences and coverage evidence.</p></section>
+        <section class="information-status" aria-label="Current data status"><h3>Current data status</h3><p class="measurement-source-status">Traffic measurements: {measurementSourceState} · {activeCounters.length} counters with valid counts in the last 24 hours{#if !layers.trafficMeasurements} · browser refresh paused (layer disabled){/if}</p>{#if measurementError || measurementSnapshot?.error}<p class="notice">{measurementError || measurementSnapshot?.error}</p>{/if}<p>HSL: {hslLive ? 'connected' : traffic.status.state} · Rail: {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'} · Ships: {marineState}</p><p>Energy: {energyLoading ? 'loading' : energy.status} · Ryhti: {ryhtiLoading ? 'loading' : ryhti.status}</p>{#each observationSnapshot?.sources ?? [] as source (source.id)}<p>{source.provider}: {source.state} · {source.message}</p>{/each}{#if observationError}<p class="notice">Observation refresh unavailable · {observationError}</p>{/if}<p>Expand the source details below for timestamps, outages, individual licences and coverage evidence.</p></section>
         <section class="potential-sources" aria-labelledby="potential-sources-heading"><h3 id="potential-sources-heading">Potential sources — not yet integrated</h3><p class="panel-note">Research directions checked on 10 October 2026. These datasets are candidates for future work and are not displayed in this view.</p><ol>{#each potentialSources as source (source.name)}<li><h4><a href={source.url} target="_blank" rel="noreferrer">{source.name} ↗</a></h4><p>{source.description}</p><p class="panel-note">{source.limitation}</p></li>{/each}</ol></section>
         <details class="source-diagnostics"><summary>Live status, attribution & technical details</summary>
       <h3>Environmental freshness & outages</h3>
       {#if observationLoading && !observationSnapshot}<p class="notice">Loading observations…</p>{/if}{#if observationError}<p class="notice">Unavailable refresh · {observationError}</p>{/if}
       {#each observationSnapshot?.sources ?? [] as source (source.id)}<details class="source-record"><summary>{source.provider} · <span class="badge {source.state}">{source.state}</span></summary><p class="panel-note">{source.message}</p>{#if source.lastError}<p class="notice">Outage: {source.lastError}</p>{/if}<p class="panel-note">{source.attribution}</p><a href={source.url} target="_blank" rel="noreferrer">Source query reference ↗</a><dl class="properties"><div><dt>Observed</dt><dd>{formatDate(source.observedAt)}</dd></div><div><dt>Retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>Metadata retrieved</dt><dd>{formatDate(source.metadataRetrievedAt)}</dd></div><div><dt>Last check</dt><dd>{formatDate(source.lastAttemptAt)}</dd></div><div><dt>Next eligible check</dt><dd>{formatDate(source.nextRefreshAt)}</dd></div><div><dt>Refresh check</dt><dd>{source.refreshMs / 60_000} min</dd></div><div><dt>Vintage / window</dt><dd>{source.vintage ?? 'Unknown'}</dd></div><div><dt>License</dt><dd>{source.license}</dd></div><div><dt>Coverage</dt><dd>{source.coverage}</dd></div><div><dt>Resolution</dt><dd>{source.resolution}</dd></div><div><dt>Units</dt><dd>{source.units.join(', ') || 'Unknown'}</dd></div><div><dt>Parameters</dt><dd>{source.parameters.join(', ')}</dd></div></dl>{#if source.requests?.length}<details><summary>Actual bounded source requests</summary>{#each source.requests as request, index (index)}<a href={request.url} target="_blank" rel="noreferrer">Request {index + 1} ↗</a><p class="panel-note">Retrieved {formatDate(request.retrievedAt)} · received {formatDate(request.receivedAt)}</p>{/each}</details>{/if}</details>{/each}
 
+      <h3>Traffic measurements · City of Helsinki</h3>
+      <p class="panel-note">{measurementSourceState} · {activeCounters.length} counters with valid counts in this map area · snapshot generated {formatDate(measurementSnapshot?.generatedAt)}.{#if !layers.trafficMeasurements} Browser refresh paused (layer disabled).{/if} {measurementError || measurementSnapshot?.error || ''}</p>
+      <p class="panel-note">Source: City of Helsinki, LIDO-TIKU API · CC BY 4.0. Counts and speeds are measured at fixed points. Sparse counters do not describe every street, and publication delays vary by source. Only counters with valid counts in the last 24 hours are shown. Refresh checks run every {MEASUREMENT_REFRESH_MS / 60_000} minutes; this does not establish the provider’s publication cadence. Counts retain their measured interval. Hourly equivalents are calculated from that interval, and partial histories keep a notice. Missing readings stay missing; a measured zero remains zero.</p>
+      <a href="https://hri.fi/data/en/dataset/helsingin-liikennemittausten-tilastorajapinta" target="_blank" rel="noreferrer">HRI dataset ↗</a> · <a href="https://lidotiku.api.hel.fi/api/" target="_blank" rel="noreferrer">LIDO-TIKU API ↗</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a>
+      {#each measurementSnapshot?.sources ?? [] as source (source.name)}<details class="source-record"><summary>{source.name} · {source.state}</summary><p class="panel-note">{source.description}</p>{#if source.error}<p class="notice">{source.error}</p>{/if}<dl class="properties"><div><dt>Latest recent measurement</dt><dd>{formatDate(source.observedAt)}</dd></div><div><dt>Measurements retrieved</dt><dd>{formatDate(source.retrievedAt)}</dd></div><div><dt>License</dt><dd>{source.license}</dd></div></dl></details>{/each}
       <h3>Rail traffic · Fintraffic Digitraffic</h3><p class="panel-note">Positions: {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'} · last report {formatDate(traffic.sources?.rail?.lastPositionAt)}. {traffic.sources?.rail?.error ?? ''}</p><p class="panel-note">Station catalog: {railStations?.state ?? 'loading'} · checked {formatDate(railStations?.retrievedAt)}. {railStationsError}</p><a href="https://www.digitraffic.fi/en/railway-traffic/" target="_blank" rel="noreferrer">Fintraffic railway data · CC BY 4.0 ↗</a>
       <h3>Ships · Fintraffic Digitraffic</h3><p class="panel-note">{marineState} · last local position report {formatDate(marineSource?.lastPositionAt)}. Last source update {formatDate(marineSource?.feedUpdatedAt)}. {marineSource?.positionError ?? marineSource?.error ?? ''}</p><p class="panel-note">Marine data: Fintraffic / Digitraffic, CC BY 4.0.</p><a href="https://www.digitraffic.fi/en/marine-traffic/" target="_blank" rel="noreferrer">Fintraffic marine data ↗</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a>
       <h3>HSL traffic</h3><p class="panel-note">Browser stream: {hslLive ? 'connected' : 'paused / disconnected'} · last upstream state: {traffic.status.state}. Last provider report {formatDate(traffic.status.lastPositionAt)}. {trafficError}</p>

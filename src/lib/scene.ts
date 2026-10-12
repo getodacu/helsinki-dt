@@ -1,3 +1,4 @@
+import type { TrafficCounterSummary } from './traffic-measurements.ts';
 import type { VehicleItinerary } from './itinerary.ts';
 import type { RailCategory } from './rail.ts';
 import * as THREE from 'three';
@@ -26,13 +27,13 @@ import { NO_ENERGY_COLOUR } from './energy-display.ts';
 
 export type CameraPreset = 'city' | 'harbour' | 'suomenlinna' | 'energy' | 'central' | 'pasila';
 export interface SceneStation {
-  id: string; name: string; longitude: number; latitude: number; kind: 'weather' | 'air-quality' | 'rail' | 'camera' | 'port-camera'; sourceIds: string[];
+  id: string; name: string; longitude: number; latitude: number; kind: 'weather' | 'air-quality' | 'rail' | 'camera' | 'port-camera' | 'traffic-counter'; sourceIds: string[]; colour?: string; detail?: string; trafficSummary?: TrafficCounterSummary;
 }
 export type Selection = { kind: 'building'; building: Building; unloaded?: boolean }
   | { kind: 'vehicle'; vehicle: Vehicle; removed?: boolean }
   | { kind: 'station'; station: SceneStation };
-export type Layers = Record<TransitMode | 'buildings' | 'roads' | 'terrain' | 'weather' | 'airQuality' | 'imagery' | 'railStations' | RailCategory, boolean>;
-export const INITIAL_LAYERS: Layers = { imagery: true, buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, train: true, ship: true, railStations: true, commuter: true, 'long-distance': true, freight: true, other: true, weather: true, airQuality: true };
+export type Layers = Record<TransitMode | 'buildings' | 'roads' | 'terrain' | 'weather' | 'airQuality' | 'imagery' | 'railStations' | 'trafficMeasurements' | RailCategory, boolean>;
+export const INITIAL_LAYERS: Layers = { imagery: true, buildings: true, roads: true, terrain: true, tram: true, bus: true, ferry: true, train: true, ship: true, railStations: true, trafficMeasurements: true, commuter: true, 'long-distance': true, freight: true, other: true, weather: true, airQuality: true };
 export type SceneStats = { fps: number; drawCalls: number; triangles: number; geometries: number;
   loadedChunks: number; vehicles: number; unplacedVehicles: number; lastReceiptLatencyMs: number | null };
 type Callbacks = { onWebcamSelect?: (camera: Webcam) => void; onPortCameraSelect?: (harbour: PortHarbour) => void; onSelection: (selection: Selection | null, message?: string) => void;
@@ -412,7 +413,7 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   const heldKeys = new Set<string>();
   const keyboardBlocked = (target: EventTarget | null = document.activeElement) => !keyboardNavigation || !initiallyReady || document.hidden
     || (target instanceof HTMLElement && (target.isContentEditable || !!target.closest('input, textarea, select, button, a[href], summary, [role="button"], [role="tabpanel"], [role="textbox"]')))
-    || !!document.querySelector('dialog[open]');
+    || !!document.querySelector('dialog[open], [popover]:popover-open');
   const stopKeyboard = () => { if (!heldKeys.size) return; heldKeys.clear(); cache.setInteracting(pointerInteracting); };
   const windowBlur = () => { pointerInteracting = false; stopKeyboard(); cache.setInteracting(false); };
   const keyDown = (event: KeyboardEvent) => {

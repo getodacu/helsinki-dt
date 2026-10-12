@@ -1,0 +1,18 @@
+{
+  "next": "https://lidotiku.api.hel.fi/api/observations/?counter=100008546&cursor=cD0lNUIlMjIyMDI2LTA3LTA1KzEwJTNBMDAlM0EwMCUyQjAwJTNBMDAlMjIlMkMrJTIyMTAwMDA4NTQ2JTIyJTJDKyUyMmNvdW50JTIyJTJDKyUyMmJpY3ljbGUlMjIlMkMrJTIyJTIyJTVE&page_size=1",
+  "previous": null,
+  "results": [
+    {
+      "typeofmeasurement": "count",
+      "phenomenondurationseconds": 3600,
+      "vehicletype": "bicycle",
+      "direction": "",
+      "unit": "n",
+      "value": 24,
+      "datetime": "2026-07-05T13:00:00+03:00",
+      "source": "EcoCounter",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/100008546/",
+      "counterId": 100008546
+    }
+  ]
+}

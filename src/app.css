@@ -104,9 +104,13 @@ summary { cursor: pointer; font-size: 13px; line-height: 1.6; min-height: 44px; 
 .station-flag.rail { color: #b29bd8; }
 .station-flag.weather, .station-flag.air-quality, .station-flag.camera, .station-flag.port-camera { width: 56px; height: 60px; color: #ed765f; }
 .station-flag.camera, .station-flag.port-camera { color: var(--teal); }
+.station-flag.traffic-counter { width: 44px; height: 48px; color: #ef4444; border-color: currentColor; }
 .station-flag::after { height: 26px; }
 .station-flag.weather::after, .station-flag.air-quality::after, .station-flag.camera::after, .station-flag.port-camera::after { height: 60px; border-color: currentColor; }
+.station-flag.traffic-counter::after { height: 14px; border-color: currentColor; }
 .station-flag svg { width: 26px; height: 26px; flex-shrink: 0; }
 .station-flag small { font-size: 9px; line-height: 1.4; text-transform: uppercase; }
+.station-flag.traffic-counter svg { width: 18px; height: 18px; }
+.station-flag.traffic-counter small { font-size: 7.5px; letter-spacing: -.25px; line-height: 1.1; text-transform: none; white-space: nowrap; }
 .station-flag.selected, .station-flag:hover, .station-flag:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; z-index: 1; }
 @media(prefers-reduced-motion:reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

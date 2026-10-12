@@ -65,6 +65,20 @@ async (page) => {
       lastError: 'Fixture weather refresh unavailable',
       requests: [{ url: 'https://opendata.fmi.fi/wfs?request=GetFeature', retrievedAt: observedAt, receivedAt: observedAt }] }]
   };
+  let measurementState = 'ready', measurementRequests = 0;
+  const counter = { id: 'HEL LAM:6373', upstreamId: '6373', name: 'Fixture traffic counter', source: 'HEL LAM', sourceId: null,
+    longitude: 24.94, latitude: 60.17, modes: ['vehicles'], firstObservedAt: null, lastObservedAt: null };
+  const count = { counterId: counter.id, mode: 'vehicles', observedAt, retrievedAt: new Date(Date.now() - 600_000).toISOString(),
+    durationSeconds: 900, value: 19, hourlyEquivalent: 76, complete: true };
+  const measurementsRoute = route => {
+    measurementRequests++;
+    const recent = ['ready', 'partial'].includes(measurementState);
+    return route.fulfill({ json: { generatedAt: new Date().toISOString(), state: measurementState,
+      counters: recent ? [counter] : [], summaries: recent ? [{ counterId: counter.id, mode: 'vehicles', latest: count, maximum: count, partial: measurementState === 'partial' }] : [],
+      sources: [{ name: counter.source, description: 'Fixture vehicle counts.', license: 'CC BY 4.0', state: measurementState,
+        observedAt: recent ? observedAt : null, retrievedAt: count.retrievedAt,
+        error: ['partial', 'unavailable'].includes(measurementState) ? 'Fixture traffic source unavailable' : null }], error: null } });
+  };
   const observationsRoute = route => route.fulfill({ json: observations });
   const catalogRoute = async route => {
     const response = await route.fetch();
@@ -75,6 +89,7 @@ async (page) => {
   };
   try {
     if (await page.locator('dialog[open]').count()) await page.keyboard.press('Escape');
+    await page.route('**/api/traffic-measurements', measurementsRoute);
     await page.route('**/api/observations', observationsRoute);
     await page.route('**/api/catalog/status', catalogRoute);
     const loadedObservations = page.waitForResponse(response => new URL(response.url()).pathname === '/api/observations');
@@ -83,16 +98,35 @@ async (page) => {
     await loadedObservations;
     await page.locator('.sensor-reading[data-parameter="t2m"]').click();
     await page.locator('#identity-inspector').waitFor();
+    const requestsBeforeSources = measurementRequests;
     const dialog = await open(modals[2]);
     await page.waitForFunction(() => document.querySelector('.information-status')?.textContent.includes('Fixture retained weather observations.'));
     await page.waitForFunction(() => document.querySelector('.information-status')?.textContent.includes('Energy: unavailable'));
-    check(await dialog.locator('.source-overview article').count() === 5, 'Source overview incomplete');
-    check(await dialog.locator('.potential-sources li').count() === 10, 'Potential shortlist incomplete');
+    await page.waitForFunction(() => document.querySelector('.measurement-source-status')?.textContent.includes('Traffic measurements: ready · 1 counters'));
+    check(measurementRequests === requestsBeforeSources, 'Opening sources made a traffic measurement request');
+    check(await dialog.locator('.source-overview article').count() === 6, 'Source overview incomplete');
+    const measurementCard = dialog.locator('.source-overview article').filter({ has: page.getByRole('heading', { name: 'Traffic measurements', exact: true }) });
+    for (const fact of ['vehicles, cycling and walking', 'last 24 hours', 'speeds where available', 'City of Helsinki', 'CC BY 4.0']) {
+      check((await measurementCard.innerText()).includes(fact), `Traffic overview missing: ${fact}`);
+    }
+    check(await measurementCard.getByRole('link', { name: 'LIDO-TIKU API ↗', exact: true }).getAttribute('href') === 'https://lidotiku.api.hel.fi/api/', 'Traffic API link missing');
+    check(await measurementCard.locator('a[href="https://hri.fi/data/en/dataset/helsingin-liikennemittausten-tilastorajapinta"]').count() === 1, 'Traffic dataset link missing');
+    check(await dialog.locator('.potential-sources li').count() === 9, 'Potential shortlist incomplete');
     check((await dialog.locator('.potential-sources li').first().innerText()).includes('Allu'), 'Allu is not first');
     check((await dialog.locator('.potential-sources').innerText()).includes('not yet integrated'), 'Candidates presented as integrated');
+    check(!/LIDO-TIKU|Walking\/cycling\/vehicle counters/.test(await dialog.locator('.potential-sources').innerText()), 'Integrated traffic counters remain in candidates');
     check((await dialog.locator('.source-overview').innerText()).includes('per-photo licences'), 'Photo rights missing');
     const diagnostics = dialog.locator('.source-diagnostics');
     await diagnostics.locator(':scope > summary').click();
+    check((await diagnostics.innerText()).includes('snapshot generated'), 'Snapshot generation is not labelled');
+    check((await diagnostics.innerText()).includes('Refresh checks run every 5 minutes'), 'Traffic refresh interval missing');
+    const measurementSource = diagnostics.locator('.source-record').filter({ hasText: 'Fixture vehicle counts.' });
+    await measurementSource.locator(':scope > summary').click();
+    for (const fact of ['Latest recent measurement', 'Measurements retrieved', 'CC BY 4.0']) {
+      check((await measurementSource.innerText()).includes(fact), `Traffic provenance missing: ${fact}`);
+    }
+    const dates = await measurementSource.locator('dd').allTextContents();
+    check(dates[0] !== dates[1], 'Measurement and retrieval times were conflated');
     const weather = diagnostics.locator('.source-record').filter({ hasText: 'Fixture retained weather observations.' });
     await weather.locator(':scope > summary').click();
     check((await weather.innerText()).includes('Fixture weather refresh unavailable'), 'Weather outage missing');
@@ -110,7 +144,7 @@ async (page) => {
     await close(modals[2], 'button');
     const about = await open(modals[0]);
     const aboutText = await about.innerText();
-    for (const fact of ['What you can explore', 'How it was built', 'ETRS-GK25', 'N2000', 'SQLite', 'SSE', 'Planners & public institutions', 'Researchers & educators', 'unavailable records remain unavailable']) {
+    for (const fact of ['What you can explore', 'How it was built', 'traffic measurements', 'vehicles, cycling and walking', 'LIDO-TIKU', 'last 24 hours', 'ETRS-GK25', 'N2000', 'SQLite', 'SSE', 'Planners & public institutions', 'Researchers & educators', 'unavailable records remain unavailable']) {
       check(aboutText.includes(fact), `Project explanation missing: ${fact}`);
     }
     check(await about.locator('figure.architecture-diagram').count() === 2, 'Architecture diagrams missing');
@@ -126,6 +160,33 @@ async (page) => {
     check(await collaboration.getByRole('link', { name: 'Let’s talk ↗', exact: true }).getAttribute('href') === 'https://ai.ro/#contact', 'Contact destination incorrect');
     check(await collaboration.getByRole('link', { name: 'Explore ai.ro ↗', exact: true }).getAttribute('href') === 'https://ai.ro/', 'Studio destination incorrect');
     await close(modals[1]);
+    // Toggle the existing layer to request each cached fixture state without waiting five minutes.
+    const transport = page.locator('#exploration-panel details').filter({ has: page.locator(':scope > summary', { hasText: 'Movement & connection' }) }).first();
+    if (!await transport.evaluate(element => element.open)) await transport.locator(':scope > summary').click();
+    const measurementLayer = transport.locator('label.layer-control').filter({ hasText: 'Traffic measurements' }).locator('input');
+    for (const state of ['loading', 'ready', 'dated', 'partial', 'unavailable']) {
+      await measurementLayer.uncheck(); measurementState = state;
+      const response = page.waitForResponse(response => new URL(response.url()).pathname === '/api/traffic-measurements');
+      await measurementLayer.check(); await response;
+      const sources = await open(modals[2]);
+      await page.waitForFunction(state => document.querySelector('.measurement-source-status')?.textContent.includes(`Traffic measurements: ${state}`), state);
+      const status = await sources.locator('.measurement-source-status').innerText();
+      check(status.includes(`${['ready', 'partial'].includes(state) ? 1 : 0} counters`), `Incorrect ${state} counter coverage`);
+      if (['partial', 'unavailable'].includes(state)) {
+        await sources.locator('.source-diagnostics > summary').click();
+        const source = sources.locator('.source-record').filter({ hasText: 'Fixture vehicle counts.' });
+        await source.locator(':scope > summary').click();
+        check((await source.innerText()).includes('Fixture traffic source unavailable'), `${state} outage missing`);
+      }
+      await close(modals[2]);
+    }
+    await measurementLayer.uncheck();
+    const paused = await open(modals[2]);
+    check((await paused.locator('.measurement-source-status').innerText()).includes('browser refresh paused (layer disabled)'), 'Disabled layer polling status missing');
+    await close(modals[2]);
+    measurementState = 'ready';
+    const resumed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/traffic-measurements');
+    await measurementLayer.check(); await resumed;
     const copyright = page.locator('.scene-footer .project-copyright');
     await inViewport(copyright);
     check(await copyright.innerText() === `© ${new Date().getFullYear()} ai.ro`, 'Map copyright year incorrect');
@@ -193,11 +254,12 @@ async (page) => {
       await page.setViewportSize({ width: 1440, height: 900 });
       await close(modal);
     }
-    return { projectModals: 3, diagrams: 2, provenance: true, outages: true, keyboardFocus: true, dismissal: true, freshScroll: true, compactMenu: true, viewports: 6 };
+    return { projectModals: 3, diagrams: 2, provenance: true, outages: true, trafficMeasurementStates: 6, keyboardFocus: true, dismissal: true, freshScroll: true, compactMenu: true, viewports: 6 };
   } catch (error) {
     await page.screenshot({ path: 'output/playwright/project-information-failure.png' });
     throw error;
   } finally {
+    await page.unroute('**/api/traffic-measurements', measurementsRoute);
     await page.unroute('**/api/observations', observationsRoute);
     await page.unroute('**/api/catalog/status', catalogRoute);
     if (await page.locator('dialog[open]').count()) await page.keyboard.press('Escape');

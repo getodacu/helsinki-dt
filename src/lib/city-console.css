@@ -314,3 +314,10 @@
   .left-stack, .right-stack { bottom: 94px; max-height: calc(100% - 110px); }
   .camera-presets { bottom: 100px; }
 }
+
+.station-swatch.traffic-counter { color: #ef4444; }
+.measurement-controls { margin: 6px 0 12px; }
+.traffic-inspector > .panel-heading { top: 0; padding: 2px 12px; }
+.traffic-inspector > .panel-heading h2 { font-size: 13px; letter-spacing: 0; }
+.traffic-inspector > .panel-heading h2 svg { color: #ef4444; }
+.traffic-inspector > .panel-content { padding: 10px 12px; }

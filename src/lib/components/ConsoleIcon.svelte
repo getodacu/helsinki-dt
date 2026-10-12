@@ -5,6 +5,7 @@
     terrain: 'M3 27L13 6l8 15 4-8 5 14z M9 14l4 3 3-3',
     roads: 'M9 2L5 30 M23 2l4 28 M16 3v5 M16 13v5 M16 23v6',
     explore: 'M4 7l7-3 8 3 7-3v21l-7 3-8-3-7 3z M11 4v21 M19 7v21',
+    'traffic-measurement': 'M4 25a13 13 0 1 1 24 0 M6 18h3 M9 8l3 3 M16 4v4 M23 8l-3 3 M23 18h3 M16 22l6-8 M18 22a2 2 0 1 1-4 0 2 2 0 0 1 4 0',
     transport: 'M11 5h10a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H11a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4z M8 16h16 M12 5V2 M20 5V2 M10 29l3-4 M22 29l-3-4 M11 21h2 M19 21h2',
     buildings: 'M5 28V12l12-6v22 M17 13h10v15 M3 28h26 M9 14v3 M13 12v3 M9 20v3 M13 18v3 M21 17v3 M24 17v3 M21 23v3 M24 23v3',
     layers: 'M2 11l14-8 14 8-14 8z M2 17l14 8 14-8 M2 23l14 8 14-8',

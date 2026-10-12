@@ -1,0 +1,37 @@
+[
+  {
+    "name": "EcoCounter",
+    "license": "CC-BY-4.0",
+    "description": "Count measurements collected by the City of Helsinki pedestrian and cycle counters, and their observations specify which. Observations are collected with 1 hour or 15 minute precision and do not distinguish the direction of the traffic. Cf. https://data.eco-counter.com/ParcPublic/?id=5589 and https://developers.eco-counter.com/"
+  },
+  {
+    "name": "Fintraffic",
+    "license": "CC-BY-4.0",
+    "description": "Vehile count and average speed measurements collected in in the metropolitan area municipalities by Fintraffic LAM (induction loop) stations. Observations collected with 1 hour precision. Directions are destination locations as reported by Fintraffic, and the detected vehicle classes are according to it as well; thus the average speed measurements have less fine-grained classifying. Cf. https://www.fintraffic.fi/fi/tie/digitraffic-avoin-lam-data and https://www.digitraffic.fi/en/road-traffic/lam/"
+  },
+  {
+    "name": "HEL LAM",
+    "license": "CC-BY-4.0",
+    "description": "Vehicle count and average speed measurements collected by the City of Helsinki LAM (induction loop) stations. Observations collected with 15 minute precision; directions are distinguished by the major compass points except for bicycle counting. Those counters which measure average speeds also classify the observations by vehicle type. Cf. https://lamapi.azurewebsites.net/swagger/"
+  },
+  {
+    "name": "InfoTripla",
+    "license": "CC-BY-4.0",
+    "description": "Historical vehicle count measurements of the traffic that has disembarked at and exists from the City of Helsinki West Harbour as collected by laser detectors. Observations collected with 1 minute precision. Direction is always away from harbor; the heavy and light traffic vehicles have their own counters. The counters were deactivated on 5 February  and 30 September 2025, respectively."
+  },
+  {
+    "name": "LIVA",
+    "license": "CC-BY-4.0",
+    "description": "Vehicle count measurements collected by the induction loop detectors associated with the City of Helsinki traffic light sensors. Observations collected with 15 minute precision. Direction is not distinguished but each loop registers a single lane or set of lanes to the same direction (hence there is a large number of them), and they are named with a combination of identifiers: traffic light system (3 = Omnia, 5 = OmniVue), controller code, detector code. The realiability of the observations varies between the individual detectors, and the useable ones belonging to the same direction of lanes at a given junction have yet to be grouped together in the manner of the other LAM data sources. Furthermore, only about half of the all existing loops are available, as making the rest available as counters requires considerable manual work in e.g. defining their locations. Cf. https://aineisto.swarco.fi/ and https://aineisto.swarco.fi/docs"
+  },
+  {
+    "name": "Marksman",
+    "license": "CC-BY-4.0",
+    "description": "Historical vehicle count measurements collected by the City of Helsinki Marksman devices. Observations collected with 1 hour or 15 minute precision, depending on the time of day. Directions are distinguished as either towards or away from the counter, while different vehicle types have not been classified."
+  },
+  {
+    "name": "SmartJunction",
+    "license": "CC-BY-4.0",
+    "description": "Vehicle count, average speed (km/h) and acceleration (m/s2) measurements collected in the Jätkäsaari area of the City of Helsinki by virtual loop detectors which utilise radar data. Observations collected with 1 hour or 15 minute precision, and the detected vehicle types are classified. Directions are distinguished as either towards or away from the radar of a virtual loop, each of which registers the traffic for a single lane. The loops are named with a combination of the location of the radar (junction), the distance from it (in meters), and a lane number. Lanes Ax are arriving lanes while Dx are departing lanes with the letter T additionally denoting a tram lane. Cf. https://www.aalto.fi/en/department-of-built-environment/smart-junction and https://bitbucket.org/conveqs/conveqs_platform_interface/src/master/"
+  }
+]

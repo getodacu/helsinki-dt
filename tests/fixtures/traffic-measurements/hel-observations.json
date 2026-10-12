@@ -1,0 +1,126 @@
+{
+  "next": "https://lidotiku.api.hel.fi/api/observations/?counter=6373&cursor=cD0lNUIlMjIyMDI2LTEwLTEwKzIwJTNBMTUlM0EwMCUyQjAwJTNBMDAlMjIlMkMrJTIyNjM3MyUyMiUyQyslMjJjb3VudCUyMiUyQyslMjJNJTVDdTAwZTQlNUN1MDBlNHJpdHRlbGVtJTVDdTAwZTR0JTVDdTAwZjZuJTIyJTJDKyUyMkwlNUN1MDBlNG50ZWVuJTIyJTVE&end_date=2026-10-10&page_size=10&start_date=2026-10-10",
+  "previous": null,
+  "results": [
+    {
+      "typeofmeasurement": "count",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Itään",
+      "unit": "n",
+      "value": 19,
+      "datetime": "2026-10-10T23:45:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "count",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Länteen",
+      "unit": "n",
+      "value": 19,
+      "datetime": "2026-10-10T23:45:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "speed",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Itään",
+      "unit": "km/h",
+      "value": 0,
+      "datetime": "2026-10-10T23:45:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "speed",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Länteen",
+      "unit": "km/h",
+      "value": 0,
+      "datetime": "2026-10-10T23:45:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "count",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Itään",
+      "unit": "n",
+      "value": 25,
+      "datetime": "2026-10-10T23:30:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "count",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Länteen",
+      "unit": "n",
+      "value": 36,
+      "datetime": "2026-10-10T23:30:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "speed",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Itään",
+      "unit": "km/h",
+      "value": 0,
+      "datetime": "2026-10-10T23:30:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "speed",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Länteen",
+      "unit": "km/h",
+      "value": 0,
+      "datetime": "2026-10-10T23:30:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "count",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Itään",
+      "unit": "n",
+      "value": 30,
+      "datetime": "2026-10-10T23:15:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    },
+    {
+      "typeofmeasurement": "count",
+      "phenomenondurationseconds": 900,
+      "vehicletype": "Määrittelemätön",
+      "direction": "Länteen",
+      "unit": "n",
+      "value": 19,
+      "datetime": "2026-10-10T23:15:00+03:00",
+      "source": "HEL LAM",
+      "counter": "https://lidotiku.api.hel.fi/api/counters/6373/",
+      "counterId": 6373
+    }
+  ]
+}

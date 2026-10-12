@@ -1,0 +1,631 @@
+{
+  "count": 27,
+  "next": null,
+  "previous": null,
+  "results": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "id": 4667,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.962192,
+            60.19967
+          ]
+        },
+        "properties": {
+          "id": 4667,
+          "name": "HEL409",
+          "source": "HEL LAM",
+          "sourceId": 4667,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-08-31T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4668,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.946106,
+            60.199475
+          ]
+        },
+        "properties": {
+          "id": 4668,
+          "name": "HEL510",
+          "source": "HEL LAM",
+          "sourceId": 4668,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4702,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.958575,
+            60.176326
+          ]
+        },
+        "properties": {
+          "id": 4702,
+          "name": "HEL508",
+          "source": "HEL LAM",
+          "sourceId": 4702,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4703,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.888736,
+            60.19586
+          ]
+        },
+        "properties": {
+          "id": 4703,
+          "name": "HEL412",
+          "source": "HEL LAM",
+          "sourceId": 4703,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4704,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.950428,
+            60.178102
+          ]
+        },
+        "properties": {
+          "id": 4704,
+          "name": "HEL533",
+          "source": "HEL LAM",
+          "sourceId": 4704,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4705,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.922612,
+            60.176801
+          ]
+        },
+        "properties": {
+          "id": 4705,
+          "name": "HEL537",
+          "source": "HEL LAM",
+          "sourceId": 4705,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-09-29T12:00:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4706,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.914831,
+            60.207542
+          ]
+        },
+        "properties": {
+          "id": 4706,
+          "name": "HEL539",
+          "source": "HEL LAM",
+          "sourceId": 4706,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4707,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.884264,
+            60.192171
+          ]
+        },
+        "properties": {
+          "id": 4707,
+          "name": "HEL542",
+          "source": "HEL LAM",
+          "sourceId": 4707,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4708,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.926465,
+            60.204277
+          ]
+        },
+        "properties": {
+          "id": 4708,
+          "name": "HEL545",
+          "source": "HEL LAM",
+          "sourceId": 4708,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4709,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.941892,
+            60.170543
+          ]
+        },
+        "properties": {
+          "id": 4709,
+          "name": "HEL411",
+          "source": "HEL LAM",
+          "sourceId": 4709,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-07-14T18:15:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4710,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.898868,
+            60.205604
+          ]
+        },
+        "properties": {
+          "id": 4710,
+          "name": "HEL501",
+          "source": "HEL LAM",
+          "sourceId": 4710,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-02-03T13:15:00+02:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4711,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.884046,
+            60.252841
+          ]
+        },
+        "properties": {
+          "id": 4711,
+          "name": "HEL504",
+          "source": "HEL LAM",
+          "sourceId": 4711,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4713,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.934237,
+            60.184879
+          ]
+        },
+        "properties": {
+          "id": 4713,
+          "name": "HEL507",
+          "source": "HEL LAM",
+          "sourceId": 4713,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-10-10T12:30:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4715,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.134079,
+            60.231812
+          ]
+        },
+        "properties": {
+          "id": 4715,
+          "name": "HEL528",
+          "source": "HEL LAM",
+          "sourceId": 4715,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4716,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.933596,
+            60.204412
+          ]
+        },
+        "properties": {
+          "id": 4716,
+          "name": "HEL529",
+          "source": "HEL LAM",
+          "sourceId": 4716,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4717,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.011979,
+            60.282258
+          ]
+        },
+        "properties": {
+          "id": 4717,
+          "name": "HEL543",
+          "source": "HEL LAM",
+          "sourceId": 4717,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4718,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.134486,
+            60.234391
+          ]
+        },
+        "properties": {
+          "id": 4718,
+          "name": "HEL601",
+          "source": "HEL LAM",
+          "sourceId": 4718,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4719,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.846637,
+            60.223604
+          ]
+        },
+        "properties": {
+          "id": 4719,
+          "name": "HEL608",
+          "source": "HEL LAM",
+          "sourceId": 4719,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2024-05-10T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4720,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.899218,
+            60.167015
+          ]
+        },
+        "properties": {
+          "id": 4720,
+          "name": "HEL609",
+          "source": "HEL LAM",
+          "sourceId": 4720,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 4721,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.844431,
+            60.181287
+          ]
+        },
+        "properties": {
+          "id": 4721,
+          "name": "HEL614",
+          "source": "HEL LAM",
+          "sourceId": 4721,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 5595,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.890839,
+            60.233961
+          ]
+        },
+        "properties": {
+          "id": 5595,
+          "name": "HEL116",
+          "source": "HEL LAM",
+          "sourceId": 5595,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 5596,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.078189817367,
+            60.276013621288
+          ]
+        },
+        "properties": {
+          "id": 5596,
+          "name": "HEL612",
+          "source": "HEL LAM",
+          "sourceId": 5596,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": false,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 6373,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.915146284953998,
+            60.219744244538
+          ]
+        },
+        "properties": {
+          "id": 6373,
+          "name": "HEL516",
+          "source": "HEL LAM",
+          "sourceId": 6373,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 6381,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.970803509081,
+            60.216591813369
+          ]
+        },
+        "properties": {
+          "id": 6381,
+          "name": "HEL513",
+          "source": "HEL LAM",
+          "sourceId": 6381,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2025-12-14T19:45:00+02:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 6396,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.901499,
+            60.162648
+          ]
+        },
+        "properties": {
+          "id": 6396,
+          "name": "HEL509",
+          "source": "HEL LAM",
+          "sourceId": 6396,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": "2023-09-01T00:00:00+03:00",
+          "lastStoredObservation": "2026-10-10T23:45:00+03:00"
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 7388,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            24.901499,
+            60.162648
+          ]
+        },
+        "properties": {
+          "id": 7388,
+          "name": "HEL527",
+          "source": "HEL LAM",
+          "sourceId": 7388,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      },
+      {
+        "type": "Feature",
+        "id": 7943,
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            25.105722,
+            60.208278
+          ]
+        },
+        "properties": {
+          "id": 7943,
+          "name": "HEL514",
+          "source": "HEL LAM",
+          "sourceId": 7943,
+          "classifying": false,
+          "crsEpsg": 4326,
+          "municipalityCode": "091",
+          "dataReceived": true,
+          "firstStoredObservation": null,
+          "lastStoredObservation": null
+        }
+      }
+    ]
+  }
+}

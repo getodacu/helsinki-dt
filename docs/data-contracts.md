@@ -1,6 +1,6 @@
 # Helsinki Lens data contracts
 
-The authoritative TypeScript records are in `src/lib/types.ts`. Source-specific adapters validate upstream content before creating these records; ordinary tests use small recorded fixtures, not live providers.
+The shared TypeScript records are in `src/lib/types.ts`; traffic measurement records and states are in `src/lib/traffic-measurements.ts`. Source-specific adapters validate upstream content before creating these records; ordinary tests use small recorded fixtures, not live providers.
 
 ## Shared rules
 
@@ -35,6 +35,27 @@ Repeated GMLIDs can contain different LoDs of the same building. Reconcile compa
 HFP topic directions 1/2 map to GTFS 0/1. Route labels are display information, not journey identities. Deduplicate identity+reported timestamp before measuring cadence. Geographic subscriptions exclude missing-position reports, so their count cannot establish a zero null-position rate.
 
 GTFS matching checks active service dates and calendar exceptions, exact route/direction and the first stop departure. Keep full GTFS service seconds even for hours beyond 24. Scheduled instants use local noon on the service date minus 12 elapsed hours plus service seconds, preserving DST behavior. Compare the resulting Helsinki clock minute to HFP's wrapped `HH:mm`; zero or multiple candidates remain unknown/ambiguous. Do not infer the service date from a position timestamp.
+
+## Traffic measurements · City of Helsinki LIDO-TIKU
+
+`TrafficMeasurementSnapshot` contains `generatedAt`, overall `state`, active `counters`, per-counter/mode `summaries`, independent `sources` and an optional `error`. `TrafficCounterDetail` adds the selected counter's raw measurements, aggregated counts, summaries, exact 24-hour `window` and retrieval time. States are `loading`, `ready`, `partial`, `dated` or `unavailable`. Provider attribution is City of Helsinki / LIDO-TIKU, CC BY 4.0; source-specific descriptions and licences are preserved. See [access and recorded evidence](data-access.md#traffic-measurement-access--lido-tiku).
+
+Counter identity is the provider source name plus a canonical positive integer ID, for example `HEL LAM:6373`; a bare number cannot identify a local API counter. GeoJSON coordinates are EPSG:4326 longitude/latitude and must be finite and within the release bounds. Missing geometry is omitted. Catalog requests are fixed to Helsinki municipality `091`. Measurement source references must match the catalog; observation query results must preserve source/counter filters and descending provider timestamps.
+
+Count/speed records retain source, vehicle class, direction, original unit, positive interval duration in seconds, measurement time and retrieval time. Recognized vehicle classes establish Vehicles, Cycling or Walking; an unknown class remains unknown and cannot produce a marker. Missing values stay null, while a measured zero is valid. Count values must be non-negative safe integers. Available speeds are shown separately, matched to their original class, direction, interval and measurement timestamp; they are never summed into traffic counts.
+
+Aggregation groups by counter, mode, timestamp and duration, deduplicates source/direction/class rows, and prefers provider totals over their component directions/classes. Conflicting duplicates, competing totals, overlapping broad/detailed classes, missing component values or unsupported count units make the aggregate incomplete with null count and rate. Valid count units are `n`, `count` and `counts`. Hourly equivalent is `count × 3600 / durationSeconds`; it is a calculated rate, not a measured hour. Latest uses the most recent valid count, preferring the longer interval on a timestamp tie. Maximum compares hourly equivalents and prefers the later measurement on an equal rate.
+
+Active counters require a complete count for a known mode with `now − 24 hours < observedAt ≤ now`. Modes come from these valid counts, not catalog availability hints. The view and histories expire old values; missing readings do not become zero or interpolate across gaps. A source or catalog failure retains previously accepted data with partial/unavailable status as applicable. Partial observation pagination discards the final timestamp group because it may continue on the missing page. Maximum values from partial data remain labelled as observed maxima. Snapshot `generatedAt` is separate from source `observedAt` and `retrievedAt`; assembling or retrieving a snapshot cannot refresh the measurement's age.
+
+The server starts one shared process-memory refresh loop at application initialization, excluding build-time initialization. Measurement checks run every five minutes; successful metadata is cached for 24 hours. API reads never trigger provider requests. Browser snapshot/detail polling pauses when hidden or disabled. The overall source status and disabled-layer notice in Data & Sources reuse the existing snapshot. A restart clears the store; the next startup warms it again.
+
+Upstream limits are three concurrent requests, at most ten pages, 8 MiB per response, 32 MiB per catalog/source observation load, 10,000 counters and 50,000 observations per source load. Source metadata allows at most 32 sources; pages allow 1,000 counter features or 5,000 observations. Each request has a 12-second timeout, and each catalog/observation load has a 30-second deadline including queue time. Pagination must stay on `https://lidotiku.api.hel.fi`, the original resource path and original filters; credentials, fragments, duplicate/unexpected parameters, loops and redirects are rejected.
+
+Read-only endpoints send `Cache-Control: no-store`:
+
+- `GET /api/traffic-measurements`: fixed map area and latest 24-hour snapshot. Query parameters return 400. Loading/unavailable/partial conditions are represented in the snapshot state.
+- `GET /api/traffic-measurements/counters/:id`: URL-encoded source-scoped ID and fixed latest-day window. Invalid IDs or any query parameters return 400; no complete recent count returns 404; warming/unavailable data returns 503. A successful detail can retain partial data and its error notice.
 
 ## Observations
 

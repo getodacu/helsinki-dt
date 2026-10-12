@@ -56,9 +56,11 @@ test('viewport clipping fits taller environmental signs and retains the smaller 
 class Element {
   children: Element[] = [];
   parent: Element | null = null;
-  style = { transform: '' };
+  style = { transform: '', backgroundColor: '', borderColor: '' };
+  textContent = '';
   attributes = new Map<string, string>();
   className = ''; innerHTML = ''; title = ''; type = ''; tabIndex = 0;
+  dataset: Record<string, string> = {};
   onclick: (() => void) | null = null;
   onpointerenter: (() => void) | null = null;
   onpointerleave: (() => void) | null = null;
@@ -155,6 +157,83 @@ test('port cameras reuse tall terrain posts with their own icon, independent vis
     assert.notEqual(button.innerHTML, road.innerHTML);
     assert.equal(button.style.transform, `translate3d(${point.x}px,${point.y - 60}px,0) translate(-50%,-100%)`);
     button.onclick!(); assert.equal(selections[0], port);
+  } finally {
+    signs.dispose(); if (original) Object.defineProperty(globalThis, 'document', original); else Reflect.deleteProperty(globalThis, 'document');
+  }
+});
+
+
+test('smaller traffic posts retain their vehicle icon, safe hover details and colocated counter identity', () => {
+  const count = { counterId: 'HEL LAM:6373', mode: 'vehicles' as const, value: 38, durationSeconds: 900, hourlyEquivalent: 152,
+    observedAt: '2026-10-10T20:45:00Z', retrievedAt: '2026-10-11T10:00:00Z', complete: true };
+  const summary = { counterId: count.counterId, mode: 'vehicles' as const, latest: count, maximum: { ...count, value: 200, hourlyEquivalent: 800 }, partial: false };
+  const counter: SceneStation = { ...station, name: '<unsafe>', id: 'traffic:HEL LAM:6373', kind: 'traffic-counter', colour: '#7858d4',
+    detail: 'HEL LAM · 38 / 15 min · Max 24 h 800 / h', trafficSummary: summary, sourceIds: ['HEL LAM'] };
+  const high = { ...counter, id: 'traffic:LIVA:6373', name: 'Higher peak', colour: '#af55ce', trafficSummary: { ...summary, maximum: { ...count, hourlyEquivalent: 1200 } } };
+  assert.equal(stationVisible(counter, INITIAL_LAYERS), true);
+  assert.equal(stationVisible(counter, { ...INITIAL_LAYERS, trafficMeasurements: false }), false);
+  assert.equal(stationVisible(weather, { ...INITIAL_LAYERS, trafficMeasurements: false }), true);
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => new Element() } });
+  const container = new Element(), selections: SceneStation[] = [], hovers: string[] = [];
+  const signs = new StationFlags(container as unknown as HTMLElement, base, value => selections.push(value), value => hovers.push(value));
+  try {
+    signs.setStations([counter, high]); signs.update(camera, 800, 800);
+    assert.equal(container.children[0].children.length, 1);
+    let button = container.children[0].children[0]; button.onclick!(); assert.equal(selections[0], high);
+    signs.update(camera, 800, 800, counter); button = container.children[0].children[0];
+    const point = projectStationFlags([counter], base, camera, 800, 800)[0];
+    assert.equal(button.tabIndex, 0);
+    assert.equal(button.style.transform, `translate3d(${point.x}px,${point.y - 14}px,0) translate(-50%,-100%)`);
+    assert.match(button.className, /traffic-counter selected/); assert.match(button.attributes.get('aria-label')!, /800 \/ h/);
+    assert.match(button.innerHTML, /<small>Vehicle<\/small>/); assert.match(button.innerHTML, /M3 18a10/);
+    assert.doesNotMatch(button.innerHTML, /unsafe|800/); assert.deepEqual(button.children, []); button.onclick!(); assert.equal(selections[1], counter);
+    button.onpointerenter!(); assert.match(hovers[0], /38 \/ 15 min/);
+    const partial = { ...counter, trafficSummary: { ...summary, partial: true } };
+    signs.setStations([partial]); signs.update(camera, 800, 800);
+    assert.match(button.title, /38 \/ 15 min/);
+    const edge = new THREE.OrthographicCamera(-400, 400, 400, -400, 1, 1000);
+    edge.position.set(0, -287.5, 100); edge.lookAt(0, -287.5, 0); edge.updateMatrixWorld();
+    assert.deepEqual(projectStationFlags([webcam, counter], base, edge, 800, 800).map(flag => flag.station), [counter]);
+    edge.position.set(379, 12.5, 100); edge.lookAt(379, 12.5, 0); edge.updateMatrixWorld();
+    assert.deepEqual(projectStationFlags([webcam, counter], base, edge, 800, 800), []);
+    edge.position.set(373, 12.5, 100); edge.lookAt(373, 12.5, 0); edge.updateMatrixWorld();
+    assert.deepEqual(projectStationFlags([webcam, counter], base, edge, 800, 800).map(flag => flag.station), [counter]);
+    edge.position.set(0, -324.5, 100); edge.lookAt(0, -324.5, 0); edge.updateMatrixWorld();
+    assert.deepEqual(projectStationFlags([webcam, counter], base, edge, 800, 800).map(flag => flag.station), [counter]);
+    edge.position.set(0, -326.5, 100); edge.lookAt(0, -326.5, 0); edge.updateMatrixWorld();
+    assert.deepEqual(projectStationFlags([counter], base, edge, 800, 800), []);
+  } finally {
+    signs.dispose(); if (original) Object.defineProperty(globalThis, 'document', original); else Reflect.deleteProperty(globalThis, 'document');
+  }
+});
+
+
+test('reused traffic posts update labels, icons and accessible descriptions for every mode, defaulting to vehicles', () => {
+  const count = { counterId: 'EcoCounter:1', mode: 'vehicles' as const, value: 12, durationSeconds: 900, hourlyEquivalent: 48,
+    observedAt: '2026-10-12T05:00:00Z', retrievedAt: '2026-10-12T05:00:00Z', complete: true };
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => new Element() } });
+  const container = new Element(), selections: SceneStation[] = [], hovers: string[] = [];
+  const signs = new StationFlags(container as unknown as HTMLElement, base, value => selections.push(value), value => hovers.push(value));
+  let button: Element | undefined;
+  try {
+    for (const [mode, label, icon] of [['vehicles', 'Vehicle', /M3 18a10/], ['cycling', 'Bicycle', /cx="5" cy="17"/], ['walking', 'Pedestrian', /cx="14" cy="4"/], ['vehicles', 'Vehicle', /M3 18a10/]] as const) {
+      const current: SceneStation = { ...station, kind: 'traffic-counter', name: 'Mode fixture',
+        trafficSummary: { counterId: count.counterId, mode, latest: { ...count, mode }, maximum: { ...count, mode }, partial: false } };
+      signs.setStations([current]); signs.update(camera, 800, 800, current);
+      const updated = container.children[0].children[0];
+      if (button) assert.equal(updated, button);
+      button = updated;
+      assert.equal(button.dataset.mode, mode); assert.match(button.innerHTML, new RegExp(`<small>${label}</small>`)); assert.match(button.innerHTML, icon);
+      assert.equal(button.attributes.get('aria-label'), `${label} counter · Mode fixture · No recent reading`);
+      button.onpointerenter!(); assert.equal(hovers.at(-1), button.title);
+      button.onclick!(); assert.equal(selections.at(-1), current); assert.equal(button.tabIndex, 0);
+      const content = button.innerHTML; signs.update(camera, 800, 800, current); assert.equal(button.innerHTML, content);
+    }
+    signs.setStations([{ ...station, kind: 'traffic-counter' }]); signs.update(camera, 800, 800);
+    assert.equal(container.children[0].children[0], button);
+    assert.match(button!.innerHTML, /<small>Vehicle<\/small>/); assert.match(button!.innerHTML, /M3 18a10/);
   } finally {
     signs.dispose(); if (original) Object.defineProperty(globalThis, 'document', original); else Reflect.deleteProperty(globalThis, 'document');
   }
