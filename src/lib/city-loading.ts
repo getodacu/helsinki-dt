@@ -3,24 +3,31 @@ export interface BackgroundProgress { phase: 'idle' | 'discovering' | 'loading' 
 export interface SceneLoadState {
   phase: 'discovering' | 'loading' | 'rendering' | 'ready' | 'error' | 'available';
   completed: number; total: number; failed: number; background: BackgroundProgress; cacheIssue: string;
+  refinement: AssetProgress & { phase: 'waiting' | 'discovering' | 'loading' | 'rendering' | 'ready' | 'error' };
 }
 
-/** A complete asset set is not ready until its revision has actually rendered. */
+/** Semantic readiness and optional refinement each require their own rendered revision. */
 export class ViewLoading {
   private view = '';
   private renderedRevision = -1;
+  private renderedRefinementRevision = -1;
   private available = false;
-  update(view: string, revision: number, progress: AssetProgress, background: BackgroundProgress, cacheIssue: string): SceneLoadState {
-    if (this.view !== view) { this.view = view; this.available = false; this.renderedRevision = -1; }
+  update(view: string, revision: number, progress: AssetProgress, background: BackgroundProgress, cacheIssue: string,
+    refinement: { revision: number; progress: AssetProgress } | null): SceneLoadState {
+    if (this.view !== view) { this.view = view; this.available = false; this.renderedRevision = -1; this.renderedRefinementRevision = -1; }
     if (!progress.discovering && progress.failed && progress.completed + progress.failed === progress.total) this.available = true;
     const complete = !progress.discovering && !progress.failed && progress.completed === progress.total;
     const phase = this.available && this.renderedRevision >= 0 && this.renderedRevision !== revision ? 'available' : (complete || this.available) && this.renderedRevision === revision ? complete ? 'ready' : 'available'
       : this.available ? 'rendering' : progress.failed ? 'error' : progress.discovering ? 'discovering' : complete ? 'rendering' : 'loading';
-    return { phase, completed: progress.completed, total: progress.total, failed: progress.failed, background, cacheIssue };
+    const detail = refinement?.progress ?? { discovering: false, completed: 0, total: 0, failed: 0 };
+    const detailPhase = !refinement ? 'waiting' : detail.failed ? 'error' : detail.discovering ? 'discovering'
+      : detail.completed !== detail.total ? 'loading' : this.renderedRefinementRevision === refinement.revision ? 'ready' : 'rendering';
+    return { phase, completed: progress.completed, total: progress.total, failed: progress.failed, background, cacheIssue,
+      refinement: { ...detail, phase: detailPhase } };
   }
-  rendered(revision: number) { this.renderedRevision = revision; }
+  rendered(revision: number, refinementRevision: number) { this.renderedRevision = revision; this.renderedRefinementRevision = refinementRevision; }
   openAvailable() { this.available = true; }
-  retry() { this.available = false; this.renderedRevision = -1; }
+  retry() { this.available = false; this.renderedRevision = -1; this.renderedRefinementRevision = -1; }
 }
 
 /** Missing parts retry quietly with bounded backoff, including across camera changes. */

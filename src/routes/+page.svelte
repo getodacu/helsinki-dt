@@ -66,7 +66,7 @@
   let appearanceStatus = $state('');
   let trafficError = $state('');
   let ready = $state(false);
-  let mapLoad = $state.raw<SceneLoadState>({ phase: 'discovering', completed: 0, total: 0, failed: 0, cacheIssue: '', background: { phase: 'idle', completed: 0, total: 0, failed: 0 } });
+  let mapLoad = $state.raw<SceneLoadState>({ phase: 'discovering', completed: 0, total: 0, failed: 0, cacheIssue: '', refinement: { phase: 'waiting', discovering: false, completed: 0, total: 0, failed: 0 }, background: { phase: 'idle', completed: 0, total: 0, failed: 0 } });
   type InformationModal = 'data' | 'about' | 'collaboration';
   let informationModal = $state<InformationModal | null>(null);
   const potentialSources = [
@@ -268,6 +268,9 @@
   let theme = $derived({ colours: themeColours, minimum: activeThemeSummary?.minimum ?? null,
     maximum: activeThemeSummary?.maximum ?? null, count: activeThemeSummary?.count ?? 0 });
   let mapCovered = $derived(loading || !ready);
+  let liveDeferred = $derived(!ready && (loading || !sceneError || !!scene));
+  let startLiveTraffic = $state<(() => void) | null>(null);
+  $effect(() => { if (!liveDeferred) startLiveTraffic?.(); });
   const modes: TransitMode[] = ['tram', 'bus', 'ferry', 'train', 'ship'];
   const modeNames: Record<TransitMode, string> = { tram: 'Trams', bus: 'Buses', ferry: 'HSL Ferries', train: 'Trains', ship: 'Ships' };
   const age = (vehicle: { reportedAt: string }) => `${Math.max(0, Math.floor(trafficAge(vehicle, now) / 1000))} s ago`;
@@ -295,7 +298,7 @@
   let marineSource = $derived(traffic.sources?.marine);
   let marineLive = $derived(browserConnected && marineSource?.state === 'live' && !marineSource.stale && !marineSource.periodic);
   let currentFeed = $derived(hslLive || railLive || marineLive);
-  let liveStatus = $derived(currentFeed ? 'Live' : browserConnected ? 'Connecting' : 'Paused');
+  let liveStatus = $derived(liveDeferred ? 'Map loading' : currentFeed ? 'Live' : browserConnected ? 'Connecting' : 'Paused');
   let liveFeeds = $derived([
     { name: 'HSL', live: hslLive, state: browserConnected ? label(traffic.status.state) : 'Paused / disconnected', lastAt: traffic.status.lastPositionAt, error: traffic.status.error },
     { name: 'Rail', live: railLive, state: browserConnected ? label(traffic.sources?.rail?.state ?? 'connecting') : 'Paused / disconnected', lastAt: traffic.sources?.rail?.lastPositionAt, error: traffic.sources?.rail?.error },
@@ -470,7 +473,7 @@
         const vehicle = fleet.get(selected.vehicle.id);
         setSelection({ kind: 'vehicle', vehicle: vehicle ?? selected.vehicle, removed: !vehicle || trafficShouldRemove(vehicle, now) });
       }
-      browserConnected = true; trafficError = '';
+      trafficError = '';
     }
     async function connect() {
       if (disposed || document.hidden) return;
@@ -486,8 +489,11 @@
         trafficError = error instanceof Error ? error.message : 'Traffic snapshot unavailable';
       }
       if (disposed || document.hidden || attempt.signal.aborted || request !== attempt) return;
+      // Full snapshots near 1 Hz otherwise compete with the first selectable semantic view.
+      // A failed renderer still opens live transport for the metadata-only interface.
+      if (liveDeferred) return;
       stream?.close(); const connection = new EventSource('/api/traffic/stream'); stream = connection;
-      const update = (event: MessageEvent) => { if (disposed || document.hidden || stream !== connection) return; try { receive(JSON.parse(event.data)); } catch { trafficError = 'Traffic update could not be read'; browserConnected = false; } };
+      const update = (event: MessageEvent) => { if (disposed || document.hidden || stream !== connection) return; try { receive(JSON.parse(event.data)); browserConnected = true; } catch { trafficError = 'Traffic update could not be read'; browserConnected = false; } };
       connection.addEventListener('snapshot', update); connection.addEventListener('update', update);
       connection.onerror = () => { if (disposed || stream !== connection) return; browserConnected = false; trafficError = 'Connection interrupted · reconnecting'; };
     }
@@ -525,6 +531,7 @@
       } catch (error) { if (!disposed) railStationsError = error instanceof Error ? error.message : 'Railway stations unavailable'; }
     }
     const railStationsTimer = setInterval(() => void refreshRailStations(), 5 * 60_000);
+    startLiveTraffic = () => { if (!stream) void connect(); };
     void connect(); void refreshObservations(); void refreshRailStations();
     void loadRouteCatalog(fetch).then(value => { if (!disposed) routeCatalog = value; }).catch(error => { if (!disposed) routeCatalog = { status: 'unavailable', generatedAt: null, source: null, routes: [], reason: error instanceof Error ? error.message : 'Route labels unavailable' }; }).finally(() => { if (!disposed) routeCatalogLoading = false; });
     const cache = new CityAssetCache();
@@ -533,7 +540,7 @@
       if (disposed) return; city = { manifest, base, cache };
     }).catch(error => { if (!disposed) sceneError = error instanceof Error ? error.message : 'City assets unavailable'; })
       .finally(() => { if (!disposed) loading = false; });
-    return () => { disposed = true; cache.dispose(); lifetime.abort(); request?.abort(); observationRequest?.abort(); stream?.close(); clearInterval(clock); clearInterval(observationsCheck); clearInterval(railStationsTimer); document.removeEventListener('visibilitychange', visibility); document.removeEventListener('visibilitychange', resumeObservations); };
+    return () => { disposed = true; startLiveTraffic = null; cache.dispose(); lifetime.abort(); request?.abort(); observationRequest?.abort(); stream?.close(); clearInterval(clock); clearInterval(observationsCheck); clearInterval(railStationsTimer); document.removeEventListener('visibilitychange', visibility); document.removeEventListener('visibilitychange', resumeObservations); };
   });
 </script>
 
@@ -616,7 +623,33 @@
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.557 21.923c.563.104.768-.244.768-.542 0-.267-.01-.974-.015-1.912-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.022-.699.078-.685.078-.685 1.13.08 1.725 1.16 1.725 1.16 1.004 1.72 2.633 1.223 3.274.935.102-.727.393-1.223.715-1.504-2.498-.284-5.124-1.25-5.124-5.565 0-1.23.44-2.234 1.16-3.022-.116-.285-.503-1.43.11-2.98 0 0 .945-.303 3.094 1.155A10.79 10.79 0 0 1 12 6.18c.956.005 1.92.129 2.82.379 2.148-1.458 3.091-1.155 3.091-1.155.615 1.55.228 2.695.112 2.98.722.788 1.158 1.791 1.158 3.022 0 4.326-2.63 5.278-5.136 5.557.404.349.763 1.039.763 2.094 0 1.512-.014 2.732-.014 3.103 0 .3.203.65.774.54A11.25 11.25 0 0 0 12 .75Z" /></svg>
     </a>
   </header>
-  <main class="city-workspace" class:has-open-panel={!!activePanel} data-scene-ready={!mapCovered} aria-busy={mapCovered}>
+    <details class="map-feedback" open>
+      <summary>Map availability and source notices</summary>
+    {#if ready && (mapLoad.phase !== 'ready' || mapLoad.refinement.phase !== 'ready' || mapLoad.cacheIssue || ['discovering', 'loading'].includes(mapLoad.background.phase))}
+      <div class="map-cache-status" role="status" aria-live="polite">
+        {#if mapLoad.phase === 'available' || mapLoad.failed}
+          <p>Semantic coverage incomplete: {mapLoad.completed} / {mapLoad.total} map parts loaded{mapLoad.failed ? `; ${mapLoad.failed} unavailable` : ''}. Available buildings remain selectable; missing parts retry automatically.</p>
+        {:else if mapLoad.phase !== 'ready'}
+          <p>Loading semantic coverage for this view: {mapLoad.completed} / {mapLoad.total}. Retained buildings remain selectable.</p>
+        {/if}
+        {#if mapLoad.refinement.phase === 'error'}
+          <p>Some aerial imagery or textured detail is unavailable ({mapLoad.refinement.failed} parts). Semantic buildings remain selectable; detail retries automatically.</p>
+        {:else if mapLoad.refinement.phase !== 'ready'}
+          <p>{mapLoad.phase === 'ready' ? 'Semantic map ready.' : 'Available semantic map open.'} {mapLoad.refinement.phase === 'waiting' ? 'Optional aerial imagery and textured detail are queued.' : mapLoad.refinement.phase === 'discovering' ? 'Finding optional aerial imagery and textured detail…' : mapLoad.refinement.phase === 'rendering' ? 'Rendering optional detail…' : `Refining aerial imagery and textured detail: ${mapLoad.refinement.completed} / ${mapLoad.refinement.total}.`} You can use the map now.</p>
+        {/if}
+        {#if mapLoad.failed || mapLoad.refinement.failed}<button class="text-button" onclick={() => scene?.retryLoad()}>Retry missing map parts</button>{/if}
+        {#if mapLoad.cacheIssue}<p>{mapLoad.cacheIssue}</p>
+        {:else if ['discovering', 'loading'].includes(mapLoad.background.phase)}
+          <p>{mapLoad.background.phase === 'discovering' ? 'Preparing the shared map cache…'
+            : `Caching area on the server: ${mapLoad.background.completed.toLocaleString()} / ${mapLoad.background.total.toLocaleString()}`}</p>
+        {/if}
+      </div>
+    {:else if mapLoad.cacheIssue}<div class="map-cache-status" role="status">{mapLoad.cacheIssue}</div>
+    {/if}
+    {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={() => openInformation()}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
+    {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
+    </details>
+  <main class="city-workspace" class:has-open-panel={!!activePanel} data-scene-ready={!mapCovered && mapLoad.phase === 'ready'} data-semantic-phase={mapLoad.phase} data-refinement-phase={mapLoad.refinement.phase} data-scene-complete={!mapCovered && mapLoad.phase === 'ready' && mapLoad.refinement.phase === 'ready'} aria-busy={mapCovered}>
     {#if city}
       <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} marinePaused={!browserConnected} {keyboardNavigation} {stations} {route} {itinerary} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection} onwebcamselect={camera => activeWebcam = camera} onportcameraselect={harbour => activePortHarbour = harbour}
         onbuildings={(value) => buildings = value} onstats={(value) => stats = value} onhover={(value) => hovered = value}
@@ -627,8 +660,9 @@
       <div class="map-loading-cover">
         <div class="scene-status" role="status" aria-live="polite">
           <span class="eyebrow">Helsinki geographic model</span>
-          <strong>{sceneError && !scene ? 'City scene unavailable' : 'Loading the complete view'}</strong>
-          <p>{sceneError && !scene ? sceneError : loading ? 'Loading terrain…' : mapLoad.phase === 'discovering' ? 'Finding buildings and imagery…' : mapLoad.phase === 'rendering' ? 'Preparing the map…' : `${mapLoad.completed.toLocaleString()} of ${mapLoad.total.toLocaleString()} map parts loaded.`}</p>
+          <strong>{sceneError && !scene ? 'City scene unavailable' : 'Loading the selectable map'}</strong>
+          <p>{sceneError && !scene ? sceneError : loading ? 'Loading terrain…' : mapLoad.phase === 'discovering' ? 'Finding semantic buildings…' : mapLoad.phase === 'rendering' ? 'Rendering the semantic map…' : `${mapLoad.completed.toLocaleString()} of ${mapLoad.total.toLocaleString()} semantic map parts loaded.`}</p>
+          <p>Aerial imagery and textured detail load after the map is usable. Search and Data &amp; Sources are available now. {liveDeferred ? 'Live transport updates wait for the map; the initial snapshot loads separately.' : 'Live transport remains available without the 3D map.'}</p>
           {#if !sceneError || scene}
             {#if loading || mapLoad.phase === 'discovering'}
               <progress aria-label="Loading current map view"></progress>
@@ -640,14 +674,6 @@
         </div>
       </div>
     {/if}
-    {#if mapLoad.cacheIssue}<div class="map-cache-status" role="status">{mapLoad.cacheIssue}</div>
-    {:else if ready && ['discovering', 'loading'].includes(mapLoad.background.phase)}
-      <div class="map-cache-status" role="status" aria-live="polite">
-        {mapLoad.background.phase === 'discovering' ? 'Preparing the shared map cache…'
-          : `Caching area on the server: ${mapLoad.background.completed.toLocaleString()} / ${mapLoad.background.total.toLocaleString()}`}
-      </div>
-    {/if}
-    {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={() => openInformation()}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
     <aside class="left-stack" class:mobile-active={activePanel === 'layers' || activePanel === 'legend'} class:legend-active={activePanel === 'legend'} aria-label="Explore the city">
       <div class="mobile-sheet-heading"><strong>{activePanel === 'legend' ? legendLabel : 'Explore the layers'}</strong>{#if legendVisible && activePanel === 'layers'}<button class="text-button" onclick={() => setActivePanel('legend')}>View legend</button>{/if}<button class="icon-button" aria-label="Close exploration panel" onclick={() => setActivePanel(null)}>×</button></div>
       <div class="console-intro"><span class="eyebrow">60° N / 24° E · HELSINKI, FINLAND</span><h1>A city of<br />connections<span>.</span></h1><p>Explore Helsinki.<br />One city. Connected perspectives.</p></div>
@@ -798,7 +824,6 @@
     <SensorReadings snapshot={observationSnapshot} {now} loading={observationLoading} error={observationError} onstation={id => { const station = stations.find(item => item.id === id); if (station) selectObject({ kind: 'station', station }); }} />
     <nav class="camera-presets" aria-label="Camera presets">{#each [{ id: 'city', name: 'City Centre' }, { id: 'harbour', name: 'Harbour' }, { id: 'central', name: 'Central Station' }] as view (view.id)}<button class:active={preset === view.id} aria-label={view.name} aria-pressed={preset === view.id} disabled={!scene} onclick={() => choosePreset(view.id as CameraPreset)}>{view.name}</button>{/each}</nav>
     <div class="scene-footer"><span class="scene-guidance">{hovered || (keyboardNavigation ? 'WASD to pan · drag to orbit · scroll to zoom' : 'Drag to orbit · scroll to zoom')}</span>{#if stats}<span class="performance" aria-label="Scene performance" data-fps={stats.fps} data-draw-calls={stats.drawCalls} data-geometries={stats.geometries} data-triangles={stats.triangles} data-loaded-chunks={stats.loadedChunks} data-placed-vehicles={stats.vehicles} data-unplaced-vehicles={stats.unplacedVehicles} data-receipt-latency-ms={stats.lastReceiptLatencyMs ?? ''}>{stats.fps} FPS · {stats.drawCalls} draws · {stats.loadedChunks} chunks</span>{/if}<a class="project-copyright" href="https://ai.ro/" target="_blank" rel="noreferrer">© {new Date(now).getFullYear()} ai.ro</a></div>
-    {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
     <nav class="mobile-panel-nav" aria-label="City panels">
       <button aria-pressed={!activePanel} onclick={() => setActivePanel(null)}><ConsoleIcon name="explore" /><span>Explore</span></button>
       <button id="layers-trigger" aria-controls="exploration-panel" aria-expanded={activePanel === 'layers'} onclick={() => setActivePanel(activePanel === 'layers' ? null : 'layers')}><ConsoleIcon name="layers" /><span>Layers</span></button>

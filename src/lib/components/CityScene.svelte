@@ -20,10 +20,11 @@
   let controller = $state.raw<CitySceneController | null>(null);
   let scale = $state<SceneScale | null>(null);
   let compassRotation = $state<number | null>(null);
+  let ready = $state(false);
   onMount(() => {
     try {
       controller = createCityScene(container, manifest, base, { onWebcamSelect: onwebcamselect, onPortCameraSelect: onportcameraselect, onSelection: onselection, onBuildings: onbuildings,
-        onStats: onstats, onHover: onhover, onError: onerror, onCameraInteraction: oninteraction, onReady: onready, onAppearanceStatus: onappearance, onLoadState: onloadstate, onScale: value => scale = value, onCompassRotation: value => compassRotation = value }, cache, { bus: asset('models/bus.glb'), tram: asset('models/tram.glb'), ferry: asset('models/ferry.glb'), train: asset('models/train.glb') });
+        onStats: onstats, onHover: onhover, onError: onerror, onCameraInteraction: oninteraction, onReady: () => { ready = true; onready(); }, onAppearanceStatus: onappearance, onLoadState: onloadstate, onScale: value => scale = value, onCompassRotation: value => compassRotation = value }, cache, { bus: asset('models/bus.glb'), tram: asset('models/tram.glb'), ferry: asset('models/ferry.glb'), train: asset('models/train.glb') });
       oncontroller(controller);
     } catch (error) { onerror(error instanceof Error ? error.message : 'The 3D scene could not start.'); }
     return () => { controller?.dispose(); oncontroller(null); };
@@ -41,6 +42,14 @@
 </script>
 
 <div class="scene-canvas" bind:this={container}></div>
+<nav class="map-camera-controls" aria-label="Map camera controls">
+  <button aria-label="Zoom in" title="Zoom in" disabled={!ready} onclick={() => controller?.cameraStep(0, 0, 1 / 1.2)}>+</button>
+  <button aria-label="Zoom out" title="Zoom out" disabled={!ready} onclick={() => controller?.cameraStep(0, 0, 1.2)}>−</button>
+  <button aria-label="Rotate left" title="Rotate left" disabled={!ready} onclick={() => controller?.cameraStep(-Math.PI / 8, 0, 0)}>↶</button>
+  <button aria-label="Rotate right" title="Rotate right" disabled={!ready} onclick={() => controller?.cameraStep(Math.PI / 8, 0, 0)}>↷</button>
+  <button aria-label="Tilt up" title="Tilt up" disabled={!ready} onclick={() => controller?.cameraStep(0, -Math.PI / 16, 0)}>↑</button>
+  <button aria-label="Tilt down" title="Tilt down" disabled={!ready} onclick={() => controller?.cameraStep(0, Math.PI / 16, 0)}>↓</button>
+</nav>
 {#if scale}
   <div class="map-scale" title="Ground distance at view centre" role="img" aria-label={`${scale.metres >= 1000 ? `${scale.metres / 1000} km` : `${scale.metres} m`} at view centre`}>
     <span>{scale.metres >= 1000 ? `${scale.metres / 1000} km` : `${scale.metres} m`}</span>
@@ -63,3 +72,16 @@
     </svg>
   </div>
 {/if}
+
+<style>
+  .map-camera-controls { position: absolute; left: 328px; top: 24px; z-index: 3; display: grid; grid-template-columns: repeat(6, 44px); gap: 4px; }
+  .map-camera-controls button { width: 44px; height: 44px; padding: 0; border: 1px solid var(--border); background: var(--panel); font-size: 22px; }
+  .map-camera-controls button:focus-visible { outline: 3px solid var(--teal); outline-offset: 1px; }
+  @media (max-width: 1199px) {
+    .map-camera-controls { left: 8px; top: 8px; bottom: auto; grid-template-columns: repeat(2, 44px); }
+    :global(.has-open-panel) .map-camera-controls { display: none; }
+  }
+  @media (max-width: 1199px) and (min-width: 780px) and (max-height: 500px) {
+    .map-camera-controls { grid-template-columns: repeat(6, 44px); }
+  }
+</style>

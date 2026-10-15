@@ -1,30 +1,19 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { CityChunkLoader, loadCityBase, loadCityManifest } from '../city-assets.ts';
 import { aerialEntries, discoverTexturedEntries, validateTileIndex } from '../city-source.ts';
 import type { BackgroundProgress } from '../city-loading.ts';
-import { cityMapCache, type CityMapCache } from './city-map-cache.ts';
-
-const preparedFetch = (async (input: RequestInfo | URL) => {
-  const path = String(input);
-  if (!/^\/data\/city\/(manifest\.json|generations\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\.json)$/.test(path)) throw new Error('Unsafe prepared asset');
-  try {
-    const body = await readFile(resolve('static', path.slice(1))).catch(() => readFile(resolve('build/client', path.slice(1))));
-    return new Response(body, { headers: { 'content-length': String(body.length) } });
-  } catch { return new Response(null, { status: 404 }); }
-}) as typeof fetch;
+import { cityMapCache, preparedCityFetch, type CityMapCache } from './city-map-cache.ts';
 
 /** Resuming enumerates the same URLs and skips all validated disk entries. */
 export async function warmCityArea(cache: CityMapCache = cityMapCache, changed: (state: BackgroundProgress) => void = () => {}, refresh = false, allLevels = false) {
   let state: BackgroundProgress = { phase: 'discovering', completed: 0, total: 0, failed: 0 };
   const report = () => changed({ ...state }); report();
-  const manifest = await loadCityManifest(preparedFetch), base = await loadCityBase(manifest, preparedFetch);
+  const manifest = await loadCityManifest(preparedCityFetch), base = await loadCityBase(manifest, preparedCityFetch);
   const signal = new AbortController().signal;
   const discovered = await discoverTexturedEntries(base, async url => {
     const asset = await cache.read(url, true, refresh); return validateTileIndex(Uint8Array.from(asset.body).buffer, url);
   }, () => true, () => 10, signal, allLevels);
   if (discovered.failed.length) console.warn('Map cache source indices awaiting retry:', discovered.failed.join(', '));
-  const loader = new CityChunkLoader(manifest, preparedFetch);
+  const loader = new CityChunkLoader(manifest, preparedCityFetch);
   const tasks = [...manifest.chunks.map(entry => async () => {
     try { await loader.load(entry.id); } finally { loader.unload(entry.id); }
   }), ...[...aerialEntries(base), ...discovered.entries].map(entry => async () => { await cache.read(entry.url, true, refresh); })];

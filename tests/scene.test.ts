@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { INITIAL_LAYERS, mapClippingPlanes, measureCompassRotation, measureGroundScale, panKeyboardCamera, frameSelection, frameVehicleFollow, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { INITIAL_LAYERS, mapClippingPlanes, measureCompassRotation, measureGroundScale, panKeyboardCamera, stepOrbitCamera, frameSelection, frameVehicleFollow, applyBuildingColours, disposeTree, makeChunkGeometry, visibleChunks, waterGeometry, routeGeometry } from '../src/lib/scene.ts';
 import { buildingIdForTriangle } from '../src/lib/data/geometry.ts';
 import type { BuildingChunk } from '../src/lib/types.ts';
 import type { RouteContext } from '../src/lib/route-context.ts';
@@ -78,6 +79,41 @@ test('building thematic colours follow semantic ranges, keep no-data neutral and
   applyBuildingColours(geometry, chunk, new Map());
   for (let vertex = 0; vertex < geometry.getAttribute('color').count; vertex++) assert.ok(Math.abs(geometry.getAttribute('color').getX(vertex) - neutral.r) < 1e-6);
   geometry.dispose();
+});
+
+test('camera steps independently change orbit axes and zoom, retain the target and respect OrbitControls bounds', () => {
+  const camera = new THREE.PerspectiveCamera(), controls = new OrbitControls(camera);
+  controls.target.set(350, 8, -200);
+  controls.minDistance = 45; controls.maxDistance = 18_000;
+  controls.minPolarAngle = 0.1; controls.maxPolarAngle = Math.PI / 2 - 0.08;
+  controls.minAzimuthAngle = -1; controls.maxAzimuthAngle = 1;
+  camera.position.copy(controls.target).add(new THREE.Vector3(0, 400, 400)); controls.update();
+  const target = controls.target.clone(), distance = controls.getDistance(), polar = controls.getPolarAngle();
+  const close = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
+  stepOrbitCamera(controls, 0, 0, 0.5);
+  close(controls.getDistance(), distance * 0.5); close(controls.getAzimuthalAngle(), 0); close(controls.getPolarAngle(), polar);
+  stepOrbitCamera(controls, 0.2, 0, 0);
+  close(controls.getDistance(), distance * 0.5); close(controls.getAzimuthalAngle(), 0.2); close(controls.getPolarAngle(), polar);
+  stepOrbitCamera(controls, 0, 0.1, 0);
+  close(controls.getDistance(), distance * 0.5); close(controls.getAzimuthalAngle(), 0.2); close(controls.getPolarAngle(), polar + 0.1);
+  stepOrbitCamera(controls, 10, 10, 1e6);
+  close(controls.getAzimuthalAngle(), controls.maxAzimuthAngle); close(controls.getPolarAngle(), controls.maxPolarAngle); close(controls.getDistance(), controls.maxDistance);
+  stepOrbitCamera(controls, -10, -10, 1e-6);
+  close(controls.getAzimuthalAngle(), controls.minAzimuthAngle); close(controls.getPolarAngle(), controls.minPolarAngle); close(controls.getDistance(), controls.minDistance);
+  assert.deepEqual(controls.target, target);
+});
+
+test('camera steps flush pointer damping without leaving drift or changing the damping preference', () => {
+  for (const damping of [true, false]) {
+    const camera = new THREE.PerspectiveCamera(), controls = new OrbitControls(camera);
+    camera.position.set(0, 400, 400); controls.update(); controls.enableDamping = damping;
+    controls.rotateLeft(0.2);
+    stepOrbitCamera(controls, 0.1, 0, 0.8);
+    const position = camera.position.clone();
+    controls.update();
+    assert.ok(camera.position.distanceTo(position) < 1e-8);
+    assert.equal(controls.enableDamping, damping);
+  }
 });
 
 

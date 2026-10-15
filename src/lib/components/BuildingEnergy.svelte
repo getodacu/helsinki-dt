@@ -3,7 +3,7 @@
   import ModeledDemandChart from './ModeledDemandChart.svelte';
   import ConsoleIcon from './ConsoleIcon.svelte';
   import { exactBuildingEnergy, exactBuildingSolar, propertyIsShared, latestCompletedModeledDemand, formatEnergyRecord, humanizeEnergyUsage } from '#lib/energy-display.ts';
-  import { buildingName, knownValue } from '#lib/inspection.ts';
+  import { buildingName, formatDate, knownValue } from '#lib/inspection.ts';
   import type { Building, EnergyRecord } from '#lib/types.ts';
   import type { EnergyCatalogState, MeasuredEnergySeries } from '#lib/energy-types.ts';
   let { building, catalogState, loadingCatalog, buildings, onmember }:
@@ -17,9 +17,10 @@
   let model = $derived(latestCompletedModeledDemand(modeled));
   let measured = $state.raw<MeasuredEnergySeries | null>(null);
   let loading = $state(false);
+  let requestError = $state<string | null>(null);
   let historyOpen = $state(false);
   let hasReadings = $derived(!!measured?.records.some(record => record.value !== null));
-  let showProperty = $derived(!!property && (loading || hasReadings));
+  let showProperty = $derived(!!property);
   let recordedUsage = $derived(measured?.records.reduce((sum, record) => sum + (record.value ?? 0), 0) ?? 0);
   const monthName = (date: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(new Date(date));
   function showHistory(dialog: HTMLDialogElement) {
@@ -41,7 +42,7 @@
     const boundary = property;
     // Changing buildings closes the history even when they share a property.
     building.id;
-    historyOpen = false; measured = null; loading = !!boundary;
+    historyOpen = false; measured = null; requestError = null; loading = !!boundary;
     if (!boundary) return;
     const request = new AbortController();
     const params = new URLSearchParams({ property: boundary.id });
@@ -54,14 +55,18 @@
             && record.unit === 'kWh' && record.metric === 'electricity_consumption' && record.sourceId === 'helsinki-nuuka' && record.scenario === null
             && Number.isFinite(Date.parse(record.period?.start)) && Date.parse(record.period?.end) - Date.parse(record.period?.start) === 86_400_000
             && (record.value === null || Number.isFinite(record.value)));
+        const validTimestamp = (value: unknown) => value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
         if (series.property?.id !== boundary.id || series.scope !== 'property' || series.method !== 'measured' || series.unit !== 'kWh'
           || series.metric !== 'electricity_consumption' || series.resolution !== 'daily' || series.timezone !== 'Europe/Helsinki'
           || !validRecords(series.records) || !validRecords(series.historyRecords)
           || !Array.isArray(series.availableMonths) || !Array.isArray(series.availableCompleteMonths)
-          || !Number.isFinite(Date.parse(series.period?.start)) || !Number.isFinite(Date.parse(series.period?.end))) throw new Error('Measured energy response could not be read.');
+          || !Number.isFinite(Date.parse(series.period?.start)) || !Number.isFinite(Date.parse(series.period?.end))
+          || !['current', 'stale', 'empty', 'unavailable'].includes(series.status)
+          || (series.message !== null && typeof series.message !== 'string')
+          || !validTimestamp(series.retrievedAt) || !validTimestamp(series.lastAttemptAt)) throw new Error('Measured energy response could not be read.');
         return series;
       }).then(series => { if (!request.signal.aborted) measured = series; })
-      .catch(() => { if (!request.signal.aborted) measured = null; })
+      .catch(error => { if (!request.signal.aborted) { measured = null; requestError = error instanceof Error ? error.message : 'Measured energy request failed.'; } })
       .finally(() => { if (!request.signal.aborted) loading = false; });
     return () => request.abort();
   });
@@ -77,11 +82,22 @@
           {#if propertyIsShared(property)}<details><summary>Buildings · {property.matchedBuildingIds.length}</summary>
             <ul class="member-list">{#each property.matchedBuildingIds as id (id)}<li><button class="text-button" onclick={() => onmember(id)}>{memberName(id)}</button></li>{/each}</ul>
           </details>{/if}
+          <div role="status" data-energy-state={loading ? 'loading' : requestError ? 'request-error' : measured?.status}>
+            <p class="notice">{loading ? 'Loading electricity readings…' : requestError ? 'Electricity request failed.' : measured?.status === 'current' ? 'Current electricity readings.'
+              : measured?.status === 'stale' ? 'Stale electricity readings. Retained values keep their original retrieval date.'
+              : measured?.status === 'empty' ? 'No electricity readings available for this month.' : 'Electricity readings unavailable.'}</p>
+            {#if requestError}<p class="panel-note">{requestError}</p>{/if}
+            {#if measured?.message}<p class="panel-note">{measured.message}</p>{/if}
+          </div>
+          {#if measured}
+            <p class="panel-note">Readings retrieved: <time datetime={measured.retrievedAt ?? undefined}>{formatDate(measured.retrievedAt)}</time> · Helsinki time</p>
+            <p class="panel-note">Last attempt: <time datetime={measured.lastAttemptAt ?? undefined}>{formatDate(measured.lastAttemptAt)}</time> · Helsinki time</p>
+          {/if}
           {#if measured && hasReadings}
             <p class="energy-month">{monthName(measured.period.start)}</p>
             <p class="energy-value">{electricityDisplay.value} {electricityDisplay.unit}<small>Recorded usage</small></p>
             <EnergyHistory records={measured.records} onexpand={() => historyOpen = true} />
-          {:else}<p class="energy-placeholder" aria-label="Loading electricity readings">—</p>{/if}
+          {:else}<p class="energy-placeholder" aria-label={loading ? 'Loading electricity readings' : 'No recorded electricity usage available'}>—</p>{/if}
         </div>
       {:else}<p class="energy-placeholder" aria-label="Loading electricity demand">—</p>{/if}
     </section>

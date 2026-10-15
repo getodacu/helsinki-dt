@@ -159,6 +159,16 @@ export function panKeyboardCamera(camera: THREE.PerspectiveCamera, target: THREE
   camera.position.add(shift); target.add(shift);
 }
 
+/** Angular deltas are radians; zoom multiplies distance, with zero leaving an axis unchanged. */
+export function stepOrbitCamera(controls: OrbitControls, azimuth: number, polar: number, zoom: number) {
+  const damping = controls.enableDamping;
+  controls.enableDamping = false; controls.update();
+  if (azimuth) controls.rotateLeft(-azimuth);
+  if (polar) controls.rotateUp(-polar);
+  if (zoom) controls.dollyIn(zoom);
+  controls.enableDamping = damping;
+}
+
 /** Frame one selected entity without changing the compass direction. */
 export function frameSelection(camera: THREE.PerspectiveCamera, target: THREE.Vector3, point: THREE.Vector3) {
   const offset = camera.position.clone().sub(target); offset.y = 0;
@@ -257,13 +267,11 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     ...PORT_HARBOURS.map(harbour => ({ ...harbour, kind: 'port-camera' as const, sourceIds: ['port-of-helsinki'] }))];
   const updateStationFlags = () => stationFlags.setStations([...stations.filter(station => stationVisible(station, layers)), ...cameraPois]);
   updateStationFlags();
-  void fleet.loadModels(modelUrls, callbacks.onError);
-  void fleet.loadShipModels(callbacks.onError);
   const vehicleRing = new THREE.Mesh(new THREE.RingGeometry(12, 16, 40), new THREE.MeshBasicMaterial({ color: '#d5f6e6', side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.95 }));
   vehicleRing.rotation.x = -Math.PI / 2; vehicleRing.renderOrder = 4; vehicleRing.visible = false; scene.add(vehicleRing);
   const viewLoading = new ViewLoading();
-  let viewKey = '', semanticRevision = 0, initiallyReady = false, loadSignature = '';
-  let loadState: SceneLoadState = { phase: 'discovering', completed: 0, total: 0, failed: 0, cacheIssue: '', background: { phase: 'idle', completed: 0, total: 0, failed: 0 } };
+  let viewKey = '', semanticRevision = 0, initiallyReady = false, appearanceStarted = false, loadSignature = '';
+  let loadState: SceneLoadState = { phase: 'discovering', completed: 0, total: 0, failed: 0, cacheIssue: '', refinement: { phase: 'waiting', discovering: false, completed: 0, total: 0, failed: 0 }, background: { phase: 'idle', completed: 0, total: 0, failed: 0 } };
   let background: BackgroundProgress = loadState.background;
   let backgroundRunning = false, serverCacheIssue = '';
   let cachePoll: ReturnType<typeof setTimeout> | undefined;
@@ -338,15 +346,19 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   };
   reportLoad = () => {
     if (disposed) return;
-    const imagery = appearance.progress();
-    const progress = { discovering: imagery.discovering, completed: [...wanted].filter(id => chunks.has(id)).length + imagery.completed,
-      total: wanted.size + imagery.total, failed: [...wanted].filter(id => failedUntil.has(id)).length + imagery.failed };
-    loadState = viewLoading.update(viewKey, semanticRevision + appearance.revision, progress, background, serverCacheIssue || cache.storageIssue);
+    const progress = { discovering: !viewKey, completed: [...wanted].filter(id => chunks.has(id)).length,
+      total: wanted.size, failed: [...wanted].filter(id => failedUntil.has(id)).length };
+    loadState = viewLoading.update(viewKey, semanticRevision, progress, background, serverCacheIssue || cache.storageIssue,
+      appearanceStarted ? { revision: appearance.revision, progress: appearance.progress() } : null);
     const usable = loadState.phase === 'ready' || loadState.phase === 'available';
     cache.setBackgroundAllowed(usable && !document.hidden);
     const signature = JSON.stringify(loadState);
     if (signature !== loadSignature) { loadSignature = signature; callbacks.onLoadState(loadState); scheduleRetry(); }
-    if (usable && !initiallyReady) { initiallyReady = true; callbacks.onReady(); }
+    if (usable && !initiallyReady) {
+      initiallyReady = true; appearanceDirty = true;
+      void fleet.loadModels(modelUrls, callbacks.onError); void fleet.loadShipModels(callbacks.onError);
+      callbacks.onReady();
+    }
     if (usable && !backgroundRunning && background.phase === 'idle') void prefetch(true);
   };
   let appearanceDirty = false;
@@ -354,7 +366,8 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     camera.updateMatrixWorld(); projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(projection);
   };
   const updateAppearance = () => {
-    if (disposed || document.hidden) return;
+    if (disposed || document.hidden || !initiallyReady) return;
+    appearanceStarted = true;
     updateCameraView(); appearance.update(controls.target, camera.position.distanceTo(controls.target), frustum);
     scheduleRetry();
   };
@@ -389,14 +402,14 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   cache.onViewSettled = updateChunks;
   scheduleRetry = () => {
     const due = disposed || document.hidden ? Infinity
-      : Math.min(cache.viewSettled ? failedUntil.nextDue([...wanted].filter(id => !pending.has(id))) : Infinity, appearance.nextRetryAt());
+      : Math.min(cache.viewSettled ? failedUntil.nextDue([...wanted].filter(id => !pending.has(id))) : Infinity, initiallyReady ? appearance.nextRetryAt() : Infinity);
     if (due === retryAt) return;
     clearTimeout(retryTimer); retryAt = due;
     if (due < Infinity) retryTimer = setTimeout(() => { retryAt = Infinity; updateAppearance(); updateChunks(); }, Math.max(0, due - Date.now()));
   };
   const requestViewUpdate = () => {
     appearanceDirty = true;
-    if (!initiallyReady && cache.viewSettled) { updateAppearance(); appearanceDirty = false; updateChunks(); }
+    if (!initiallyReady && cache.viewSettled) { updateChunks(); }
     else { cache.viewChanged(); scheduleRetry(); }
   };
   const preset = (id: CameraPreset) => {
@@ -547,8 +560,8 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
     flags.update(fleet.placements, camera, container.clientWidth, container.clientHeight,
       selected?.kind === 'vehicle' && !selected.removed ? selected.vehicle.id : null, hoveredVehicleId);
     stationFlags.update(camera, container.clientWidth, container.clientHeight, selected?.kind === 'station' ? selected.station : null);
-    const renderedRevision = semanticRevision + appearance.revision; renderer.render(scene, camera); frames++;
-    viewLoading.rendered(renderedRevision); reportLoad();
+    const renderedRevision = semanticRevision, refinementRevision = appearance.revision; renderer.render(scene, camera); frames++;
+    viewLoading.rendered(renderedRevision, refinementRevision); reportLoad();
     if (followId && followViewDirty && cache.viewSettled && now - followedAt >= 1500) {
       updateChunks(); followedAt = now; followViewDirty = false;
     }
@@ -568,6 +581,13 @@ export function createCityScene(container: HTMLElement, manifest: CityManifest, 
   document.addEventListener('visibilitychange', visibility); frame = requestAnimationFrame(animate);
   return {
     preset,
+    cameraStep(azimuth: number, polar: number, zoom: number) {
+      if (disposed || !initiallyReady || document.hidden || !controls.enabled
+        || document.querySelector('dialog[open], [popover]:popover-open')) return;
+      stopKeyboard(); interaction();
+      stepOrbitCamera(controls, azimuth, polar, zoom);
+      interactionEnded();
+    },
     retryLoad() { failedUntil.clear(); appearance.retry(); viewLoading.retry();
       if (!backgroundRunning && background.phase === 'partial') background = { ...background, phase: 'idle' };
       requestViewUpdate(); },

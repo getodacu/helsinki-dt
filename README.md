@@ -166,7 +166,7 @@ Below 1200px, **Layers** and **Inspect** use one shared panel; **Explore** close
 
 The header buttons **About this project**, **Open for collaboration** and **Data & sources** open distinct centered modals. About explains the project, engineering, system architecture and 3D exploration with responsive diagrams and practical use cases. Collaboration introduces ways to work with ai.ro; Data & sources retains live status, provenance and attribution, including a traffic-measurement overview and source diagnostics. On compact screens the buttons sit inside the **···** menu. Escape, the close button or a backdrop click closes each modal and returns focus to its opener.
 
-Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Drag to orbit and scroll to zoom. Keyboard navigation pauses in interactive controls, while a dialog is open, and when the window loses focus. Moving manually stops vehicle follow.
+Hold **WASD** to pan across the ground relative to the camera heading; diagonal movement keeps the same speed. Drag to orbit and scroll to zoom. Six native camera buttons provide **Zoom in**, **Zoom out**, **Rotate left**, **Rotate right**, **Tilt up** and **Tilt down** once the map opens: use **Tab** to focus them and **Enter** or **Space** to activate. Keyboard panning pauses in interactive controls, while a dialog is open, and when the window loses focus. Pointer controls and vehicle follow remain available; moving manually, including a camera button, stops follow.
 
 Choose the numbered **City Centre**, **Harbour** or **Central Station** cards for existing camera views. The header live dot opens separate HSL, rail and AIS statuses and report times. Search has **Vehicles**, **Routes**, **Buildings** and **Stations** tabs. The query filters the selected tab, which is remembered until reload. Lists scroll by mouse, touch or keyboard with the scrollbar hidden. Buildings shows loaded identities with an empty query, searches prepared metadata/addresses when typing, and retains a server-backed list if WebGL is unavailable. Building search requests run only while its tab is open. Search and scene picking use the same selection contract. On desktop, Escape clears selection. Search results, popovers and dialogs handle Escape before the map.
 Selecting a building opens its source identifiers and compatible energy/solar records. Selection and hover tint the displayed building, with selection taking precedence. Choosing a building, vehicle or station from search selects and highlights it, opens its inspector, closes search and instantly zooms to its location while keeping the compass direction. Choosing the same result again recenters it; selections made while the map is loading zoom when it becomes ready. Vehicles use their displayed position; reports without a usable map position still open their details. Direct map clicks preserve the current camera view, and vehicle following remains a separate action. Selecting a vehicle shows its real report age, deviation and exact scheduled journey when available. Verified routes use an outlined line and stop markers with names on hover, keyboard focus or touch focus. A chevron ahead of the selected vehicle shows a reported heading or a bearing from accepted movement; it pulses while moving and stays static with reduced motion. Unknown direction, stale reports and hidden vehicles suppress the cue. AIS ships have no scheduled route mapping. Following ends when you interact with the camera. Weather and air-quality inspectors show the station name, station ID and a recent six-hour history for each available parameter. Each history retains its latest reading, unit, observation time and freshness; source diagnostics remain in **Data & sources**. Inspecting history does not change current traffic into historical playback. **Data & sources** explains dates, coverage, attribution and gaps. Search/inspection provide a metadata fallback when WebGL is unavailable.
@@ -177,7 +177,11 @@ The default **Aerial imagery** layer uses the municipal 2025 orthophoto and text
 
 The renderer discovers assets for the visible area and changes model detail with the camera distance. Selecting a building requests finer nearby detail. Complete local replacements appear while unrelated downloads continue, and offscreen objects release GPU resources. Downloads have deadlines, byte limits and bounded concurrency; the old fixed 24-imagery/48-model caps no longer apply. The prepared 20 m terrain still limits coastline precision.
 
-Map readiness includes discovery, enabled visible assets, texture decoding and a rendered frame. Missing parts retry with bounded backoff while settled available data remains usable. KTX2 texture decoding uses the Basis transcoder bundled with the pinned Three.js dependency and served locally by Vite.
+The complete rendered semantic map opens first, including selectable buildings, without waiting for optional aerial imagery, textured buildings or vehicle model detail. **Ready** means semantic coverage has loaded and rendered; **complete** additionally means enabled visible aerial/textured refinement has rendered. Optional detail continues separately and does not block map use. Partial semantic coverage or failed optional detail stays explicitly labelled, with available buildings selectable and missing parts retried with bounded backoff; partial coverage is not reported as complete. KTX2 texture decoding uses the Basis transcoder bundled with the pinned Three.js dependency and served locally by Vite.
+
+An initial transport snapshot is available before the map opens. Recurring live SSE starts once the coarse semantic map opens, rather than competing with its initial load. If renderer or prepared-asset loading fails terminally, the metadata/search fallback still starts live transport.
+
+The **Map availability and source notices** strip keeps the map's size stable. Tab to its summary; Enter or Space expands/collapses the notices, and End scrolls overflowing content without hiding or covering map controls.
 
 ## Shared map cache CLI
 
@@ -196,13 +200,13 @@ To rebuild every zoom level using the server's persistent cache directory, run f
 CITY_MAP_CACHE_DIR=/srv/helsinki/shared/city-map npm run city:cache -- --all-levels --refresh
 ```
 
-Use the **same absolute directory** in the running app's environment or `.env`:
+Use the **same absolute directory** in the app's environment or `.env`:
 
 ```dotenv
 CITY_MAP_CACHE_DIR=/srv/helsinki/shared/city-map
 ```
 
-Give the command and application user read/write access to that directory and preserve it across deployments. Without this setting, both use `.cache/city-map` relative to their working directory. Running the CLI in another checkout with the default directory does not rebuild the deployment's cache; point it at the shared directory or transfer its completed cache to the serving host. Use a prepared city matching the deployment's area/generation.
+Give the command and application user read/write access to that directory and preserve it across deployments. **One process owns a cache directory: stop the app before running `city:cache` against the same directory**, then restart it after the CLI exits. Concurrent workers need separate directories. Without this setting, both use `.cache/city-map` relative to their working directory. Running the CLI in another checkout with the default directory does not rebuild the deployment's cache; point it at the shared directory or transfer its completed cache while the app is stopped. Use a prepared city matching the deployment's area/generation; preserve operator configuration and user files.
 
 To resume after interruption or source failure, omit `--refresh`:
 
@@ -214,7 +218,9 @@ The CLI traverses nested indexes by default, keeps coarse models needed when zoo
 
 Progress uses `discovering`, `loading`, then `complete`, `partial` or `stopped`. A complete run exits **0**; incomplete discovery/downloads, invalid prepared assets, unsupported arguments or storage failure exit nonzero. After fixing connectivity, space or permissions, resume without `--refresh`. Full-detail disk usage and download duration have not been measured and exceed overview caching.
 
-Saved municipal bytes become eligible for revalidation after 30 days, with older validated bytes available during source outages. Automatic warming starts after the first usable view and retains overview behavior. Server upstream work permits four requests, at most two for area warming, with foreground work taking priority. Disk failure stops warming while foreground loading remains operational. `/api/city-cache` reports the running app's warmer, not the separate CLI process's progress. The CLI requires the source checkout and is not shipped as a runnable script in release bundles.
+Saved municipal bytes become eligible for revalidation after 30 days, with older validated bytes retained on failed refresh. Automatic warming starts after the first usable view and retains overview behavior. Server upstream work permits four requests, at most two for area warming, with foreground work taking priority. Quota inability or disk failure stops warming; foreground requests can still use validated downloaded bytes without caching them. `/api/city-cache` reports the running app's warmer, not the separate CLI process's progress. The CLI requires the source checkout and is not shipped as a runnable script in release bundles.
+
+The durable municipal cache defaults to **8 GiB** (`CITY_MAP_CACHE_MAX_BYTES=8589934592`) and **16384 entries** (`CITY_MAP_CACHE_MAX_ENTRIES`). Its byte budget counts municipal metadata and binary files, not temporary files, sibling caches or photograph directories. Eviction uses least-recent in-memory use, with a disk inventory rebuilt on restart; it does not maintain persistent access recency. Pending distinct work defaults to **36** (`CITY_MAP_CACHE_MAX_PENDING`), with at most **32 queued** (`CITY_MAP_CACHE_MAX_QUEUED`). These settings accept positive safe integers; invalid values use defaults. Calibrate them for the host's storage and workload; a bounded cache may evict earlier coverage during a full-area CLI run.
 
 ## Commands and source refresh
 
@@ -307,6 +313,8 @@ The inspector separates **measured property electricity**, **modeled building de
 
 The browser requests energy and Ryhti records only for the selected building; theme values arrive in bounded chunk groups. Source summaries retain global ranges, counts and provenance. The full `/api/energy/catalog` and `/api/ryhti/catalog` endpoints remain available for compatibility, but the app does not call them. Daily measured requests accept only catalog-listed properties and the previous twelve completed calendar months. Without a month selection, the service chooses the latest completed month with finite readings for every day; incomplete months retain null gaps and no unqualified total.
 
+The property inspector distinguishes **loading**, **current**, **stale**, **empty**, **unavailable** and **request failure**. Retained stale readings keep their original retrieval date, and responses show the last attempt separately with source/error context. Switching buildings clears the previous request's display. Missing or failed readings show a dash, not zero; actual measured zeroes remain valid. Recorded usage sums available readings, not an invented complete-month total, and a shared-property total remains one property total rather than per-building consumption.
+
 Successful measured requests are eligible for refresh after six hours, failures after one minute. Identical lookups coalesce; limits are four concurrent requests, 24 starts/minute, and 256 KiB/15 seconds/366 daily rows per upstream response. Its checksum-validated raw cache has at most 64 disk entries and 64 memory entries at `.cache/energy/runtime`. New month or city/source/membership versions start a new lookup. Provider publication cadence is unknown.
 
 Coverage is incomplete by design. The dated 8 October 2026 release evidence records 8,909 unique buildings, modeled demand for 4,949, solar for 695 in twelve selected district tiles, and one measured property with two exact building matches and one unresolved member. Other solar areas remain unqueried; unknown reference weather year and model settings stay labelled. See [energy/solar evidence](docs/energy-solar-evidence.md), [solar method](docs/solar-method-evidence.md) and [release results](docs/milestone-results/E.md) for measured coverage and performance rather than treating them as live guarantees.
@@ -322,7 +330,7 @@ Coverage is incomplete by design. The dated 8 October 2026 release evidence reco
 | `GET /api/entities/building/:id/photo/image?generation=...` | Checksum-verified locally cached photo bytes with ETags. |
 | `GET /api/themes?generation=...` | Available theme options, global ranges, categories and counts. |
 | `GET /api/themes/:key?generation=...&chunks=...` | Colour/category tuples for 1–16 distinct comma-separated chunk IDs; global colour scale stays fixed while panning. |
-| `GET /api/city-asset?url=...` | Validated municipal asset proxy/cache; only approved model paths and bounded aerial requests are accepted. |
+| `GET /api/city-asset?url=...` | Municipal proxy/cache restricted to prepared aerial cells and validated discovered or cached models/indexes; overload, cancellation and other failures return generic 503 with `Retry-After: 60`. |
 | `GET /api/city-cache` | Runtime warmer progress and storage issue; partial warming may trigger a retry. |
 | `POST /api/city-cache` | Start/resume automatic overview warming. |
 | `GET /api/traffic` | Current vehicle snapshot and dated feed status. |
@@ -355,7 +363,11 @@ Source-status responses can be HTTP 200 while showing unavailable or dated data.
 | `NODE_ENV` | Example sets `production`. |
 | `SHUTDOWN_TIMEOUT` | Graceful shutdown timeout in seconds; example `30`. |
 | `PROTOCOL_HEADER` | Set `x-forwarded-proto` only behind a trusted proxy that replaces the header. |
-| `CITY_MAP_CACHE_DIR` | Persistent map cache shared by the CLI and app; default `.cache/city-map`. |
+| `CITY_MAP_CACHE_DIR` | Persistent map cache used by the CLI and app, one owner at a time; default `.cache/city-map`. |
+| `CITY_MAP_CACHE_MAX_BYTES` | Municipal metadata + binary budget in bytes; default `8589934592` (8 GiB). |
+| `CITY_MAP_CACHE_MAX_ENTRIES` | Municipal asset-entry budget; default `16384`. |
+| `CITY_MAP_CACHE_MAX_PENDING` | Maximum distinct pending municipal requests; default `36`. |
+| `CITY_MAP_CACHE_MAX_QUEUED` | Maximum queued municipal requests; default `32`. |
 
 To build and run from a prepared source checkout:
 

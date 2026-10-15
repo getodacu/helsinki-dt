@@ -51,8 +51,19 @@ npm start
 | `NODE_ENV` | Set `production` for the released Node process. |
 | `SHUTDOWN_TIMEOUT` | Adapter graceful SIGTERM/SIGINT timeout in seconds; default/example `30`. |
 | `PROTOCOL_HEADER` | Behind a trusted proxy, set to `x-forwarded-proto` and have the proxy replace that header. Leave unset for direct HTTP. |
+| `CITY_MAP_CACHE_DIR` | Persistent municipal cache; default `.cache/city-map`. One process owns a directory. |
+| `CITY_MAP_CACHE_MAX_BYTES` | Municipal metadata + binary budget in bytes; default `8589934592` (8 GiB). |
+| `CITY_MAP_CACHE_MAX_ENTRIES` | Municipal asset-entry budget; default `16384`. |
+| `CITY_MAP_CACHE_MAX_PENDING` | Maximum distinct pending municipal requests (active + queued); default `36`. |
+| `CITY_MAP_CACHE_MAX_QUEUED` | Maximum queued municipal requests; default `32`. |
 
 Environment variables supplied by the process manager override values in `.env`. The project defines no API-key variables. The installed adapter's origin/proxy contract was checked against adapter-node **6.0.0**, `src/handler.js:19` and `src/index.js:10` in its pinned source; it derives the request host from forwarded headers or Host and has no runtime `ORIGIN` variable in this version. Keep the Node port private behind a proxy and accept forwarded headers only from that proxy.
+
+Municipal cache limits accept positive safe integers; invalid values fall back to defaults. Calibrate storage and request budgets for the intended host/workload. The durable budget covers municipal metadata and binary files only, excluding temporary files, sibling caches and photograph directories. Eviction uses least-recent in-memory access; restart rebuilds the disk inventory rather than preserving access recency. Valid stale bytes survive failed refreshes. Quota inability or disk failure stops automatic warming, while foreground requests can still use validated downloaded bytes uncached.
+
+Keep `CITY_MAP_CACHE_DIR` persistent across releases and writable by the application user. To warm it from a prepared source checkout, **stop the app first**, run `CITY_MAP_CACHE_DIR=/srv/helsinki/shared/city-map npm run city:cache`, then restart with that same absolute directory. Add `-- --refresh` to retrieve again without first deleting valid cache files; omit it to resume. The CLI and app must not write the same directory concurrently; concurrent workers require separate directories. A bounded cache can evict earlier coverage during full-area warming. Keep matching prepared assets, operator environment and user files intact; no additional preparation or provisioning step is needed for these limits.
+
+The public `/api/city-asset` proxy admits prepared aerial cells and validated discovered/cached municipal models and indexes, not arbitrary municipal URLs. Overload, cancellation and other asset failures return a generic HTTP 503 with `Retry-After: 60`; do not treat these as permission to bypass the proxy.
 
 ## Systemd on alpha
 
@@ -102,6 +113,8 @@ Check **process health** with `curl --fail --max-time 5 http://127.0.0.1:3000/ >
 
 Check **source health** separately: `GET /api/traffic` returns connection status and dated positions, including independent `sources.hsl`, `sources.rail` and `sources.marine` state; `GET /api/observations` returns source status plus actual measurement/retrieval times; `GET /api/route` returns prepared labels/validity or an unavailable reason; `GET /api/energy/catalog` returns ready/stale/unavailable state with dated provenance. These endpoints may return HTTP 200 for an honest source outage. `/api/traffic` also acquires demand for the shared live feeds, so a monitoring poll changes their otherwise idle lifetime. Do not equate a transport HTTP 200 with fresh data. Inspect the status and dates shown in the product or JSON.
 
+Map loading opens the complete rendered semantic coverage first; optional aerial/textured and vehicle-model detail refine afterward. Semantic **ready** and visible aerial/textured **complete** are separate states. Partial semantic coverage and optional-detail errors remain nonblocking, explicitly labelled and retryable; available buildings remain selectable. The initial transport snapshot can arrive before map readiness; recurring SSE begins when the coarse map opens, or after terminal renderer/assets failure enables the metadata fallback. The six native zoom/rotate/tilt buttons support Tab and Enter/Space alongside existing WASD, pointer and follow controls.
+
 Capture stdout/stderr using the existing process manager or shell redirection and retain restart timestamps/release IDs. There is no project-specific logfile path or account required. For manual inspection, `npm start > /absolute/operator/logs/helsinki.log 2>&1` captures startup/uncaught errors. Rotate logs through the host's standard tooling. Track source outages, cache write errors, request latency, memory and restart count separately. The application does not log upstream credentials; do not add raw payload or environment dumps to operational logs.
 
 ### Marine feed and bounded verification
@@ -120,6 +133,8 @@ The first command observes real Digitraffic MQTT/REST through the shared HSL/rai
 Weather/AQ caches are bounded in memory and refreshed on demand (weather eligible every five minutes, AQ fifteen, metadata daily); a restart resets these caches and reacquires real observations. Each FMI response is bounded to 2 MiB/30 seconds; failures retain dated valid values while the process lives. Observation age and source connectivity remain distinct.
 
 Measured energy has a writable, atomic, checksum-validated raw cache at `.cache/energy/runtime/`, bounded to 64 files and 64 in-memory entries. Success is eligible for refresh after six hours and failure after one minute. Requests use catalog-listed properties, previous twelve completed months, four concurrent requests, 24 starts/minute and at most 256 KiB/15 seconds/366 daily rows. Identical requests coalesce. The provider's publication cadence is unknown. A restart revalidates preserved raw files; a new month or city/source/membership fingerprint starts a new lookup. Corrupt raw files are ignored, then a bounded real refresh is attempted. Do not erase valid caches as a routine restart step.
+
+Property electricity inspection separately reports loading, current, stale, empty, unavailable and request failure. Retained readings preserve their original retrieval time; last-attempt time and source/error context remain separate. Missing readings are not zero, partial recorded usage is not an unqualified complete-month total, and shared-property consumption is never divided into per-building values.
 
 For failed city/energy preparation, read `.cache/task-b/` or `.cache/task-d/` diagnostics and the dated energy refresh status. Failed publication retains the previous validated generation; incomplete or checksum-mismatched files must not be activated. Missing chunks affect only their coverage and show an explicit loading failure. Restore from the matching saved release if a deployed static file is corrupt. Network recovery resumes real source refresh without substituting fixture data.
 

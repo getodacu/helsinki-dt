@@ -20,7 +20,8 @@ async (page) => {
   const minimizeLayers = page.locator('#desktop-layers-minimize');
   const temperature = sensors.locator('[data-parameter="t2m"]');
   const presets = page.getByRole('navigation', { name: 'Camera presets' });
-  const sizes = [{ width: 1440, height: 900 }, { width: 1283, height: 1104 }, { width: 1280, height: 720 }, { width: 1200, height: 900 }, { width: 1199, height: 900 }, { width: 1024, height: 768 }, { width: 1032, height: 1104 }, { width: 390, height: 844 }, { width: 844, height: 390 }];
+  const cameraControls = page.getByRole('navigation', { name: 'Map camera controls' });
+  const sizes = [{ width: 1440, height: 900 }, { width: 1283, height: 1104 }, { width: 1280, height: 720 }, { width: 1200, height: 900 }, { width: 1199, height: 900 }, { width: 1199, height: 768 }, { width: 1024, height: 768 }, { width: 1032, height: 1104 }, { width: 390, height: 844 }, { width: 844, height: 390 }];
   const sizeCheck = async locator => {
     const box = await locator.boundingBox(), size = page.viewportSize();
     check(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= size.width + 1 && box.y + box.height <= size.height + 1, 'Panel leaves viewport');
@@ -29,6 +30,28 @@ async (page) => {
   const separated = async locator => {
     const a = await sensors.boundingBox(), b = await locator.boundingBox();
     check(a && b && (a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y), 'Sensor display overlaps an open panel');
+  };
+  const disjoint = async (first, second) => {
+    const a = await first.boundingBox(), b = await second.boundingBox();
+    check(a && b && (a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y),
+      `${await first.getAttribute('class')} overlaps ${await second.getAttribute('class')}`);
+  };
+  const cameraLayout = async () => {
+    const overlays = [cameraControls, sensors, presets, page.locator('.map-scale'), page.locator('.map-compass')];
+    const visible = [];
+    for (const overlay of overlays) {
+      if (!await overlay.isVisible()) continue;
+      await sizeCheck(overlay);
+      visible.push(overlay);
+    }
+    for (let i = 0; i < visible.length; i++) {
+      for (let j = i + 1; j < visible.length; j++) await disjoint(visible[i], visible[j]);
+    }
+    if (await cameraControls.isVisible()) {
+      for (const panel of [page.locator('.left-stack'), page.locator('.right-stack')]) {
+        if (await panel.isVisible()) await disjoint(cameraControls, panel);
+      }
+    }
   };
   try {
     await page.route('**/api/observations', observationsRoute);
@@ -96,6 +119,49 @@ async (page) => {
       check(Math.round(sensorBox.width) === 260 && Math.round(sensorBox.height) === 52, 'Sensor display is not compact');
       for (const button of await sensors.getByRole('button').all()) check((await button.boundingBox()).height >= 44, 'Sensor target too small');
       for (const button of await presets.getByRole('button').all()) check((await button.boundingBox()).height >= (size.width >= 1200 ? 44 : 32), 'Camera preset target too small');
+      check(await page.locator('.map-scale').isVisible(), 'Map scale feedback missing');
+      if (size.width >= 1200) check(await page.locator('.map-compass').isVisible(), 'Map compass feedback missing');
+      await cameraLayout();
+      check(await cameraControls.getByRole('button').count() === 6, 'Map camera controls incomplete');
+      for (const button of await cameraControls.getByRole('button').all()) {
+        const box = await button.boundingBox();
+        check(box.width >= 44 && box.height >= 44 && await button.isEnabled(), 'Map camera target too small or disabled');
+        check(await button.evaluate(element => {
+          const box = element.getBoundingClientRect();
+          return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest('button') === element;
+        }), 'Map camera control is covered');
+      }
+      if ((size.width === 1440 && size.height === 900) || (size.width === 390 && size.height === 844)) {
+        await page.waitForTimeout(300);
+        const zoomIn = cameraControls.getByRole('button', { name: 'Zoom in', exact: true });
+        await zoomIn.focus(); await page.keyboard.press('Tab');
+        check(await cameraControls.getByRole('button', { name: 'Zoom out', exact: true }).evaluate(element => element === document.activeElement), 'Camera controls not Tab reachable');
+        await page.keyboard.press('Shift+Tab');
+        check(await zoomIn.evaluate(element => element === document.activeElement && element.matches(':focus-visible')
+          && getComputedStyle(element).outlineStyle !== 'none' && parseFloat(getComputedStyle(element).outlineWidth) >= 2), 'Camera keyboard focus not visible');
+        for (const [name, key, selector, attribute] of [
+          ['Zoom in', 'Enter', '.map-scale-bar', 'style'],
+          ['Zoom out', 'Space', '.map-scale-bar', 'style'],
+          ['Rotate left', 'Enter', '.map-compass g', 'transform'],
+          ['Rotate right', 'Space', '.map-compass g', 'transform'],
+          ['Tilt up', 'Enter', '.station-flag.weather', 'style'],
+          ['Tilt down', 'Space', '.station-flag.weather', 'style']
+        ]) {
+          const before = await page.locator(selector).getAttribute(attribute);
+          const button = cameraControls.getByRole('button', { name, exact: true });
+          await button.focus(); await button.press(key);
+          await page.waitForFunction(({ selector, attribute, before }) => document.querySelector(selector)?.getAttribute(attribute) !== before, { selector, attribute, before });
+          check(await button.evaluate(element => element === document.activeElement && element.matches(':focus-visible')), `${name} lost visible keyboard focus`);
+        }
+        const searchInput = page.getByRole('searchbox');
+        const compassBefore = await page.locator('.map-compass g').getAttribute('transform');
+        const scaleBefore = await page.locator('.map-scale-bar').getAttribute('style');
+        await searchInput.fill('wasd'); await searchInput.press('ArrowLeft'); await searchInput.press('ArrowRight');
+        check(await searchInput.inputValue() === 'wasd', 'Map controls changed search text');
+        check(await searchInput.evaluate(element => element.selectionStart === 4 && element.selectionEnd === 4), 'Map controls intercepted search arrow keys');
+        check(await page.locator('.map-compass g').getAttribute('transform') === compassBefore && await page.locator('.map-scale-bar').getAttribute('style') === scaleBefore, 'Typing/search navigation changed the camera');
+        await searchInput.fill(''); await searchInput.press('Escape');
+      }
       if (size.width >= 1200) {
         check(Math.round((await page.locator('.left-stack').boundingBox()).width) === 280, 'Wrong exploration width');
         await sizeCheck(layers);
@@ -103,12 +169,17 @@ async (page) => {
         await page.locator('#layers-trigger').focus(); await page.keyboard.press('Enter');
         await layers.waitFor(); await sizeCheck(page.locator('.left-stack')); await separated(page.locator('.left-stack'));
         check(!await presets.isVisible() && await sensors.isVisible(), 'Compact panel overlap');
+        check(!await cameraControls.isVisible(), 'Camera controls overlap compact exploration panel');
+        await cameraLayout();
         check(await page.locator('#exploration-heading').evaluate(element => element === document.activeElement), 'Layers heading not focused');
         await page.keyboard.press('Escape'); check(!await layers.isVisible() && await presets.isVisible(), 'Escape did not close panel');
+        check(await cameraControls.isVisible(), 'Camera controls did not return after exploration closed');
         check(await page.locator('#layers-trigger').evaluate(element => element === document.activeElement), 'Panel trigger focus not restored');
       }
       await temperature.focus(); await temperature.press('Enter'); await inspector.waitFor();
       await sizeCheck(page.locator('.right-stack')); await separated(page.locator('.right-stack'));
+      await cameraLayout();
+      if (size.width < 1200) check(!await cameraControls.isVisible(), 'Camera controls overlap compact inspector');
       if (size.width >= 1200) check(Math.round((await page.locator('.right-stack').boundingBox()).width) === 340, 'Wrong inspector width');
       else {
         check(await context.innerText() === 'Inspect', 'Inspection navigation missing');
@@ -120,6 +191,8 @@ async (page) => {
       await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
       check(await context.count() === 0, 'Clearing selection retains Inspect');
       check(await page.locator('#city-search').evaluate(element => element === document.activeElement), 'Clearing selection lost focus');
+      check(await cameraControls.isVisible(), 'Camera controls did not return after inspection closed');
+      await cameraLayout();
       await page.screenshot({ path: `output/playwright/ocean-sensors-${size.width}x${size.height}.png` });
     }
     await page.setViewportSize({ width: 390, height: 844 });
