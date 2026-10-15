@@ -623,32 +623,6 @@
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.557 21.923c.563.104.768-.244.768-.542 0-.267-.01-.974-.015-1.912-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.022-.699.078-.685.078-.685 1.13.08 1.725 1.16 1.725 1.16 1.004 1.72 2.633 1.223 3.274.935.102-.727.393-1.223.715-1.504-2.498-.284-5.124-1.25-5.124-5.565 0-1.23.44-2.234 1.16-3.022-.116-.285-.503-1.43.11-2.98 0 0 .945-.303 3.094 1.155A10.79 10.79 0 0 1 12 6.18c.956.005 1.92.129 2.82.379 2.148-1.458 3.091-1.155 3.091-1.155.615 1.55.228 2.695.112 2.98.722.788 1.158 1.791 1.158 3.022 0 4.326-2.63 5.278-5.136 5.557.404.349.763 1.039.763 2.094 0 1.512-.014 2.732-.014 3.103 0 .3.203.65.774.54A11.25 11.25 0 0 0 12 .75Z" /></svg>
     </a>
   </header>
-    <details class="map-feedback" open>
-      <summary>Map availability and source notices</summary>
-    {#if ready && (mapLoad.phase !== 'ready' || mapLoad.refinement.phase !== 'ready' || mapLoad.cacheIssue || ['discovering', 'loading'].includes(mapLoad.background.phase))}
-      <div class="map-cache-status" role="status" aria-live="polite">
-        {#if mapLoad.phase === 'available' || mapLoad.failed}
-          <p>Semantic coverage incomplete: {mapLoad.completed} / {mapLoad.total} map parts loaded{mapLoad.failed ? `; ${mapLoad.failed} unavailable` : ''}. Available buildings remain selectable; missing parts retry automatically.</p>
-        {:else if mapLoad.phase !== 'ready'}
-          <p>Loading semantic coverage for this view: {mapLoad.completed} / {mapLoad.total}. Retained buildings remain selectable.</p>
-        {/if}
-        {#if mapLoad.refinement.phase === 'error'}
-          <p>Some aerial imagery or textured detail is unavailable ({mapLoad.refinement.failed} parts). Semantic buildings remain selectable; detail retries automatically.</p>
-        {:else if mapLoad.refinement.phase !== 'ready'}
-          <p>{mapLoad.phase === 'ready' ? 'Semantic map ready.' : 'Available semantic map open.'} {mapLoad.refinement.phase === 'waiting' ? 'Optional aerial imagery and textured detail are queued.' : mapLoad.refinement.phase === 'discovering' ? 'Finding optional aerial imagery and textured detail…' : mapLoad.refinement.phase === 'rendering' ? 'Rendering optional detail…' : `Refining aerial imagery and textured detail: ${mapLoad.refinement.completed} / ${mapLoad.refinement.total}.`} You can use the map now.</p>
-        {/if}
-        {#if mapLoad.failed || mapLoad.refinement.failed}<button class="text-button" onclick={() => scene?.retryLoad()}>Retry missing map parts</button>{/if}
-        {#if mapLoad.cacheIssue}<p>{mapLoad.cacheIssue}</p>
-        {:else if ['discovering', 'loading'].includes(mapLoad.background.phase)}
-          <p>{mapLoad.background.phase === 'discovering' ? 'Preparing the shared map cache…'
-            : `Caching area on the server: ${mapLoad.background.completed.toLocaleString()} / ${mapLoad.background.total.toLocaleString()}`}</p>
-        {/if}
-      </div>
-    {:else if mapLoad.cacheIssue}<div class="map-cache-status" role="status">{mapLoad.cacheIssue}</div>
-    {/if}
-    {#if city?.manifest.gaps.length}<button class="coverage-notice" onclick={() => openInformation()}>Building coverage incomplete <span>View evidence ↗</span></button>{/if}
-    {#if sceneError && ready}<p class="scene-error" role="status">{sceneError}</p>{/if}
-    </details>
   <main class="city-workspace" class:has-open-panel={!!activePanel} data-scene-ready={!mapCovered && mapLoad.phase === 'ready'} data-semantic-phase={mapLoad.phase} data-refinement-phase={mapLoad.refinement.phase} data-scene-complete={!mapCovered && mapLoad.phase === 'ready' && mapLoad.refinement.phase === 'ready'} aria-busy={mapCovered}>
     {#if city}
       <CityScene manifest={city.manifest} base={city.base} cache={city.cache} onloadstate={value => mapLoad = value} {traffic} {layers} marinePaused={!browserConnected} {keyboardNavigation} {stations} {route} {itinerary} {routes} routeFilter={routeFilter || null} buildingColours={activeRyhtiTheme ? ryhtiColors.colours : theme.colours} buildingTheme={!!activeTheme || !!activeRyhtiTheme} onappearance={value => appearanceStatus = value} onselection={setSelection} onwebcamselect={camera => activeWebcam = camera} onportcameraselect={harbour => activePortHarbour = harbour}
@@ -662,7 +636,6 @@
           <span class="eyebrow">Helsinki geographic model</span>
           <strong>{sceneError && !scene ? 'City scene unavailable' : 'Loading the selectable map'}</strong>
           <p>{sceneError && !scene ? sceneError : loading ? 'Loading terrain…' : mapLoad.phase === 'discovering' ? 'Finding semantic buildings…' : mapLoad.phase === 'rendering' ? 'Rendering the semantic map…' : `${mapLoad.completed.toLocaleString()} of ${mapLoad.total.toLocaleString()} semantic map parts loaded.`}</p>
-          <p>Aerial imagery and textured detail load after the map is usable. Search and Data &amp; Sources are available now. {liveDeferred ? 'Live transport updates wait for the map; the initial snapshot loads separately.' : 'Live transport remains available without the 3D map.'}</p>
           {#if !sceneError || scene}
             {#if loading || mapLoad.phase === 'discovering'}
               <progress aria-label="Loading current map view"></progress>
@@ -958,7 +931,16 @@
           <article><h4>Building records & energy</h4><p>Ryhti building and permit records, Nuuka property electricity, modeled building demand and annual solar radiation. Property measurements, modeled demand and incoming sunlight describe different things; coverage varies by building.</p><a href="https://ryhti.syke.fi/en/" target="_blank" rel="noreferrer">Ryhti / SYKE ↗</a><a href="https://helsinki-openapi.nuuka.cloud/swagger/Nuuka%20Open%20API/swagger.json" target="_blank" rel="noreferrer">Nuuka source reference ↗</a></article>
           <article class="information-wide"><h4>Cameras & photographs</h4><p>Six selected Fintraffic road-weather cameras show dated snapshots. Port of Helsinki cameras provide harbour views; the Vuosaari camera is outside the map’s prepared area. Some building photos are matched through Wikidata identifiers and supplied by Wikimedia Commons.</p><p>Camera availability depends on its provider. Building photographs retain their author, source page and individual licence in the inspector; port-camera media follows the provider’s terms.</p><a href="https://www.digitraffic.fi/en/road-traffic/" target="_blank" rel="noreferrer">Road cameras · Fintraffic · CC BY 4.0 ↗</a><a href="https://www.portofhelsinki.fi/en/about-us/port-of-helsinki/web-camera-south-harbour/" target="_blank" rel="noreferrer">Port of Helsinki cameras ↗</a><a href="https://commons.wikimedia.org/" target="_blank" rel="noreferrer">Wikimedia Commons · per-photo licences ↗</a></article>
         </div>
-        <section class="information-status" aria-label="Current data status"><h3>Current data status</h3><p class="measurement-source-status">Traffic measurements: {measurementSourceState} · {activeCounters.length} counters with valid counts in the last 24 hours{#if !layers.trafficMeasurements} · browser refresh paused (layer disabled){/if}</p>{#if measurementError || measurementSnapshot?.error}<p class="notice">{measurementError || measurementSnapshot?.error}</p>{/if}<p>HSL: {hslLive ? 'connected' : traffic.status.state} · Rail: {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'} · Ships: {marineState}</p><p>Energy: {energyLoading ? 'loading' : energy.status} · Ryhti: {ryhtiLoading ? 'loading' : ryhti.status}</p>{#each observationSnapshot?.sources ?? [] as source (source.id)}<p>{source.provider}: {source.state} · {source.message}</p>{/each}{#if observationError}<p class="notice">Observation refresh unavailable · {observationError}</p>{/if}<p>Expand the source details below for timestamps, outages, individual licences and coverage evidence.</p></section>
+        <section class="information-status" aria-label="Current data status"><h3>Current data status</h3>
+          <div class="map-cache-status" role="status" aria-live="polite">
+            <p>Map: {loading ? 'loading' : sceneError && !scene ? 'unavailable' : mapLoad.phase} · Aerial imagery &amp; textures: {mapLoad.refinement.phase}</p>
+            {#if mapLoad.phase === 'available' || mapLoad.failed}<p class="notice">Map coverage incomplete: {mapLoad.completed} / {mapLoad.total} parts loaded; {mapLoad.failed} unavailable.</p>{/if}
+            {#if mapLoad.refinement.failed}<p class="notice">Aerial imagery or textures unavailable: {mapLoad.refinement.failed} parts.</p>{/if}
+            {#if mapLoad.cacheIssue}<p class="notice">{mapLoad.cacheIssue}</p>{/if}
+            {#if sceneError}<p class="scene-error">{sceneError}</p>{/if}
+          </div>
+          {#if mapLoad.failed || mapLoad.refinement.failed}<button class="text-button" onclick={() => scene?.retryLoad()}>Retry missing map parts</button>{/if}
+          <p class="measurement-source-status">Traffic measurements: {measurementSourceState} · {activeCounters.length} counters with valid counts in the last 24 hours{#if !layers.trafficMeasurements} · browser refresh paused (layer disabled){/if}</p>{#if measurementError || measurementSnapshot?.error}<p class="notice">{measurementError || measurementSnapshot?.error}</p>{/if}<p>HSL: {hslLive ? 'connected' : traffic.status.state} · Rail: {railLive ? 'connected' : traffic.sources?.rail?.state ?? 'connecting'} · Ships: {marineState}</p><p>Energy: {energyLoading ? 'loading' : energy.status} · Ryhti: {ryhtiLoading ? 'loading' : ryhti.status}</p>{#each observationSnapshot?.sources ?? [] as source (source.id)}<p>{source.provider}: {source.state} · {source.message}</p>{/each}{#if observationError}<p class="notice">Observation refresh unavailable · {observationError}</p>{/if}<p>Expand the source details below for timestamps, outages, individual licences and coverage evidence.</p></section>
         <section class="potential-sources" aria-labelledby="potential-sources-heading"><h3 id="potential-sources-heading">Potential sources — not yet integrated</h3><p class="panel-note">Research directions checked on 10 October 2026. These datasets are candidates for future work and are not displayed in this view.</p><ol>{#each potentialSources as source (source.name)}<li><h4><a href={source.url} target="_blank" rel="noreferrer">{source.name} ↗</a></h4><p>{source.description}</p><p class="panel-note">{source.limitation}</p></li>{/each}</ol></section>
         <details class="source-diagnostics"><summary>Live status, attribution & technical details</summary>
       <h3>Environmental freshness & outages</h3>

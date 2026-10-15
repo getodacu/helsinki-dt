@@ -10,7 +10,14 @@ async (page) => {
   const manifestStarted = new Promise(resolve => manifestRequested = resolve);
   let appearanceRequests = 0, streamRequests = 0, earlyStream = false;
   await startup.route('**/data/city/manifest.json', async route => { manifestRequested(); await manifestGate; await route.continue(); });
-  await startup.route('**/api/city-asset?*', async route => { appearanceRequests++; await appearanceGate; await route.continue(); });
+  await startup.route('**/api/city-asset?*', async route => {
+    appearanceRequests++;
+    if (appearanceRequests === 1) return route.fulfill({ status: 503, contentType: 'text/plain', body: 'Fixture map detail unavailable' });
+    await appearanceGate; await route.continue();
+  });
+  await startup.route('**/api/city-cache', route => route.fulfill({ json: {
+    phase: 'partial', completed: 0, total: 1, failed: 1, cacheIssue: 'Fixture shared map cache unavailable'
+  } }));
   await startup.route('**/models/ship-generic.glb', route => route.fulfill({ status: 503, contentType: 'text/plain', body: 'Optional ship model unavailable' }));
   startup.on('request', request => {
     if (new URL(request.url()).pathname === '/api/traffic/stream') {
@@ -22,6 +29,19 @@ async (page) => {
     await startup.goto(page.url(), { waitUntil: 'domcontentloaded' });
     await manifestStarted;
     const main = startup.locator('main'), inspector = startup.locator('#identity-inspector');
+    const checkWorkspaceLayout = async () => {
+      check(await startup.locator('.map-feedback').count() === 0, 'Removed notice bar remains');
+      const header = await startup.locator('.masthead').boundingBox(), bounds = await main.boundingBox();
+      check(Math.abs(bounds.y - header.y - header.height) <= 1, 'Unused space remains below the header');
+      check(Math.abs(bounds.y + bounds.height - startup.viewportSize().height) <= 1, 'Map does not fill the remaining viewport');
+    };
+    for (const [width, height] of [[1440, 900], [390, 844]]) {
+      await startup.setViewportSize({ width, height });
+      await checkWorkspaceLayout();
+      check(await startup.locator('.scene-status p').count() === 1, 'Loading screen retains explanatory paragraphs');
+      check(await startup.getByRole('progressbar', { name: 'Loading current map view' }).isVisible(), 'Loading progress missing');
+    }
+    await startup.setViewportSize({ width: 1440, height: 900 });
     const search = startup.getByRole('searchbox');
     await search.fill('Mannerheimintie');
     await startup.getByRole('tab', { name: 'Buildings', exact: true }).click();
@@ -41,10 +61,7 @@ async (page) => {
     }, null, { timeout: 120_000 });
     const canvas = startup.locator('.scene-canvas > canvas'); await canvas.waitFor({ state: 'visible' });
     check(await main.getAttribute('data-scene-complete') === 'false', 'Held appearance falsely reported full detail');
-    await startup.waitForFunction(() => /aerial imagery|textured detail/.test(document.querySelector('.map-cache-status')?.textContent ?? ''));
-    check((await startup.locator('.map-cache-status').innerText()).includes('You can use the map now'), 'Nonblocking refinement context missing');
     check(await startup.locator('.map-loading-cover').count() === 0, 'Optional appearance still covers the map');
-    await startup.locator('.map-feedback .scene-error').waitFor({ state: 'visible' });
     // Select a real semantic roof through the canvas, not a metadata search result.
     const box = await canvas.boundingBox(); let picked = false;
     for (const y of [.35, .45, .55, .65]) {
@@ -60,66 +77,40 @@ async (page) => {
     check(picked, 'No semantic building could be selected while all appearance requests were held');
     check(appearanceRequests > 0, 'No optional appearance refinement started after semantic readiness');
     check(!earlyStream, 'Live stream competed with initial semantic loading');
-    // Keep the real refinement requests held while an optional model has failed.
+    // Keep refinement held while errors and retry controls remain available in Sources.
     await inspector.getByRole('button', { name: 'Clear selection', exact: true }).click();
-    const checkFeedbackLayout = async () => {
-      const result = await startup.evaluate(() => {
-        const region = document.querySelector('.map-feedback');
-        const bounds = region.getBoundingClientRect();
-        const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-        const notices = [...region.children];
-        const errors = [];
-        if (!region.querySelector('.scene-error') || !region.querySelector('.map-cache-status')) errors.push('simultaneous notices missing');
-        if (document.querySelector('main').dataset.refinementPhase === 'ready') errors.push('refinement no longer held');
-        if (bounds.left < 0 || bounds.right > innerWidth || bounds.top < 0 || bounds.bottom > innerHeight || region.scrollWidth > region.clientWidth) errors.push('feedback overflows viewport');
-        for (let i = 0; i < notices.length; i++) {
-          if (notices[i].scrollWidth > notices[i].clientWidth) errors.push('notice overflows horizontally');
-          for (const sibling of notices.slice(i + 1)) if (overlaps(notices[i].getBoundingClientRect(), sibling.getBoundingClientRect())) errors.push('notices overlap');
-        }
-        for (const element of document.querySelectorAll('.map-camera-controls, .map-scale, .sensor-readings, .camera-presets, .left-stack, .right-stack, .mobile-panel-nav')) {
-          const rect = element.getBoundingClientRect();
-          if (rect.width && rect.height && overlaps(bounds, rect)) errors.push(`feedback overlaps ${element.className}`);
-        }
-        return errors;
-      });
-      check(result.length === 0, result.join('; '));
-      const feedback = startup.locator('.map-feedback');
-      check(await feedback.getAttribute('open') !== null, 'Availability notices must start expanded');
-      const expandedBounds = await main.boundingBox();
-      await feedback.locator('summary').click();
-      check(JSON.stringify(await main.boundingBox()) === JSON.stringify(expandedBounds), 'Collapsing feedback changed the map extent');
-      await feedback.locator('summary').click();
-      await feedback.locator('summary').focus();
-      check(await feedback.locator('summary').evaluate(element => document.activeElement === element), 'Feedback has no native keyboard entry point');
-      if (await feedback.evaluate(element => element.scrollHeight > element.clientHeight)) {
-        await startup.keyboard.press('End');
-        await startup.waitForFunction(() => document.querySelector('.map-feedback').scrollTop > 0);
-      }
-      // Every message and action remains reachable in the bounded native scroller.
-      for (const item of await startup.locator('.map-feedback p, .map-feedback button').all()) {
-        await item.scrollIntoViewIfNeeded();
-        check(await item.evaluate(element => {
-          const rect = element.getBoundingClientRect(), region = element.closest('.map-feedback').getBoundingClientRect();
-          const x = (rect.left + rect.right) / 2, y = Math.max(rect.top, region.top) + Math.min(rect.bottom - Math.max(rect.top, region.top), region.bottom - Math.max(rect.top, region.top)) / 2;
-          const hit = document.elementFromPoint(x, y);
-          return rect.bottom > region.top && rect.top < region.bottom && (hit === element || element.contains(hit));
-        }), 'A feedback message or action is obscured or unreachable');
-      }
-    };
     for (const [width, height] of [[1440, 900], [1200, 900], [1199, 768], [390, 844], [844, 390]]) {
       await startup.setViewportSize({ width, height });
-      await checkFeedbackLayout();
+      await checkWorkspaceLayout();
+      const workspaceBounds = await main.boundingBox();
+      if (width < 1200) await startup.getByRole('button', { name: 'Project information menu' }).click();
+      const sourcesButton = startup.locator(width < 1200 ? '#project-menu' : '.header-actions').getByRole('button', { name: 'Data & sources' });
+      await sourcesButton.focus(); await sourcesButton.press('Enter');
+      const status = startup.getByRole('region', { name: 'Current data status' });
+      await status.locator('.scene-error').waitFor({ state: 'visible' });
+      check((await status.innerText()).includes('Fixture shared map cache unavailable'), 'Cache issue missing from Sources');
+      const retry = status.getByRole('button', { name: 'Retry missing map parts' });
+      await retry.waitFor({ state: 'visible' }); await retry.focus();
+      check(await retry.evaluate(element => document.activeElement === element), 'Retry control is not keyboard reachable');
+      check(await status.evaluate(element => element.scrollWidth <= element.clientWidth), 'Status overflows horizontally');
+      check(JSON.stringify(await main.boundingBox()) === JSON.stringify(workspaceBounds), 'Sources dialog resized the map');
+      await startup.keyboard.press('Escape');
+      await startup.locator('#sources').waitFor({ state: 'detached' });
       if (width < 1200) {
         await startup.getByRole('button', { name: 'Layers', exact: true }).click();
-        await checkFeedbackLayout();
+        await checkWorkspaceLayout();
         await startup.getByRole('button', { name: 'Close exploration panel', exact: true }).click();
       }
     }
     await startup.setViewportSize({ width: 1440, height: 900 });
+    await startup.locator('.header-actions').getByRole('button', { name: 'Data & sources' }).click();
+    await startup.getByRole('button', { name: 'Retry missing map parts' }).press('Enter');
+    await startup.keyboard.press('Escape');
     releaseAppearance();
     await startup.waitForFunction(() => document.querySelector('main')?.getAttribute('data-scene-complete') === 'true', null, { timeout: 120_000 });
     check(await main.getAttribute('data-refinement-phase') === 'ready', 'Full detail did not finish and render');
-    check(JSON.stringify(await main.boundingBox()) === JSON.stringify(initialWorkspaceBounds), 'Feedback changes resized the map between startup and completed refinement');
+    await checkWorkspaceLayout();
+    check(JSON.stringify(await main.boundingBox()) === JSON.stringify(initialWorkspaceBounds), 'Loading changes resized the map between startup and completed refinement');
     check(streamRequests > 0, 'Live stream never resumed after semantic readiness');
     await startup.close();
     const fallback = await context.newPage();
@@ -132,6 +123,6 @@ async (page) => {
     await fallback.getByText('City scene unavailable', { exact: true }).waitFor();
     await fallbackStream;
     check(await fallback.locator('main').getAttribute('data-scene-ready') === 'false', 'Renderer failure falsely reported a semantic map');
-    return { metadataBeforeManifest: true, coarseSemanticPicking: true, nonblockingRefinement: true, simultaneousFeedbackLayout: true, fullDetailRendered: true, streamDeferred: true, fallbackLiveTransport: true };
+    return { metadataBeforeManifest: true, coarseSemanticPicking: true, nonblockingRefinement: true, fullMapSpace: true, sourceErrorsAndRetry: true, fullDetailRendered: true, streamDeferred: true, fallbackLiveTransport: true };
   } finally { releaseManifest(); releaseAppearance(); await context.close(); }
 }
